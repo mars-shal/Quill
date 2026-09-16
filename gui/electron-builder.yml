@@ -1,0 +1,48 @@
+appId: com.quill.writer
+productName: Quill
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# The PyInstaller-bundled sidecar ships alongside the app; Electron's
+# process.resourcesPath resolves it at runtime (see electron/main.ts).
+extraResources:
+  - from: resources/quill-sidecar
+    to: quill-sidecar
+    filter:
+      - '**/*'
+
+asar: true
+
+linux:
+  target:
+    - AppImage
+  category: Office
+  maintainer: Quill
+  synopsis: IDE for writers
+  desktopName: quill
+  syncDesktopName: true
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+  notarize: false
+
+win:
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+electronDownload:
+  cache: .electron-cache
+
+publish: null

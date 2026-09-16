@@ -1,0 +1,50 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            artifact: '*.AppImage'
+          - os: macos-latest
+            platform: mac
+            artifact: '*.dmg'
+          - os: windows-latest
+            platform: win
+            artifact: '*.exe'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Python venv + package install
+        shell: bash
+        run: |
+          python -m venv .venv
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; else PY=.venv/Scripts/python.exe; fi
+          "$PY" -m pip install -e .
+          "$PY" -m pip install pyinstaller
+      - name: GUI deps
+        shell: bash
+        run: cd gui && npm ci
+      - name: Build release (${{ matrix.platform }})
+        shell: bash
+        run: scripts/build-release.sh ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quill-${{ matrix.platform }}
+          path: gui/release/${{ matrix.artifact }}

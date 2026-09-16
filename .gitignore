@@ -1,0 +1,55 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+!gui/build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+
+# Node
+node_modules/
+gui/node_modules/
+
+# Vite/electron build output
+gui/out/
+
+# Vendored upstream clone (dependency ships via pyproject/pip)
+markitdown/
+
+# Export output
+output/
+
+# Logs
+logs/
+*.log
+.pytest_cache/
+
+# App state / env files
+.quill_engine/
+.env.*
+!.env.example
+
+# PyInstaller artifacts
+packaging/build/
+gui/resources/
+
+# electron-builder output
+gui/release/
+gui/.electron-cache/
+
+# Agent tooling state (not project source)
+.agent/
+.omo/
+.zcode/
+gui/.omo/
+gui/.playwright-mcp/
+
+# Personal/sample documents (not project assets)
+/2024_13496 Swep Report.docx
+/MY SWEP REPORT - MIJI CALEB.docx
+/swep-report.docx
