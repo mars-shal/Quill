@@ -39,7 +39,7 @@ packaging/build/
 gui/resources/
 
 # electron-builder output
-gui/release/
+
 gui/.electron-cache/
 
 # Agent tooling state (not project source)
