@@ -36,11 +36,22 @@ echo "==> [3/4] electron build"
 (cd "$ROOT/gui" && npm run build)
 
 echo "==> [4/4] electron-builder ($PLATFORM)"
-TARGETS=(
-  linux: "--linux AppImage"
-  mac:   "--mac dmg"
-  win:   "--win nsis"
+
+case "$PLATFORM" in
+  linux)
+    BUILDER_ARGS=(--linux AppImage)
+    ;;
+  mac)
+    BUILDER_ARGS=(--mac dmg)
+    ;;
+  win)
+    BUILDER_ARGS=(--win nsis)
+    ;;
+esac
+
+(
+  cd "$ROOT/gui"
+  npx electron-builder --publish never "${BUILDER_ARGS[@]}"
 )
-(cd "$ROOT/gui" && npx electron-builder --publish never ${TARGETS[$PLATFORM]})
 
 echo "==> done. Artifacts in gui/release/ ($PLATFORM)."
