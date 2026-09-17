@@ -24,7 +24,7 @@ linux:
   category: Office
   maintainer: Quill
   synopsis: IDE for writers
-  desktopName: quill
+  executableName: quill
   syncDesktopName: true
 
 mac:
