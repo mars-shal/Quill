@@ -1,5 +1,9 @@
 name: Quill Windows Build
 
+permissions:
+  # The release step needs more than the repo default (read-only) grants.
+  contents: write
+
 on:
   push:
     branches: [main]
@@ -59,9 +63,9 @@ jobs:
           tag_name: windows-build-${{ github.run_number }}
           name: "Quill Windows Build #${{ github.run_number }}"
           files: |
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.exe
-            dist/**
+            gui/src-tauri/target/release/bundle/**/*.msi
+            gui/src-tauri/target/release/bundle/**/*.exe
+            gui/dist/**
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows build artefact
@@ -69,5 +73,5 @@ jobs:
         with:
           name: quill-windows-build
           path: |
-            src-tauri/target/release/bundle/**
-            dist/**
+            gui/src-tauri/target/release/bundle/**
+            gui/dist/**

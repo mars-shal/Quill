@@ -1,5 +1,9 @@
 name: Quill Linux Build
 
+permissions:
+  # The release step needs more than the repo default (read-only) grants.
+  contents: write
+
 on:
   push:
     branches: [main]
@@ -76,8 +80,8 @@ jobs:
           tag_name: linux-build-${{ github.run_number }}
           name: "Quill Linux Build #${{ github.run_number }}"
           files: |
-            src-tauri/target/release/bundle/**
-            dist/**
+            gui/src-tauri/target/release/bundle/**
+            gui/dist/**
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux build artefact
@@ -85,6 +89,6 @@ jobs:
         with:
           name: quill-linux-build
           path: |
-            src-tauri/target/release/bundle/**
-            src-tauri/target/release/quill
-            dist/**
+            gui/src-tauri/target/release/bundle/**
+            gui/src-tauri/target/release/quill
+            gui/dist/**
