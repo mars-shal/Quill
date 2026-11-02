@@ -22,44 +22,45 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          # The lockfile lives next to package.json, not at the repository
+          # root; without this setup-node fails before anything runs.
+          cache-dependency-path: gui/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
+      # pwsh, not cmd: the previous version indented this block into invalid
+      # YAML, so the whole workflow never parsed, and its verify steps used
+      # `if not exist` cmd syntax that pwsh rejects.
       - name: Clean slate (remove previous builds)
         run: |
-        rm -rf dist
-        rm -rf src-tauri\target
-        rm -rf src-tauri\gen
+          Remove-Item -Recurse -Force dist, src-tauri/target, src-tauri/gen -ErrorAction SilentlyContinue
 
       - name: Tauri Windows build
         run: npm run tauri:build
 
       - name: Verify build
         run: |
-          if not exist src-tauri\binaries\*\-pc-windows-msvc\Quill.exe (
-            echo "❌ Windows build artefacts not found"
+          $bundles = Get-ChildItem -Recurse -File -Path src-tauri/target/release/bundle -Include *.msi,*.exe -ErrorAction SilentlyContinue
+          if (-not (Test-Path src-tauri/target/release/quill.exe) -or -not $bundles) {
+            Write-Host "❌ Windows build artefacts not found"
+            Get-ChildItem -Recurse src-tauri/target/release -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { $_.FullName }
             exit 1
-          )
-          echo "✓ Windows build artefacts verified"
+          }
+          Write-Host "✓ Windows build artefacts verified"
+          $bundles | ForEach-Object { $_.FullName }
 
-      - name: Onboarding sequence check
-        run: |
-          :: Verify the onboarding card works fresh install
-          if exist src-tauri\binaries\*\-pc-windows-msvc\Quill.exe (
-            echo "✓ Binary exists, onboarding sequence ready"
-          ) else (
-            echo "❌ Binary not found"
-            exit 1
-          )
-
+      # Releases are cut from pushes to main only -- a pull request must not
+      # mint a tag, and two runs must not fight over the same tag name.
       - name: Create Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: windows-build-${{ github.run_number }}
           name: "Quill Windows Build #${{ github.run_number }}"
           files: |
-            src-tauri\binaries\*\-pc-windows-msvc\Quill.exe
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
             dist/**
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -68,5 +69,5 @@ jobs:
         with:
           name: quill-windows-build
           path: |
-            src-tauri\binaries\*\-pc-windows-msvc\Quill.exe
+            src-tauri/target/release/bundle/**
             dist/**

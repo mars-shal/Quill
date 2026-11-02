@@ -17,11 +17,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Tauri v2 links against webkit2gtk-4.1 and GTK at build time and the
+      # runner image ships none of the -dev packages.
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+          # The lockfile lives next to package.json, not at the repository
+          # root; without this setup-node fails before anything runs.
+          cache-dependency-path: gui/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -35,31 +52,31 @@ jobs:
       - name: Tauri Linux build
         run: npm run tauri:build
 
+      # The artifacts a Tauri build actually produces: the raw binary plus the
+      # deb/rpm/appimage bundles under target/release. (The old check tested a
+      # literal `src-tauri/binaries/*` glob that could never be a directory.)
       - name: Verify build
         run: |
-          if [ ! -d "src-tauri/binaries/*-unknown-linux-gnu" ]; then
+          shopt -s globstar nullglob
+          bundles=(src-tauri/target/release/bundle/**/*.deb src-tauri/target/release/bundle/**/*.rpm src-tauri/target/release/bundle/**/*.AppImage)
+          if [ ! -x src-tauri/target/release/quill ] || [ ${#bundles[@]} -eq 0 ]; then
             echo "❌ Linux build artefacts not found"
+            find src-tauri/target/release -maxdepth 3 -type f 2>/dev/null | head -20 || true
             exit 1
           fi
           echo "✓ Linux build artefacts verified"
+          ls -l src-tauri/target/release/quill "${bundles[@]}"
 
-      - name: Onboarding sequence check
-        run: |
-          # Verify the onboarding card works fresh install
-          if [ -f "src-tauri/binaries/*-unknown-linux-gnu/quill" ]; then
-            echo "✓ Binary exists, onboarding sequence ready"
-          else
-            echo "❌ Binary not found"
-            exit 1
-          fi
-
+      # Releases are cut from pushes to main only -- a pull request must not
+      # mint a tag, and two runs must not fight over the same tag name.
       - name: Create Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: linux-build-${{ github.run_number }}
           name: "Quill Linux Build #${{ github.run_number }}"
           files: |
-            src-tauri/binaries/*-unknown-linux-gnu/quill
+            src-tauri/target/release/bundle/**
             dist/**
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -68,5 +85,6 @@ jobs:
         with:
           name: quill-linux-build
           path: |
-            src-tauri/binaries/*-unknown-linux-gnu/quill
+            src-tauri/target/release/bundle/**
+            src-tauri/target/release/quill
             dist/**
