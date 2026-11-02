@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Quill sidecar — the pipeline as an HTTP service.
 #
 # This is the engine only (api.py): classify, research, write. The Tauri
@@ -11,14 +12,21 @@ FROM python:3.14-slim-bookworm
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 ENV PYTHONUNBUFFERED=1 \
+    UV_HTTP_TIMEOUT=600 \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
 # Dependencies first: the lockfile changes rarely, the source changes daily,
 # so this layer stays cached across ordinary commits.
+#
+# The cache mount is what makes a dropped connection cheap: without it every
+# retry re-downloads the ~200MB torch wheel from scratch, and this network
+# does drop large transfers (two builds in a row timed out mid-wheel). With
+# it, an interrupted `uv sync` resumes from what it already fetched.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project
 
 # The pipeline itself. The json store files are small fallbacks; the sqlite
 # database is a volume (see compose), so a fresh clone starts fresh.
