@@ -1,0 +1,548 @@
+2026-10-09 16:09:24.446 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+16:09:24.489 | INFO    | utilis.timing:_configure 132 - log file: /home/marshall/Documents/projects/InProgress/Quill_New/logs/quill-20261009-160924.log
+16:09:24.489 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._searxng took 0.000s (call #1, total 0.000s, avg 0.0002s)
+======================================================================
+PHASE A - REAL NETWORK, DEFAULT ARGUMENTS ONLY
+======================================================================
+QUILL_SEARXNG_URL = <UNSET>
+PASS  _searxng returns [] when QUILL_SEARXNG_URL unset   [[] in 0.03s]
+PASS  _searxng returns a list   [list]
+16:09:25.042 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.552s (call #1, total 0.552s, avg 0.5515s)
+16:09:25.053 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._bing took 0.563s (call #1, total 0.563s, avg 0.5632s)
+
+_bing -> list len=8 in 0.56s
+PASS  _bing returns list   [list]
+PASS  _bing elements are dicts   [0 non-dict]
+PASS  _bing elements have title/url/snippet keys   [keys seen: ['snippet', 'title', 'url']]
+PASS  _bing <= 8 results (cap intact)   [8]
+PASS  _bing respects default timeout <=12s   [0.56s]
+  sample: [{'title': 'Microsoft Copilot | Sign in', 'url': 'http://copilot.com/', 'snippet': 'Microsoft Copilot is AI built to help you get things done. Create, brainstorm, learn, and solve problems with AI chat that works across your day.'}]
+16:09:26.376 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 1.320s (call #2, total 1.872s, avg 0.9359s)
+16:09:26.481 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._ddg took 1.427s (call #1, total 1.427s, avg 1.4270s)
+
+_ddg -> list len=8 in 1.43s
+PASS  _ddg returns list   [list]
+PASS  _ddg elements are dicts   [0 non-dict]
+PASS  _ddg elements have title/url/snippet keys   [keys seen: ['snippet', 'title', 'url']]
+PASS  _ddg <= 8 results (cap intact)   [8]
+PASS  _ddg respects default timeout <=12s   [1.43s]
+  sample: [{'title': 'Colosseum - Wikipedia', 'url': 'https://en.wikipedia.org/wiki/Colosseum', 'snippet': 'TheColosseumis the largest ancient amphitheatre in the world, built by the Flavian dynasty in Rome around AD 80. It was used for gladiatorial contests, animal hunts, and other spectacles, and is a symbol of Imperial Rome and a New 7 Wonder of the World.'}]
+16:09:27.104 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.622s (call #3, total 2.493s, avg 0.8311s)
+16:09:27.107 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._fetch took 0.625s (call #1, total 0.625s, avg 0.6253s)
+
+_fetch -> str len=171 in 0.63s
+  sample: 'Example Domain This domain is for use in documentation examples without needing permission. This is not a service; avoid'
+PASS  _fetch returns str   [str]
+PASS  _fetch honours max_chars default 8000   [171]
+PASS  _fetch is real network (example.com body fetched)   [got 171 chars]
+16:09:27.198 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised URLError: <urlopen error [Errno -2] Name or service not known> after 0.090s
+Traceback (most recent call last):
+
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 1321, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+    │ │       │   │             │   │         │   │     └ {'Host': 'this-host-does-not-exist-qq.invalid', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firef...
+    │ │       │   │             │   │         │   └ <property object at 0x757a97e93970>
+    │ │       │   │             │   │         └ <urllib.request.Request object at 0x757a95b73100>
+    │ │       │   │             │   └ '/'
+    │ │       │   │             └ <urllib.request.Request object at 0x757a95b73100>
+    │ │       │   └ <function Request.get_method at 0x757a97ea2b90>
+    │ │       └ <urllib.request.Request object at 0x757a95b73100>
+    │ └ <function HTTPConnection.request at 0x757a97fb26c0>
+    └ <http.client.HTTPSConnection object at 0x757a95b73230>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1358, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+    │    │             │       │    │     │        └ False
+    │    │             │       │    │     └ {'Host': 'this-host-does-not-exist-qq.invalid', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firef...
+    │    │             │       │    └ None
+    │    │             │       └ '/'
+    │    │             └ 'GET'
+    │    └ <function HTTPConnection._send_request at 0x757a97fb2770>
+    └ <http.client.HTTPSConnection object at 0x757a95b73230>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1404, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+    │    │          │                    └ False
+    │    │          └ None
+    │    └ <function HTTPConnection.endheaders at 0x757a97fb2610>
+    └ <http.client.HTTPSConnection object at 0x757a95b73230>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1353, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+    │    │            │                            └ False
+    │    │            └ None
+    │    └ <function HTTPConnection._send_output at 0x757a97fb2140>
+    └ <http.client.HTTPSConnection object at 0x757a95b73230>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1113, in _send_output
+    self.send(msg)
+    │    │    └ b'GET / HTTP/1.1\r\nAccept-Encoding: identity\r\nHost: this-host-does-not-exist-qq.invalid\r\nUser-Agent: Mozilla/5.0 (X11; L...
+    │    └ <function HTTPConnection.send at 0x757a97fb1f30>
+    └ <http.client.HTTPSConnection object at 0x757a95b73230>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1057, in send
+    self.connect()
+    │    └ <function HTTPSConnection.connect at 0x757a97fb2c40>
+    └ <http.client.HTTPSConnection object at 0x757a95b73230>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1492, in connect
+    super().connect()
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1023, in connect
+    self.sock = self._create_connection(
+    │    │      │    └ <function create_connection at 0x757a97f97a00>
+    │    │      └ <http.client.HTTPSConnection object at 0x757a95b73230>
+    │    └ None
+    └ <http.client.HTTPSConnection object at 0x757a95b73230>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/socket.py", line 846, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+               │           │     │        └ <SocketKind.SOCK_STREAM: 1>
+               │           │     └ 443
+               │           └ 'this-host-does-not-exist-qq.invalid'
+               └ <function getaddrinfo at 0x757a97f97c10>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/socket.py", line 983, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               │       │           │     │     │       │     │      └ 0
+               │       │           │     │     │       │     └ 0
+               │       │           │     │     │       └ <SocketKind.SOCK_STREAM: 1>
+               │       │           │     │     └ 0
+               │       │           │     └ 443
+               │       │           └ 'this-host-does-not-exist-qq.invalid'
+               │       └ <built-in function getaddrinfo>
+               └ <module '_socket' (built-in)>
+
+socket.gaierror: [Errno -2] Name or service not known
+
+
+During handling of the above exception, another exception occurred:
+
+
+Traceback (most recent call last):
+
+  File "/tmp/opencode/gate31/probe_backcompat.py", line 88, in <module>
+    dead = e._fetch("https://this-host-does-not-exist-qq.invalid/")
+           │ └ <function ResearchEngine._fetch at 0x757a95bdf530>
+           └ <components.researchEngine.ResearchEngine object at 0x757a95b4d400>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x757a95b4d400>, 'https://this-host-does-not-exist-qq.invalid/')
+             └ <function ResearchEngine._fetch at 0x757a95bdf480>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 857, in _fetch
+    data = self._http_get(url)
+           │    │         └ 'https://this-host-does-not-exist-qq.invalid/'
+           │    └ <function ResearchEngine._http_get at 0x757a95bdf320>
+           └ <components.researchEngine.ResearchEngine object at 0x757a95b4d400>
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x757a95b4d400>, 'https://this-host-does-not-exist-qq.invalid/')
+             └ <function ResearchEngine._http_get at 0x757a95bdf270>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 851, in _http_get
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+         │      │       │       │            └ 12
+         │      │       │       └ <urllib.request.Request object at 0x757a95b73100>
+         │      │       └ <function urlopen at 0x757a981a49e0>
+         │      └ <module 'urllib.request' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/re...
+         └ <module 'urllib' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/__init__.py'>
+
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           │      │    │    │     └ 12
+           │      │    │    └ None
+           │      │    └ <urllib.request.Request object at 0x757a95b73100>
+           │      └ <function OpenerDirector.open at 0x757a97ea3530>
+           └ <urllib.request.OpenerDirector object at 0x757a973a8d70>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 487, in open
+    response = self._open(req, data)
+               │    │     │    └ None
+               │    │     └ <urllib.request.Request object at 0x757a95b73100>
+               │    └ <function OpenerDirector._open at 0x757a97ea35e0>
+               └ <urllib.request.OpenerDirector object at 0x757a973a8d70>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 504, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             │    │           │    │            │         └ 'https'
+             │    │           │    │            └ 'https'
+             │    │           │    └ {'no': [<urllib.request.ProxyHandler object at 0x757a973a8ec0>], 'unknown': [<urllib.request.UnknownHandler object at 0x757a9...
+             │    │           └ <urllib.request.OpenerDirector object at 0x757a973a8d70>
+             │    └ <function OpenerDirector._call_chain at 0x757a97ea3480>
+             └ <urllib.request.OpenerDirector object at 0x757a973a8d70>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 464, in _call_chain
+    result = func(*args)
+             │     └ (<urllib.request.Request object at 0x757a95b73100>,)
+             └ <bound method HTTPSHandler.https_open of <urllib.request.HTTPSHandler object at 0x757a95b4e3c0>>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 1369, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           │    │       │    │      │                └ <urllib.request.Request object at 0x757a95b73100>
+           │    │       │    │      └ <class 'http.client.HTTPSConnection'>
+           │    │       │    └ <module 'http.client' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client....
+           │    │       └ <module 'http' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/__init__.py'>
+           │    └ <function AbstractHTTPHandler.do_open at 0x757a97ead590>
+           └ <urllib.request.HTTPSHandler object at 0x757a95b4e3c0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 1324, in do_open
+    raise URLError(err)
+          └ <class 'urllib.error.URLError'>
+
+urllib.error.URLError: <urlopen error [Errno -2] Name or service not known>
+16:09:27.214 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._fetch took 0.106s (call #2, total 0.732s, avg 0.3658s)
+
+_fetch(unreachable) -> str len=0 in 0.11s
+PASS  _fetch swallows network error and returns str ''
+16:09:27.215 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._searxng took 0.000s (call #2, total 0.001s, avg 0.0003s)
+16:09:27.971 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.754s (call #5, total 3.248s, avg 0.6495s)
+16:09:27.985 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._ddg took 0.769s (call #2, total 2.196s, avg 1.0982s)
+16:09:28.524 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.537s (call #6, total 3.785s, avg 0.6308s)
+16:09:28.525 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._bing took 0.539s (call #2, total 1.102s, avg 0.5511s)
+16:09:28.525 | INFO    | utilis.timing:wrapper 182 - ResearchEngine.search took 1.310s (call #1, total 1.310s, avg 1.3105s)
+
+search() -> list len=8 in 1.31s
+PASS  search() returns list   [list]
+PASS  search() shape is _ddg/_bing shape
+
+======================================================================
+PHASE B - WIRE INSPECTION OF THE Request OBJECT BUILT INSIDE _http_get
+======================================================================
+16:09:28.527 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.001s (call #7, total 3.786s, avg 0.5408s)
+
+-- DEFAULT CALL: _http_get(url)  [exactly how _ddg/_bing/_fetch call it]
+   full_url            = https://html.duckduckgo.com/html/?q=roman+colosseum
+   method              = GET
+   timeout passed      = 12  (type int)
+   Request.headers     = {'User-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0', 'Accept': 'text/html,application/rss+xml'}
+      User-agent: Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0
+      Accept: text/html,application/rss+xml
+PASS  default timeout is 12   [12]
+PASS  default Accept is 'text/html,application/rss+xml'   ['text/html,application/rss+xml']
+PASS  default User-Agent is the Firefox UA   ['Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0']
+PASS  only the 2 historical headers present   [['accept', 'user-agent']]
+16:09:28.528 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.001s (call #8, total 3.786s, avg 0.4733s)
+
+-- OVERRIDE CALL: _http_get(url, timeout=30, headers={'Accept': 'application/json'})
+   timeout passed      = 30
+   Request.headers     = {'User-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0', 'Accept': 'application/json'}
+PASS  override timeout honoured (30)
+PASS  override Accept replaces Accept   ['application/json']
+PASS  override MERGES, keeps User-Agent (not a wholesale replace)   ['Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0']
+16:09:28.529 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised TypeError: ResearchEngine._http_get() takes 2 positional arguments but 3 were given after 0.000s
+Traceback (most recent call last):
+
+  File "/tmp/opencode/gate31/probe_backcompat.py", line 169, in <module>
+    e._http_get("https://example.com/", 5)
+    │ └ <function ResearchEngine._http_get at 0x757a95bdf320>
+    └ <components.researchEngine.ResearchEngine object at 0x757a95b4d400>
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x757a95b4d400>, 'https://example.com/', 5)
+             └ <function ResearchEngine._http_get at 0x757a95bdf270>
+
+TypeError: ResearchEngine._http_get() takes 2 positional arguments but 3 were given
+PASS  timeout is keyword-only (positional rejected)   [ResearchEngine._http_get() takes 2 positional arguments but 3 were given]
+16:09:28.531 | INFO    | components.researchEngine:_http_get 843 - BLOCKED url=file:///etc/passwd reason=scheme:file
+16:09:28.531 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised ValueError: blocked url (scheme:file): 'file:///etc/passwd' after 0.001s
+Traceback (most recent call last):
+
+  File "/tmp/opencode/gate31/probe_backcompat.py", line 176, in <module>
+    e._http_get("file:///etc/passwd")
+    │ └ <function ResearchEngine._http_get at 0x757a95bdf320>
+    └ <components.researchEngine.ResearchEngine object at 0x757a95b4d400>
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x757a95b4d400>, 'file:///etc/passwd')
+             └ <function ResearchEngine._http_get at 0x757a95bdf270>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 844, in _http_get
+    raise ValueError(f"blocked url ({reason}): {url!r}")
+                                     │          └ 'file:///etc/passwd'
+                                     └ 'scheme:file'
+
+ValueError: blocked url (scheme:file): 'file:///etc/passwd'
+PASS  non-http scheme still raises ValueError   [blocked url (scheme:file): 'file:///etc/passwd']
+16:09:28.534 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.001s (call #11, total 3.787s, avg 0.3442s)
+FAIL  loopback/private still blocked by is_blocked_url   [no raise]
+
+======================================================================
+PROBE RESULT: 1 failure(s)
+  FAILED: loopback/private still blocked by is_blocked_url
+======================================================================
+
+
+################################################################
+# RE-RUN (2nd pass) - the single 1st-pass failure was MY wrong
+# assertion premise (loopback-blocking), corrected per
+# ground truth in utilis/safety.py (untouched, mtime 2026-10-07).
+################################################################
+2026-10-09 16:09:56.112 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+16:09:56.142 | INFO    | utilis.timing:_configure 132 - log file: /home/marshall/Documents/projects/InProgress/Quill_New/logs/quill-20261009-160956.log
+16:09:56.142 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._searxng took 0.000s (call #1, total 0.000s, avg 0.0002s)
+======================================================================
+PHASE A - REAL NETWORK, DEFAULT ARGUMENTS ONLY
+======================================================================
+QUILL_SEARXNG_URL = <UNSET>
+PASS  _searxng returns [] when QUILL_SEARXNG_URL unset   [[] in 0.02s]
+PASS  _searxng returns a list   [list]
+16:09:56.624 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.481s (call #1, total 0.481s, avg 0.4809s)
+16:09:56.625 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._bing took 0.482s (call #1, total 0.482s, avg 0.4821s)
+
+_bing -> list len=8 in 0.48s
+PASS  _bing returns list   [list]
+PASS  _bing elements are dicts   [0 non-dict]
+PASS  _bing elements have title/url/snippet keys   [keys seen: ['snippet', 'title', 'url']]
+PASS  _bing <= 8 results (cap intact)   [8]
+PASS  _bing respects default timeout <=12s   [0.48s]
+  sample: [{'title': 'Lusha | Sign in', 'url': 'https://auth.lusha.com/login', 'snippet': 'Login to Lusha, Over 280,000 companies prefer Lusha to connect with prospects, convert more leads and increase their revenue'}]
+16:09:57.394 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.767s (call #2, total 1.247s, avg 0.6237s)
+16:09:57.450 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._ddg took 0.824s (call #1, total 0.824s, avg 0.8235s)
+
+_ddg -> list len=0 in 0.82s
+PASS  _ddg returns list   [list]
+PASS  _ddg elements are dicts   [0 non-dict]
+PASS  _ddg elements have title/url/snippet keys   [keys seen: []]
+PASS  _ddg <= 8 results (cap intact)   [0]
+PASS  _ddg respects default timeout <=12s   [0.82s]
+  sample: []
+16:09:57.912 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.461s (call #3, total 1.708s, avg 0.5693s)
+16:09:57.916 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._fetch took 0.465s (call #1, total 0.465s, avg 0.4650s)
+
+_fetch -> str len=171 in 0.47s
+  sample: 'Example Domain This domain is for use in documentation examples without needing permission. This is not a service; avoid'
+PASS  _fetch returns str   [str]
+PASS  _fetch honours max_chars default 8000   [171]
+PASS  _fetch is real network (example.com body fetched)   [got 171 chars]
+16:09:57.923 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised URLError: <urlopen error [Errno -2] Name or service not known> after 0.006s
+Traceback (most recent call last):
+
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 1321, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+    │ │       │   │             │   │         │   │     └ {'Host': 'this-host-does-not-exist-qq.invalid', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firef...
+    │ │       │   │             │   │         │   └ <property object at 0x7688686bbc40>
+    │ │       │   │             │   │         └ <urllib.request.Request object at 0x76886645aea0>
+    │ │       │   │             │   └ '/'
+    │ │       │   │             └ <urllib.request.Request object at 0x76886645aea0>
+    │ │       │   └ <function Request.get_method at 0x7688686cab90>
+    │ │       └ <urllib.request.Request object at 0x76886645aea0>
+    │ └ <function HTTPConnection.request at 0x7688687de6c0>
+    └ <http.client.HTTPSConnection object at 0x76886645afd0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1358, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+    │    │             │       │    │     │        └ False
+    │    │             │       │    │     └ {'Host': 'this-host-does-not-exist-qq.invalid', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firef...
+    │    │             │       │    └ None
+    │    │             │       └ '/'
+    │    │             └ 'GET'
+    │    └ <function HTTPConnection._send_request at 0x7688687de770>
+    └ <http.client.HTTPSConnection object at 0x76886645afd0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1404, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+    │    │          │                    └ False
+    │    │          └ None
+    │    └ <function HTTPConnection.endheaders at 0x7688687de610>
+    └ <http.client.HTTPSConnection object at 0x76886645afd0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1353, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+    │    │            │                            └ False
+    │    │            └ None
+    │    └ <function HTTPConnection._send_output at 0x7688687de140>
+    └ <http.client.HTTPSConnection object at 0x76886645afd0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1113, in _send_output
+    self.send(msg)
+    │    │    └ b'GET / HTTP/1.1\r\nAccept-Encoding: identity\r\nHost: this-host-does-not-exist-qq.invalid\r\nUser-Agent: Mozilla/5.0 (X11; L...
+    │    └ <function HTTPConnection.send at 0x7688687ddf30>
+    └ <http.client.HTTPSConnection object at 0x76886645afd0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1057, in send
+    self.connect()
+    │    └ <function HTTPSConnection.connect at 0x7688687dec40>
+    └ <http.client.HTTPSConnection object at 0x76886645afd0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1492, in connect
+    super().connect()
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client.py", line 1023, in connect
+    self.sock = self._create_connection(
+    │    │      │    └ <function create_connection at 0x7688687c3a00>
+    │    │      └ <http.client.HTTPSConnection object at 0x76886645afd0>
+    │    └ None
+    └ <http.client.HTTPSConnection object at 0x76886645afd0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/socket.py", line 846, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+               │           │     │        └ <SocketKind.SOCK_STREAM: 1>
+               │           │     └ 443
+               │           └ 'this-host-does-not-exist-qq.invalid'
+               └ <function getaddrinfo at 0x7688687c3c10>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/socket.py", line 983, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               │       │           │     │     │       │     │      └ 0
+               │       │           │     │     │       │     └ 0
+               │       │           │     │     │       └ <SocketKind.SOCK_STREAM: 1>
+               │       │           │     │     └ 0
+               │       │           │     └ 443
+               │       │           └ 'this-host-does-not-exist-qq.invalid'
+               │       └ <built-in function getaddrinfo>
+               └ <module '_socket' (built-in)>
+
+socket.gaierror: [Errno -2] Name or service not known
+
+
+During handling of the above exception, another exception occurred:
+
+
+Traceback (most recent call last):
+
+  File "/tmp/opencode/gate31/probe_backcompat.py", line 88, in <module>
+    dead = e._fetch("https://this-host-does-not-exist-qq.invalid/")
+           │ └ <function ResearchEngine._fetch at 0x7688664c7530>
+           └ <components.researchEngine.ResearchEngine object at 0x768866439400>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x768866439400>, 'https://this-host-does-not-exist-qq.invalid/')
+             └ <function ResearchEngine._fetch at 0x7688664c7480>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 857, in _fetch
+    data = self._http_get(url)
+           │    │         └ 'https://this-host-does-not-exist-qq.invalid/'
+           │    └ <function ResearchEngine._http_get at 0x7688664c7320>
+           └ <components.researchEngine.ResearchEngine object at 0x768866439400>
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x768866439400>, 'https://this-host-does-not-exist-qq.invalid/')
+             └ <function ResearchEngine._http_get at 0x7688664c7270>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 851, in _http_get
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+         │      │       │       │            └ 12
+         │      │       │       └ <urllib.request.Request object at 0x76886645aea0>
+         │      │       └ <function urlopen at 0x7688689a09e0>
+         │      └ <module 'urllib.request' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/re...
+         └ <module 'urllib' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/__init__.py'>
+
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           │      │    │    │     └ 12
+           │      │    │    └ None
+           │      │    └ <urllib.request.Request object at 0x76886645aea0>
+           │      └ <function OpenerDirector.open at 0x7688686cb530>
+           └ <urllib.request.OpenerDirector object at 0x768867c8cd70>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 487, in open
+    response = self._open(req, data)
+               │    │     │    └ None
+               │    │     └ <urllib.request.Request object at 0x76886645aea0>
+               │    └ <function OpenerDirector._open at 0x7688686cb5e0>
+               └ <urllib.request.OpenerDirector object at 0x768867c8cd70>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 504, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             │    │           │    │            │         └ 'https'
+             │    │           │    │            └ 'https'
+             │    │           │    └ {'no': [<urllib.request.ProxyHandler object at 0x768867c8cec0>], 'unknown': [<urllib.request.UnknownHandler object at 0x76886...
+             │    │           └ <urllib.request.OpenerDirector object at 0x768867c8cd70>
+             │    └ <function OpenerDirector._call_chain at 0x7688686cb480>
+             └ <urllib.request.OpenerDirector object at 0x768867c8cd70>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 464, in _call_chain
+    result = func(*args)
+             │     └ (<urllib.request.Request object at 0x76886645aea0>,)
+             └ <bound method HTTPSHandler.https_open of <urllib.request.HTTPSHandler object at 0x76886643a3c0>>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 1369, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           │    │       │    │      │                └ <urllib.request.Request object at 0x76886645aea0>
+           │    │       │    │      └ <class 'http.client.HTTPSConnection'>
+           │    │       │    └ <module 'http.client' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/client....
+           │    │       └ <module 'http' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/http/__init__.py'>
+           │    └ <function AbstractHTTPHandler.do_open at 0x7688686d9590>
+           └ <urllib.request.HTTPSHandler object at 0x76886643a3c0>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 1324, in do_open
+    raise URLError(err)
+          └ <class 'urllib.error.URLError'>
+
+urllib.error.URLError: <urlopen error [Errno -2] Name or service not known>
+16:09:57.940 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._fetch took 0.024s (call #2, total 0.489s, avg 0.2443s)
+
+_fetch(unreachable) -> str len=0 in 0.02s
+PASS  _fetch swallows network error and returns str ''
+16:09:57.942 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._searxng took 0.000s (call #2, total 0.001s, avg 0.0003s)
+16:09:58.732 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.789s (call #5, total 2.497s, avg 0.4994s)
+16:09:58.745 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._ddg took 0.803s (call #2, total 1.627s, avg 0.8134s)
+16:09:59.142 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.395s (call #6, total 2.892s, avg 0.4821s)
+16:09:59.142 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._bing took 0.397s (call #2, total 0.879s, avg 0.4393s)
+16:09:59.143 | INFO    | utilis.timing:wrapper 182 - ResearchEngine.search took 1.202s (call #1, total 1.202s, avg 1.2022s)
+
+search() -> list len=1 in 1.20s
+PASS  search() returns list   [list]
+PASS  search() shape is _ddg/_bing shape
+
+======================================================================
+PHASE B - WIRE INSPECTION OF THE Request OBJECT BUILT INSIDE _http_get
+======================================================================
+16:09:59.144 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.001s (call #7, total 2.893s, avg 0.4133s)
+
+-- DEFAULT CALL: _http_get(url)  [exactly how _ddg/_bing/_fetch call it]
+   full_url            = https://html.duckduckgo.com/html/?q=roman+colosseum
+   method              = GET
+   timeout passed      = 12  (type int)
+   Request.headers     = {'User-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0', 'Accept': 'text/html,application/rss+xml'}
+      User-agent: Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0
+      Accept: text/html,application/rss+xml
+PASS  default timeout is 12   [12]
+PASS  default Accept is 'text/html,application/rss+xml'   ['text/html,application/rss+xml']
+PASS  default User-Agent is the Firefox UA   ['Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0']
+PASS  only the 2 historical headers present   [['accept', 'user-agent']]
+16:09:59.145 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.000s (call #8, total 2.894s, avg 0.3617s)
+
+-- OVERRIDE CALL: _http_get(url, timeout=30, headers={'Accept': 'application/json'})
+   timeout passed      = 30
+   Request.headers     = {'User-agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0', 'Accept': 'application/json'}
+PASS  override timeout honoured (30)
+PASS  override Accept replaces Accept   ['application/json']
+PASS  override MERGES, keeps User-Agent (not a wholesale replace)   ['Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0']
+16:09:59.146 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised TypeError: ResearchEngine._http_get() takes 2 positional arguments but 3 were given after 0.000s
+Traceback (most recent call last):
+
+  File "/tmp/opencode/gate31/probe_backcompat.py", line 169, in <module>
+    e._http_get("https://example.com/", 5)
+    │ └ <function ResearchEngine._http_get at 0x7688664c7320>
+    └ <components.researchEngine.ResearchEngine object at 0x768866439400>
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x768866439400>, 'https://example.com/', 5)
+             └ <function ResearchEngine._http_get at 0x7688664c7270>
+
+TypeError: ResearchEngine._http_get() takes 2 positional arguments but 3 were given
+PASS  timeout is keyword-only (positional rejected)   [ResearchEngine._http_get() takes 2 positional arguments but 3 were given]
+16:09:59.148 | INFO    | components.researchEngine:_http_get 843 - BLOCKED url=file:///etc/passwd reason=scheme:file
+16:09:59.149 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised ValueError: blocked url (scheme:file): 'file:///etc/passwd' after 0.001s
+Traceback (most recent call last):
+
+  File "/tmp/opencode/gate31/probe_backcompat.py", line 176, in <module>
+    e._http_get("file:///etc/passwd")
+    │ └ <function ResearchEngine._http_get at 0x7688664c7320>
+    └ <components.researchEngine.ResearchEngine object at 0x768866439400>
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x768866439400>, 'file:///etc/passwd')
+             └ <function ResearchEngine._http_get at 0x7688664c7270>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 844, in _http_get
+    raise ValueError(f"blocked url ({reason}): {url!r}")
+                                     │          └ 'file:///etc/passwd'
+                                     └ 'scheme:file'
+
+ValueError: blocked url (scheme:file): 'file:///etc/passwd'
+PASS  non-http scheme still raises ValueError   [blocked url (scheme:file): 'file:///etc/passwd']
+PASS  safety gate verdict for https://www.pornhub.com/x   [blocked=True reason=domain:pornhub.com expected_blocked=True]
+PASS  safety gate verdict for https://es.pornhub.com/x   [blocked=True reason=domain:pornhub.com expected_blocked=True]
+PASS  safety gate verdict for https://bit.ly/abc   [blocked=True reason=domain:bit.ly expected_blocked=True]
+PASS  safety gate verdict for https://notpornhub.com/x   [blocked=False reason=- expected_blocked=False]
+PASS  safety gate verdict for https://example.com/pornhub-news   [blocked=False reason=- expected_blocked=False]
+PASS  safety gate verdict for http://localhost:8080/search?q=x   [blocked=False reason=- expected_blocked=False]
+PASS  safety gate verdict for http://127.0.0.1:8080/search   [blocked=False reason=- expected_blocked=False]
+PASS  safety gate verdict for https://example.com/   [blocked=False reason=- expected_blocked=False]
+16:09:59.152 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.001s (call #11, total 2.894s, avg 0.2631s)
+PASS  _http_get lets the documented SearXNG host through the gate
+
+======================================================================
+PROBE RESULT: 0 failure(s)
+======================================================================

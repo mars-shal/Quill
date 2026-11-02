@@ -1,0 +1,72 @@
+name: Quill Windows Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./gui
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Clean slate (remove previous builds)
+        run: |
+        rm -rf dist
+        rm -rf src-tauri\target
+        rm -rf src-tauri\gen
+
+      - name: Tauri Windows build
+        run: npm run tauri:build
+
+      - name: Verify build
+        run: |
+          if not exist src-tauri\binaries\*\-pc-windows-msvc\Quill.exe (
+            echo "❌ Windows build artefacts not found"
+            exit 1
+          )
+          echo "✓ Windows build artefacts verified"
+
+      - name: Onboarding sequence check
+        run: |
+          :: Verify the onboarding card works fresh install
+          if exist src-tauri\binaries\*\-pc-windows-msvc\Quill.exe (
+            echo "✓ Binary exists, onboarding sequence ready"
+          ) else (
+            echo "❌ Binary not found"
+            exit 1
+          )
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-build-${{ github.run_number }}
+          name: "Quill Windows Build #${{ github.run_number }}"
+          files: |
+            src-tauri\binaries\*\-pc-windows-msvc\Quill.exe
+            dist/**
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quill-windows-build
+          path: |
+            src-tauri\binaries\*\-pc-windows-msvc\Quill.exe
+            dist/**

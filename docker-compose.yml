@@ -1,0 +1,66 @@
+# Quill in Docker — the pipeline as a service, with its search backend.
+#
+#   cp .env.example .env        # then put your provider key in it
+#   docker compose up --build
+#
+#   API      -> http://localhost:8000   (GET /health answers when ready)
+#   Search   -> SearXNG on the internal network, http://searxng:8080
+#
+# The desktop app is not in this stack: it is a Tauri GUI that needs your
+# display. It talks to this same API, so pointing it at localhost:8000 (or
+# running it with QUILL_API_URL=http://localhost:8000) lets the GUI drive a
+# containerised pipeline. Without the GUI, every endpoint api.py serves is
+# still available over HTTP.
+#
+# Two named volumes carry the state that must survive `docker compose down`:
+#   quill-data    the sidecar's database (runs, documents, research)
+#   quill-models  the embedding model (all-MiniLM-L6-v2), downloaded once
+#
+# Restart policies: both services come back after a reboot or a crash without
+# anyone having to remember to start them.
+
+services:
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    # Same settings file as the dev script: it is the one that turns on the
+    # `json` output format, without which every search silently403s.
+    volumes:
+      - ./scripts/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sidecar:
+    build: .
+    restart: unless-stopped
+    # .env carries the provider key and the tuning knobs (QUILL_TPM,
+    # QUILL_REASONING_EFFORT, persona models, ...) exactly as a bare-metal
+    # run reads them. Copy .env.example first; compose refuses to start
+    # without the file.
+    env_file: .env
+    environment:
+      # The engine reaches SearXNG over the compose network, not loopback --
+      # `127.0.0.1:8080` inside this container is the container itself.
+      QUILL_SEARXNG_URL: http://searxng:8080
+    ports:
+      - "8000:8000"
+    volumes:
+      - quill-data:/app/database
+      - quill-models:/root/.cache/huggingface
+    depends_on:
+      searxng:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  quill-data:
+  quill-models:

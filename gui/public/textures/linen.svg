@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+  <!-- Linen. Two threads at right angles, offset so the weave does not read as
+       a grid: a perfect grid competes with the text baseline. -->
+  <rect width="8" height="8" fill="none"/>
+  <path d="M0 1h8M0 5h8" stroke="#000" stroke-width="0.7" opacity="0.05"/>
+  <path d="M1 0v8M5 0v8" stroke="#000" stroke-width="0.7" opacity="0.035"/>
+</svg>

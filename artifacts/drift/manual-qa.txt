@@ -1,0 +1,263 @@
+==============================================================================
+DRIFT MANUAL QA - utilis/drift.detect_drift on real corpora
+==============================================================================
+
+##############################################################################
+# FAILING RUN  Desimation-of-the-Stadium-of-Rome
+# corpus   : output/Desimation-of-the-Stadium-of-Rome.research.md (270426 chars)
+# concept  : The demolition of the stadium in Rome
+# prompt   : Hey Can you Write a new thieasis for me about The desimation of the stadium of Rome
+# from run : logs/quill-20261010-160443.log
+# note     : 10 of 19 sections shipped as INSUFFICIENT EVIDENCE placeholders while the research gate reported quality=0.699 relevant_pages=50 and passed
+##############################################################################
+{
+  "drift_detected": true,
+  "signal": "temporal",
+  "summary": "44.1% of 700 year mentions fall in 2022-2026 (309 mentions), and the request named no year in that period",
+  "corpus_chars": 270426,
+  "temporal": {
+    "checked": true,
+    "fired": true,
+    "reason": "44.1% of 700 year mentions fall in 2022-2026 (309 mentions), and the request named no year in that period",
+    "total_year_mentions": 700,
+    "distinct_years": 102,
+    "request_years": [],
+    "window_years": [
+      2022,
+      2023,
+      2024,
+      2025,
+      2026
+    ],
+    "window_start": 2022,
+    "window_end": 2026,
+    "window_mentions": 309,
+    "window_share": 0.441,
+    "thresholds": {
+      "window_years": 2,
+      "min_window_share": 0.33,
+      "min_window_mentions": 30
+    }
+  },
+  "entity": {
+    "checked": true,
+    "fired": false,
+    "reason": "the request's own entity is not outranked (132 vs 99 mentions)",
+    "top_present": [
+      {
+        "entity": "rome",
+        "mentions": 132
+      },
+      {
+        "entity": "stadium",
+        "mentions": 13
+      },
+      {
+        "entity": "rome olympics",
+        "mentions": 9
+      }
+    ],
+    "top_absent": [
+      {
+        "entity": "stadio flaminio",
+        "mentions": 99
+      },
+      {
+        "entity": "italy",
+        "mentions": 71
+      },
+      {
+        "entity": "roma",
+        "mentions": 70
+      },
+      {
+        "entity": "lazio",
+        "mentions": 67
+      }
+    ],
+    "alien_share": 0.699,
+    "head_advantage": 1.333,
+    "thresholds": {
+      "min_entity_mentions": 8,
+      "top_entities": 5,
+      "min_alien_share": 0.6
+    },
+    "top_absent_pages": {}
+  }
+}
+
+  >> drift_detected = True   signal = temporal
+  >> 44.1% of 700 year mentions fall in 2022-2026 (309 mentions), and the request named no year in that period
+
+##############################################################################
+# HEALTHY RUN  Demolition-of-the-Stadio-Dei-Marmi-in-Rome
+# corpus   : output/Demolition-of-the-Stadio-Dei-Marmi-in-Rome.research.md (282243 chars)
+# concept  : Demolition of Stadio dei Marmi in Rome in 1968
+# prompt   : write a thesis about the demolition of the Stadio dei Marmi in Rome in 1968
+# from run : output/Demolition-of-the-Stadio-Dei-Marmi-in-Rome.research.md
+# note     : 12 of 15 sections written, 3 placeholders - the drift check must stay quiet here or it trains the reader to ignore it
+##############################################################################
+{
+  "drift_detected": false,
+  "signal": null,
+  "summary": "no dominant period: best window 1928-1932 holds only 26.3% of year mentions",
+  "corpus_chars": 282243,
+  "temporal": {
+    "checked": true,
+    "fired": false,
+    "reason": "no dominant period: best window 1928-1932 holds only 26.3% of year mentions",
+    "total_year_mentions": 908,
+    "distinct_years": 73,
+    "request_years": [
+      1968
+    ],
+    "window_years": [
+      1928,
+      1930,
+      1931,
+      1932
+    ],
+    "window_start": 1928,
+    "window_end": 1932,
+    "window_mentions": 239,
+    "window_share": 0.263,
+    "thresholds": {
+      "window_years": 2,
+      "min_window_share": 0.33,
+      "min_window_mentions": 30
+    }
+  },
+  "entity": {
+    "checked": true,
+    "fired": false,
+    "reason": "off-request entity share 48.7% is below 60%",
+    "top_present": [
+      {
+        "entity": "stadio dei marmi",
+        "mentions": 276
+      },
+      {
+        "entity": "rome",
+        "mentions": 206
+      },
+      {
+        "entity": "marmi",
+        "mentions": 65
+      },
+      {
+        "entity": "stadio olimpico",
+        "mentions": 46
+      },
+      {
+        "entity": "stadio",
+        "mentions": 17
+      }
+    ],
+    "top_absent": [
+      {
+        "entity": "foro italico",
+        "mentions": 232
+      },
+      {
+        "entity": "fascist",
+        "mentions": 130
+      },
+      {
+        "entity": "enrico del debbio",
+        "mentions": 96
+      }
+    ],
+    "alien_share": 0.487,
+    "head_advantage": 1.19,
+    "thresholds": {
+      "min_entity_mentions": 8,
+      "top_entities": 5,
+      "min_alien_share": 0.6
+    },
+    "top_absent_pages": {}
+  }
+}
+
+  >> drift_detected = False   signal = None
+  >> no dominant period: best window 1928-1932 holds only 26.3% of year mentions
+
+==============================================================================
+GATE 2 (evidence-mass) - per-section coverage scores vs the real labels.
+Provisional verdict: the metric did NOT separate. Tables kept for the record.
+==============================================================================
+
+--- FAILING: Desimation-of-the-Stadium-of-Rome  (10 placeholders / 9 written) ---
+lab   plain_st  idf_mass  rare_cov  best_unit  max_rare  section title
+WRT      1.000     1.000     1.000      1.000     0.408  Historical Context of the Stadium
+WRT      1.000     1.000     1.000      0.705     0.057  Construction and Original Purpose
+WRT      1.000     1.000     1.000      1.000     0.013  Modifications During the 19th Century
+WRT      1.000     1.000     1.000      0.741     0.119  Decline Leading up to Demolition
+PH       1.000     1.000     1.000      0.532     0.119  Physical Deterioration Leading to Demolition
+PH       0.000     0.000     0.000      0.000     0.000  Structural Assessment Reports
+WRT      0.750     0.637     0.000      0.375     0.038  Safety Concerns and Public Incidents
+WRT      0.500     0.338     0.000      0.338     0.026  Political Decision-Making Process
+WRT      0.667     0.578     0.000      0.363     0.031  Municipal Council Deliberations
+PH       0.750     0.710     0.667      0.580     0.038  Presidential Decree and Public Consultation
+WRT      1.000     1.000     1.000      1.000     0.119  Execution of Demolition
+PH       0.667     0.519     0.000      0.519     0.119  Demolition Contractor Selection
+WRT      1.000     0.519     0.000      0.519     0.119  Timeline and Phased Demolition
+PH       1.000     1.000     1.000      1.000     0.020  Environmental and Archaeological Consideration
+PH       0.000     0.000     0.000      0.000     0.000  Soil Contamination Assessment
+PH       0.667     0.333     0.333      0.333     0.002  Excavation of Subsurface Layers
+PH       1.000     1.000     1.000      0.721     0.031  Legacy and Urban Redevelopment
+PH       0.667     0.467     0.000      0.467     0.051  Post-Demolition Site Planning
+PH       0.667     0.613     0.500      0.613     0.018  Socioeconomic Impact on Local Communities
+    plain_st   PH mean=0.642 | WRT mean=0.880 | AUC_low=0.706 (1.0 = perfect separator)
+    idf_mass   PH mean=0.564 | WRT mean=0.786 | AUC_low=0.678 (1.0 = perfect separator)
+    rare_cov   PH mean=0.450 | WRT mean=0.556 | AUC_low=0.561 (1.0 = perfect separator)
+    best_unit  PH mean=0.477 | WRT mean=0.671 | AUC_low=0.656 (1.0 = perfect separator)
+    max_rare   PH mean=0.040 | WRT mean=0.104 | AUC_low=0.722 (1.0 = perfect separator)
+
+--- HEALTHY: Demolition-of-the-Stadio-Dei-Marmi-in-Rome  (3 placeholders / 12 written) ---
+lab   plain_st  idf_mass  rare_cov  best_unit  max_rare  section title
+WRT      1.000     1.000     1.000      0.540     0.521  The Architectural and Cultural Significance of
+WRT      1.000     1.000     1.000      1.000     0.521  Design Features and Construction Techniques of
+WRT      1.000     1.000     1.000      0.661     0.279  Social Role and Symbolic Meaning of the Stadiu
+WRT      0.667     0.108     0.000      0.108     0.233  Factors That Led to the Decision to Demolish t
+WRT      0.857     0.607     0.333      0.410     0.233  Post‑War Urban Planning Proposals Targeting th
+WRT      0.333     0.235     0.000      0.235     0.018  Structural Assessment Reports of the Stadium’s
+PH       0.600     0.563     0.500      0.437     0.028  Legal and Bureaucratic Processes That Authoriz
+WRT      0.800     0.200     0.200      0.200     0.003  Municipal Council Resolution #1968‑05 and Its 
+PH       0.833     0.470     0.000      0.470     0.123  Role of the Ministry of Culture and Its Decisi
+WRT      1.000     0.724     0.500      0.564     0.043  Impact of Demolition on Urban Fabric and Publi
+WRT      0.750     0.645     0.000      0.645     0.028  Changes in Traffic Flow and Land Use Following
+WRT      0.833     0.556     0.333      0.345     0.064  Oral History Accounts of Community Reactions t
+WRT      0.667     0.584     0.000      0.271     0.015  Long‑Term Legacy and Preservation Lessons Lear
+PH       0.500     0.361     0.000      0.361     0.052  Revision of Heritage Protection Laws After 196
+WRT      0.800     0.211     0.000      0.211     0.135  Comparative Analysis of Similar Demolitions in
+    plain_st   PH mean=0.644 | WRT mean=0.809 | AUC_low=0.764 (1.0 = perfect separator)
+    idf_mass   PH mean=0.465 | WRT mean=0.572 | AUC_low=0.639 (1.0 = perfect separator)
+    rare_cov   PH mean=0.167 | WRT mean=0.364 | AUC_low=0.625 (1.0 = perfect separator)
+    best_unit  PH mean=0.423 | WRT mean=0.433 | AUC_low=0.444 (1.0 = perfect separator)
+    max_rare   PH mean=0.067 | WRT mean=0.175 | AUC_low=0.597 (1.0 = perfect separator)
+
+Verdict: no metric reaches a shippable operating point on BOTH documents.
+Best threshold for max_rare_st on the HEALTHY document kills 6 of its 12
+written sections while catching all 3 placeholders - a 50% content loss on
+a healthy run. Gate 2 was DELETED, not wired.
+
+
+==============================================================================
+WIRING EVIDENCE - ResearchEngine.run() driven with stubs (no pipeline run)
+==============================================================================
+WARNING | components.researchEngine:run 568 - research gate: DRIFT (temporal) for 'The demolition of the stadium in Rome'; the corpus may describe a different subject or period than the request and the writer will ground sections in it. 75.8% of 566 year mentions fall in 2022-2026 (429 mentions), and the request named no year in that period
+WARNING | components.researchEngine:run 577 - research gate: drift detail prompt=Hey Can you Write a new thieasis for me about The desimation of the stadium of Rome request_years=[] corpus_years=12 dominant_window=2022-2026 window_mentions=429 of 566 year_mentions
+### FAILING-shaped corpus through ResearchEngine.run() ###
+
+payload['drift_detected'] = True
+payload['signal']         = temporal
+payload['low_research']   = False (gate unchanged: False)
+payload['quality']        = 0.699
+corpus non-empty          = True
+
+### HEALTHY-shaped corpus through the same gate ###
+
+payload['drift_detected'] = False
+payload['signal']         = None
+payload['low_research']   = False
+(no drift warning line above means the healthy run stayed quiet)

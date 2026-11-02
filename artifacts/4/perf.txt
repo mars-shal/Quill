@@ -1,0 +1,45 @@
+### Step 4 - PERF / LOW-END-DEVICE COST (independently re-measured)
+date: 2026-10-09T16:45:17
+method: ResearchEngine._searxng() inline, sequential, wall-clock perf_counter;
+        RSS from docker stats --no-stream quill-searxng. Every number parsed.
+
+== CONTAINER RSS (quill-searxng) ==
+  reading #1 (warm)                 : 155.9MiB / 30.98GiB  (0.49%)
+  reading #2 (after ~10 queries)    : 156.3MiB / 30.98GiB  (0.49%)
+  reading #3 (after ~20 queries)    : 158.7MiB / 30.98GiB  (0.50%)
+  growth ~20 queries: +2.8 MiB (155.9 -> 158.7). Flat; connection-pool warming.
+  trimmed engine set (14 enabled vs 83 default-active) kept RSS lean (<160MiB).
+
+== PER-QUERY LATENCY, 12 SEQUENTIAL _searxng CALLS ==
+  #01  1.207s  hits=8
+  #02  0.797s  hits=8
+  #03  0.884s  hits=8
+  #04  0.691s  hits=8
+  #05  0.774s  hits=8
+  #06  0.803s  hits=7
+  #07  0.808s  hits=8
+  #08  0.814s  hits=8
+  #09  0.820s  hits=7
+  #10  0.972s  hits=7
+  #11  0.975s  hits=8
+  #12  0.974s  hits=8
+
+  min    = 0.691s
+  median = 0.817s
+  max    = 1.207s
+  mean   = 0.877s   total=10.519s for 12 queries
+
+== DEAD-BACKEND BASELINE (logs/quill-20261008-171831.log) ==
+  21 searches / 41 HTTP requests, 29.5s of search HTTP, 148 hits offered,
+  148 REJECTED, pages == [], _fetch calls == 0, written=0 placeholder=5.
+  SearXNG now: ~0.817s median/query, 7-8 hits/query, all topically usable.
+  Per-usable-result: dead = 29.5s / 0 pages; SearXNG = 0.817s / 8 hits.
+
+== LOW-MEMORY DEPLOYMENT RECOMMENDATION ==
+  It is SAFE on 4GB *for memory*: searxng RSS ~156-159MiB, engine count barely
+  moves RSS (engine table is ~1KB/entry). Leave ~3.8GB for the model runtime.
+  DEFAULT ENGINE LIST IS NOT SAFE FOR LATENCY: a single reachable-but-slow engine
+  (observed: wikidata ~6s) inflates every query because SearXNG waits for the
+  slowest engine. Ship the ~14-engine allowlist + outgoing.request_timeout=8s.
+  Also throttle: brave suspends after rapid queries (seen: 'too many requests');
+  DuckDuckGo can serve CAPTCHA. Keep >=2s between searches on a shared IP.

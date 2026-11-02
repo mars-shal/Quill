@@ -1,0 +1,179 @@
+2026-10-10 15:50:15.607 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+15:50:15.628 | INFO    | utilis.timing:_configure 132 - log file: /home/marshall/Documents/projects/InProgress/Quill_New/logs/quill-20261010-155015.log
+15:50:15.629 | INFO    | utilis.timing:wrapper 182 - Agent.Scout took 0.000s (call #1, total 0.000s, avg 0.0001s)
+
+==============================================================================
+0. REWRITTEN Scout system_prompt (real Agent.Scout, only Agent.model stubbed)
+==============================================================================
+You are a research agent.
+
+        You are given a concept and the research that has already been gathered for it.
+        Decide whether the existing research is sufficient, or whether more information
+        is needed from the user before continuing.
+
+        If you need input, ask at most 3 questions. Each question must:
+        - cover a DIFFERENT aspect, with no overlap or repetition between questions;
+        - ask ONLY what search cannot answer: which subject you mean, what angle,
+          how deep, what to include or avoid, who it is for;
+        - NEVER ask for a fact research can establish - dates, years, reasons,
+          causes, mechanisms, quantities, builders, locations, or a known name;
+        - be at most 100 characters and end in a question mark;
+        - not restate the concept or mention "this document", "this essay" or "the topic".
+        If the concept is specific enough to research, reply done instead.
+
+        Respond with valid JSON only, no other text, in this exact shape:
+        {"status": "needs_user_input", "questionnaire": ["<QUESTION>", "<QUESTION>"]}
+
+        If no more information is needed, respond with valid JSON only, no other text, in this exact shape:
+        {"status": "done", "summary": "<SUMMARY OF CONCEPT + RESEARCH + CONTEXT>"}
+        
+
+--- questionnaire rule block only ---
+If you need input, ask at most 3 questions. Each question must:
+        - cover a DIFFERENT aspect, with no overlap or repetition between questions;
+        - ask ONLY what search cannot answer: which subject you mean, what angle,
+          how deep, what to include or avoid, who it is for;
+        - NEVER ask for a fact research can establish - dates, years, reasons,
+          causes, mechanisms, quantities, builders, locations, or a known name;
+        - be at most 100 characters and end in a question mark;
+        - not restate the concept or mention "this document", "this essay" or "the topic".
+        If the concept is specific enough to research, reply done instead.
+
+removed rule 'ask for ONE specific thing (a name, a date, a mechanism, a figure)' present? False
+new prohibition present? True
+whole prompt 1305 chars; rule block 680 chars (replaced a 382-char block)
+
+==============================================================================
+1. JSON response contracts are byte-identical to before
+==============================================================================
+needs_user_input contract verbatim: True
+done contract verbatim:            True
+whole contract block verbatim:     True
+
+==============================================================================
+2. Real Agent.Scout fed the EXACT round-1 reply from the incident log
+==============================================================================
+ScoutReport round 1 -> status='needs_user_input' summary='' questionnaire=['What is the name of the stadium?', 'When was it demolished?', 'What was the primary reason for its demolition?']
+15:50:15.629 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=date/year question='When was it demolished?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.629 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=reason/cause question='What was the primary reason for its demolition?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+guard survivors    -> ['What is the name of the stadium?']
+   KEPT   rule=None                   What is the name of the stadium?
+   DROPPED rule=date/year              When was it demolished?
+   DROPPED rule=reason/cause           What was the primary reason for its demolition?
+
+==============================================================================
+3. Real Agent.Scout fed the EXACT round-2 reply from the incident log
+==============================================================================
+ScoutReport round 2 -> status='needs_user_input' summary='' questionnaire=['Which specific stadium in Rome are you referring to?', 'In what year was it demolished?', 'What was the primary reason for its demolition?']
+15:50:15.630 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=date/year question='In what year was it demolished?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.630 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=reason/cause question='What was the primary reason for its demolition?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+guard survivors    -> ['Which specific stadium in Rome are you referring to?']
+   KEPT   rule=None                   Which specific stadium in Rome are you referring to?
+   DROPPED rule=date/year              In what year was it demolished?
+   DROPPED rule=reason/cause           What was the primary reason for its demolition?
+
+==============================================================================
+4. Real ResearchEngine.validate(), all six fact questions (round 1 shape + 3 more)
+==============================================================================
+15:50:15.630 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=date/year question='When was it demolished?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.630 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=reason/cause question='What was the primary reason for its demolition?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.630 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=date/year question='In what year was it demolished?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.630 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=quantity/figure question='How many seats did it have?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.631 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=builder/author/owner question='Who designed the stadium?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.631 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=location question='Where is it located?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.631 | INFO    | utilis.timing:wrapper 182 - ResearchEngine.validate took 0.001s (call #1, total 0.001s, avg 0.0006s)
+status      = 'continue'
+coverage    = 0.91
+questionnaire= []
+summary[:90]= "Research summary for 'the demolition of the stadium of Rome' (coverage 0.910).\nScout did n"
+
+GRACEFUL DEGRADATION: empty questionnaire + status 'continue' -> Oracle-driven _think research. Got exactly that: True
+
+==============================================================================
+5. Real ResearchEngine.validate(), round-2 reply (one good + two fact questions)
+==============================================================================
+15:50:15.631 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=date/year question='In what year was it demolished?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.631 | INFO    | components.researchEngine:_clean_questions 1303 - questionnaire dropped: rule=reason/cause question='What was the primary reason for its demolition?' (search answers this, not the user; an all-dropped set falls through to Oracle research)
+15:50:15.631 | INFO    | utilis.timing:wrapper 182 - ResearchEngine.validate took 0.000s (call #2, total 0.001s, avg 0.0005s)
+status       = 'needs_user_input'
+questionnaire= ['Which specific stadium in Rome are you referring to?']
+-> the user is asked ONLY the disambiguation question they can actually answer
+
+==============================================================================
+6. Rule table, with each rule's stored example checked live
+==============================================================================
+-- _USER_ONLY_RULES (checked FIRST, always wins) --
+  OK   disambiguation \b(?:referring to|do you mean|which one|or should i)\b
+        protects: Which specific stadium in Rome are you referring to?
+  OK   naming       \b(?:the name of|what (?:do you|should i|would you) call)\b
+        protects: What is the name of the stadium?
+  OK   audience     \b(?:audience|reader|readers|readership|intended for|writing for)\b
+        protects: Who is the intended audience for this thesis?
+  OK   depth        \b(?:detail|granular|granularity|depth)\b
+        protects: How much detail do you want on the demolition?
+  OK   length       \b(?:word count|page count|essay length|paper length|thesis length)\b|\bhow (?:long|many words|many pages)\b[^?]{0,30}\b(?:should|want|need|prefer)\b
+        protects: How long should the essay be?
+  OK   scope        \b(?:scope|angle|focus|focused|emphasi\w*|prioriti\w*|which period|what period)\b
+        protects: Should the essay focus on the demolition or the aftermath?
+  OK   avoid        \b(?:avoid|excluding|exclude|omit|omitting|leave out|keep out|skip|do not include|don't include)\b
+        protects: Is there anything I should avoid including?
+  OK   stance       \b(?:purpose|goal|argument|thesis statement|tone|perspective|opinion)\b
+        protects: What should the thesis argue about the demolition?
+  OK   preference   \b(?:how|what|which|who|where)\b[^?]{0,60}\b(?:should|would you like|do you want|do you need|do you prefer|do you expect|do you care|care about|matters? most|is important|are important)\b
+        protects: How should I structure the demolition chapter?
+-- _RESEARCH_FACT_RULES (research-shaped, dropped) --
+  OK   date/year              \b(?:what|which|in what|in which)\s+year\b|\bwhen\b[^?]{0,40}\b(?:was|were|did|had|has|have|built|founded|opened|closed|demolished|destroyed|constructed|completed|created|established|released|published|occurred|happened|take place|date)\b
+        rejects: In what year was it demolished?
+  OK   reason/cause           \b(?:reasons?|causes?|rationale|motivation)\b|\bwhy\b[^?]{0,40}\b(?:was|were|did|had|has|have|built|founded|demolished|occurred|happened|constructed)\b
+        rejects: What was the primary reason for its demolition?
+  OK   mechanism/process      \b(?:mechanism\w*|methodolog\w*)\b|\bhow\b[^?]{0,40}\b(?:work|worked|works|happen|happened|occurred|take place|carried out|conducted|undertook|executed)\b
+        rejects: What mechanism was used to demolish it?
+  OK   quantity/figure        \bhow (?:many|much|long|old|tall|big|large|far|deep|wide|heavy|fast|often)\b|\bwhat (?:percentage|proportion|number|amount)\b
+        rejects: How many seats did it have?
+  OK   builder/author/owner   \bwho\b[^?]{0,40}\b(?:designed|design|architect|built|constructed|commissioned|funded|owner|owned|authored|author|wrote|written by|developed|engineered|purchased|paid for)\b
+        rejects: Who designed the stadium?
+  OK   location               \bwhere\s+(?:is|are|was|were)\s+(?:it|they|this|that)\b|\bwhere\b[^?]{0,40}\b(?:located|situated|built|stands?)\b|\bwhich (?:city|country|region|town|street)\b[^?]{0,40}\b(?:was|were|did|does|is the|are the|hosted|affected|demolished|located|built|stands?)\b
+        rejects: Where is it located?
+
+==============================================================================
+7. False-negative sweep: every disambiguation/intent question MUST survive
+==============================================================================
+  KEPT   Which specific stadium in Rome are you referring to?
+  KEPT   What is the name of the stadium?
+  KEPT   Do you mean the Colosseum or the Stadio Olimpico?
+  KEPT   Which one of the two Roman stadiums do you mean?
+  KEPT   What should I call it in the thesis title?
+  KEPT   Which stadium should the essay cover?
+  KEPT   How much detail do you want on the demolition?
+  KEPT   How long should the essay be?
+  KEPT   Who is the intended audience for this thesis?
+  KEPT   Should the essay focus on the demolition or the aftermath?
+  KEPT   Is there anything I should avoid including?
+  KEPT   How should I structure the demolition chapter?
+  KEPT   What should the thesis argue about the demolition?
+  KEPT   When do you need the draft by?
+  KEPT   How deep should the technical detail go?
+  KEPT   What period of the stadium's history matters most?
+  KEPT   What period of the stadium's history matters most to you?
+  KEPT   Which year do you care about?
+  KEPT   Should I include the political or the architectural angle?
+  KEPT   Which country should the essay cover?
+  KEPT   Which town should I focus on?
+  KEPT   Which region matters most to you?
+  KEPT   Which city is most relevant to you?
+
+over-filtered: none
+
+==============================================================================
+8. Malformed input (pre-existing behaviour must not regress)
+==============================================================================
+  []                                                                           -> []
+  None                                                                         -> []
+  [None, None]                                                                 -> []
+  [12345, ['x'], {'a': 1}]                                                     -> []
+  ['Why?']                                                                     -> []
+  ['a stadium of Rome without any terminator']                                 -> []
+  ['The stadium was demolished in 1960.']                                      -> ['The stadium was demolished in 1960.']
+  ['Which stadium do you mean? When was it demolished?']                       -> ['Which stadium do you mean?']
+  ['コロッセオ 🏟️ どの競技場?', '🏟️?']                                                   -> ['コロッセオ 🏟️ どの競技場?']
+  ['Which stadium do you mean?', 'Which stadium do you mean?']                 -> ['Which stadium do you mean?']

@@ -1,0 +1,47 @@
+{
+  "title": "Quiet Interface",
+  "type": "doc",
+  "content": [
+    { "type": "heading", "attrs": { "level": 1 }, "content": [ { "type": "text", "text": "Quiet Interface" } ] },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Plain, " },
+        { "type": "text", "marks": [{ "type": "bold" }], "text": "bold" },
+        { "type": "text", "text": ", " },
+        { "type": "text", "marks": [{ "type": "italic" }], "text": "italic" },
+        { "type": "text", "text": ", " },
+        { "type": "text", "marks": [{ "type": "underline" }], "text": "underline" },
+        { "type": "text", "text": ", " },
+        { "type": "text", "marks": [{ "type": "strike" }], "text": "struck" },
+        { "type": "text", "text": "." }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [ { "type": "text", "marks": [{ "type": "highlight", "attrs": { "color": "#fde68a" } }], "text": "Marked heading" } ]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        { "type": "listItem", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "One" }] }] },
+        { "type": "listItem", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Two" }] }] }
+      ]
+    },
+    { "type": "blockquote", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Quoted line." }] }] },
+    { "type": "codeBlock", "attrs": { "language": "js" }, "content": [{ "type": "text", "text": "const x = 1;" }] },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Safe " },
+        { "type": "text", "marks": [{ "type": "link", "attrs": { "href": "https://example.com/a" } }], "text": "link" },
+        { "type": "text", "text": " and blocked " },
+        { "type": "text", "marks": [{ "type": "link", "attrs": { "href": "javascript:alert(1)" } }], "text": "link" },
+        { "type": "text", "text": " and " },
+        { "type": "text", "text": "<script>alert(\"xss\")</script>" }
+      ]
+    },
+    { "type": "horizontalRule" }
+  ]
+}

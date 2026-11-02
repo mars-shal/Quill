@@ -1,0 +1,115 @@
+2026-10-09 15:52:23.924 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+15:52:23.950 | INFO    | utilis.timing:_configure 132 - log file: /home/marshall/Documents/projects/InProgress/Quill_New/logs/quill-20261009-155223.log
+15:52:23.953 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.003s (call #1, total 0.003s, avg 0.0031s)
+15:52:23.954 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._searxng took 0.004s (call #1, total 0.004s, avg 0.0035s)
+======================================================================
+QUILL_SEARXNG_URL = http://127.0.0.1:53155
+======================================================================
+
+_searxng returned 8 hits in 0.013s
+  - Stadio dei Marmi - Wikipedia
+    url     : https://en.wikipedia.org/wiki/Stadio_dei_Marmi
+    snippet : The Stadio dei Marmi was an ancient Roman marble stadium in the Campus Martius, Rome, dedi
+  - Stadium of Domitian - Roma Segreta
+    url     : https://romasegreta.it/stadio-di-domiziano/
+    snippet : Demolished around 1968 under the Fascist urban renewal of the Via del Campo Marzio.
+  - Marble Stadium (Domitian) - Digital Augustan Rome
+    url     : https://digitalaugustanrome.org/buildings/stadium/
+    snippet : Constructed c. 86 AD, capacity c. 30,000 spectators, built of Luna marble on the Campus Ma
+  - Campo Marzio - Wikipedia
+    url     : https://en.wikipedia.org/wiki/Campo_Marzio
+    snippet : The Campus Martius, the northernmost of the seven hills of Rome, was home to the marble st
+  - Villaggio Olimpico - Roma Sparita
+    url     : https://romasparita.eu/villaggio-olimpico/
+    snippet : The area around the former Stadio dei Marmi was cleared for the 1960 Olympic Village.
+  - Domitian's Stadium - JSTOR
+    url     : https://www.jstor.org/stable/2654321
+    snippet : A reconstruction of the stadium plan with seating capacity estimates.
+  - Forum Holitorium excavations
+    url     : https://www.romarttoday.it/forum-holitorium/
+    snippet : Excavations near the former stadium site during the Metro C works.
+  - Stadio dei Marmi - Treccani
+    url     : https://www.treccani.it/enciclopedia/stadio-dei-marmi/
+    snippet : Anfiteatro marmoreo edificato da Domiziano, demolito nel Novecento.
+15:52:23.955 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.001s (call #2, total 0.004s, avg 0.0019s)
+15:52:23.955 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._searxng took 0.001s (call #2, total 0.004s, avg 0.0022s)
+
+PASS  non-empty result   [8]
+PASS  count <= 8   [8]
+PASS  every hit has non-empty title
+PASS  every hit has non-empty url
+PASS  every hit keys are exactly title/url/snippet
+PASS  every snippet derived from content
+PASS  every url is http(s)
+PASS  a parsed snippet contains 'Campus Martius'
+PASS  wikipedia hit present with correct url
+PASS  Treccani (8th result) present despite 8 in the body
+PASS  QUILL_SEARXNG_CATEGORIES reaches the live instance   [8]
+
+ALL PASS: 11/11
+
+======================================================================
+403 branch (instance without json in search.formats)
+======================================================================
+15:52:23.955 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised HTTPError: HTTP Error 403: Forbidden after 0.000s
+Traceback (most recent call last):
+
+  File "/tmp/opencode/live_qa.py", line 78, in <module>
+    engine._http_get(f"http://127.0.0.1:{PORT}/search?q=x", timeout=5)
+    │      │                             └ '53155'
+    │      └ <function ResearchEngine._http_get at 0x7f909c5c81a0>
+    └ <components.researchEngine.ResearchEngine object at 0x7f909c541010>
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {'timeout': 5}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x7f909c541010>, 'http://127.0.0.1:53155/search?q=x')
+             └ <function ResearchEngine._http_get at 0x7f909c5c80f0>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 851, in _http_get
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+         │      │       │       │            └ 5
+         │      │       │       └ <urllib.request.Request object at 0x7f909c553890>
+         │      │       └ <function urlopen at 0x7f909e99fa00>
+         │      └ <module 'urllib.request' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/re...
+         └ <module 'urllib' from '/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/__init__.py'>
+
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           │      │    │    │     └ 5
+           │      │    │    └ None
+           │      │    └ <urllib.request.Request object at 0x7f909c553890>
+           │      └ <function OpenerDirector.open at 0x7f909e7119b0>
+           └ <urllib.request.OpenerDirector object at 0x7f909ddb0980>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 493, in open
+    response = meth(req, response)
+               │    │    └ <http.client.HTTPResponse object at 0x7f909c5bada0>
+               │    └ <urllib.request.Request object at 0x7f909c553890>
+               └ <bound method HTTPErrorProcessor.http_response of <urllib.request.HTTPErrorProcessor object at 0x7f909c541d30>>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 602, in http_response
+    response = self.parent.error(
+               │    │      └ <function OpenerDirector.error at 0x7f909e711b10>
+               │    └ <urllib.request.OpenerDirector object at 0x7f909ddb0980>
+               └ <urllib.request.HTTPErrorProcessor object at 0x7f909c541d30>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 531, in error
+    return self._call_chain(*args)
+           │    │            └ ({'default': [<urllib.request.HTTPDefaultErrorHandler object at 0x7f909c5417f0>], 301: [<urllib.request.HTTPRedirectHandler o...
+           │    └ <function OpenerDirector._call_chain at 0x7f909e711900>
+           └ <urllib.request.OpenerDirector object at 0x7f909ddb0980>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 464, in _call_chain
+    result = func(*args)
+             │     └ (<urllib.request.Request object at 0x7f909c553890>, <http.client.HTTPResponse object at 0x7f909c5bada0>, 403, 'Forbidden', <h...
+             └ <bound method HTTPDefaultErrorHandler.http_error_default of <urllib.request.HTTPDefaultErrorHandler object at 0x7f909c5417f0>>
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/urllib/request.py", line 611, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+          │         │   │         │     │    │     └ <http.client.HTTPResponse object at 0x7f909c5bada0>
+          │         │   │         │     │    └ <http.client.HTTPMessage object at 0x7f909c5a0cb0>
+          │         │   │         │     └ 'Forbidden'
+          │         │   │         └ 403
+          │         │   └ <property object at 0x7f909e708ea0>
+          │         └ <urllib.request.Request object at 0x7f909c553890>
+          └ <class 'urllib.error.HTTPError'>
+
+urllib.error.HTTPError: HTTP Error 403: Forbidden
+  server answered HTTP 403
+PASS  live instance 403s without format=json

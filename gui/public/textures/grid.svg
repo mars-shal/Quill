@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+  <!-- A faint square grid, for readers who want the sense of a page. One line
+       per cell at 28px rather than a heavier border every few cells: a bold
+       grid is a table. -->
+  <path d="M28 0H0v28" fill="none" stroke="#000" stroke-width="0.8" opacity="0.045"/>
+</svg>

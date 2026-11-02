@@ -1,0 +1,167 @@
+2026-10-09 15:45:24.706 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+15:45:24.720 | INFO    | utilis.timing:_configure 132 - log file: /home/marshall/Documents/projects/InProgress/Quill_New/logs/quill-20261009-154524.log
+15:45:24.720 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._http_get took 0.000s (call #1, total 0.000s, avg 0.0004s)
+15:45:24.720 | INFO    | components.researchEngine:_http_get 759 - BLOCKED url=foo://bar reason=scheme:foo
+15:45:24.720 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised ValueError: blocked url (scheme:foo): 'foo://bar' after 0.000s
+Traceback (most recent call last):
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 94, in <module>
+    call_http_get(_e, _bad)
+    │             │   └ 'foo://bar'
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ <function call_http_get at 0x740a50fd8eb0>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 69, in call_http_get
+    box["body"] = engine._http_get(url, **kw)
+    │             │      │         │      └ {}
+    │             │      │         └ 'foo://bar'
+    │             │      └ <function ResearchEngine._http_get at 0x740a50fcf1c0>
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ {}
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x740a50f45010>, 'foo://bar')
+             └ <function ResearchEngine._http_get at 0x740a50fcf110>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 760, in _http_get
+    raise ValueError(f"blocked url ({reason}): {url!r}")
+                                     │          └ 'foo://bar'
+                                     └ 'scheme:foo'
+
+ValueError: blocked url (scheme:foo): 'foo://bar'
+15:45:24.721 | INFO    | components.researchEngine:_http_get 759 - BLOCKED url=not-a-url reason=scheme:none
+15:45:24.721 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised ValueError: blocked url (scheme:none): 'not-a-url' after 0.000s
+Traceback (most recent call last):
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 94, in <module>
+    call_http_get(_e, _bad)
+    │             │   └ 'not-a-url'
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ <function call_http_get at 0x740a50fd8eb0>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 69, in call_http_get
+    box["body"] = engine._http_get(url, **kw)
+    │             │      │         │      └ {}
+    │             │      │         └ 'not-a-url'
+    │             │      └ <function ResearchEngine._http_get at 0x740a50fcf1c0>
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ {}
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x740a50f45010>, 'not-a-url')
+             └ <function ResearchEngine._http_get at 0x740a50fcf110>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 760, in _http_get
+    raise ValueError(f"blocked url ({reason}): {url!r}")
+                                     │          └ 'not-a-url'
+                                     └ 'scheme:none'
+
+ValueError: blocked url (scheme:none): 'not-a-url'
+15:45:24.722 | INFO    | components.researchEngine:_http_get 759 - BLOCKED url=example.org/x reason=scheme:none
+15:45:24.722 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised ValueError: blocked url (scheme:none): 'example.org/x' after 0.000s
+Traceback (most recent call last):
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 94, in <module>
+    call_http_get(_e, _bad)
+    │             │   └ 'example.org/x'
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ <function call_http_get at 0x740a50fd8eb0>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 69, in call_http_get
+    box["body"] = engine._http_get(url, **kw)
+    │             │      │         │      └ {}
+    │             │      │         └ 'example.org/x'
+    │             │      └ <function ResearchEngine._http_get at 0x740a50fcf1c0>
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ {}
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x740a50f45010>, 'example.org/x')
+             └ <function ResearchEngine._http_get at 0x740a50fcf110>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 760, in _http_get
+    raise ValueError(f"blocked url ({reason}): {url!r}")
+                                     │          └ 'example.org/x'
+                                     └ 'scheme:none'
+
+ValueError: blocked url (scheme:none): 'example.org/x'
+15:45:24.723 | INFO    | components.researchEngine:_http_get 759 - BLOCKED url=javascript:alert(1) reason=scheme:javascript
+15:45:24.723 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised ValueError: blocked url (scheme:javascript): 'javascript:alert(1)' after 0.000s
+Traceback (most recent call last):
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 94, in <module>
+    call_http_get(_e, _bad)
+    │             │   └ 'javascript:alert(1)'
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ <function call_http_get at 0x740a50fd8eb0>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 69, in call_http_get
+    box["body"] = engine._http_get(url, **kw)
+    │             │      │         │      └ {}
+    │             │      │         └ 'javascript:alert(1)'
+    │             │      └ <function ResearchEngine._http_get at 0x740a50fcf1c0>
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ {}
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x740a50f45010>, 'javascript:alert(1)')
+             └ <function ResearchEngine._http_get at 0x740a50fcf110>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 760, in _http_get
+    raise ValueError(f"blocked url ({reason}): {url!r}")
+                                     │          └ 'javascript:alert(1)'
+                                     └ 'scheme:javascript'
+
+ValueError: blocked url (scheme:javascript): 'javascript:alert(1)'
+15:45:24.723 | INFO    | components.researchEngine:_http_get 759 - BLOCKED url=https://es.pornhub.com/pornstars reason=domain:pornhub.com
+15:45:24.723 | ERROR   | utilis.timing:wrapper 170 - FAIL  ResearchEngine._http_get raised ValueError: blocked url (domain:pornhub.com): 'https://es.pornhub.com/pornstars' after 0.000s
+Traceback (most recent call last):
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 104, in <module>
+    call_http_get(_e, "https://es.pornhub.com/pornstars")
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ <function call_http_get at 0x740a50fd8eb0>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/tests/test_searxng.py", line 69, in call_http_get
+    box["body"] = engine._http_get(url, **kw)
+    │             │      │         │      └ {}
+    │             │      │         └ 'https://es.pornhub.com/pornstars'
+    │             │      └ <function ResearchEngine._http_get at 0x740a50fcf1c0>
+    │             └ <components.researchEngine.ResearchEngine object at 0x740a50f45010>
+    └ {}
+
+> File "/home/marshall/Documents/projects/InProgress/Quill_New/utilis/timing.py", line 165, in wrapper
+    result = func(*args, **kwargs)
+             │     │       └ {}
+             │     └ (<components.researchEngine.ResearchEngine object at 0x740a50f45010>, 'https://es.pornhub.com/pornstars')
+             └ <function ResearchEngine._http_get at 0x740a50fcf110>
+
+  File "/home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py", line 760, in _http_get
+    raise ValueError(f"blocked url ({reason}): {url!r}")
+                                     │          └ 'https://es.pornhub.com/pornstars'
+                                     └ 'domain:pornhub.com'
+
+ValueError: blocked url (domain:pornhub.com): 'https://es.pornhub.com/pornstars'
+15:45:24.724 | INFO    | utilis.timing:wrapper 182 - ResearchEngine._fetch took 0.000s (call #1, total 0.000s, avg 0.0001s)
+PASS  baseline: default Accept is text/html,application/rss+xml   [text/html,application/rss+xml]
+PASS  baseline: default User-Agent is a Firefox 124 string   [Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0]
+PASS  baseline: default timeout is 12   [12]
+PASS  baseline: non-http(s) url raises ValueError ('foo://bar')   [blocked url (scheme:foo): 'foo://bar']
+PASS  baseline: non-http(s) url raises ValueError ('not-a-url')   [blocked url (scheme:none): 'not-a-url']
+PASS  baseline: non-http(s) url raises ValueError ('example.org/x')   [blocked url (scheme:none): 'example.org/x']
+PASS  baseline: non-http(s) url raises ValueError ('javascript:alert(1)')   [blocked url (scheme:javascript): 'javascript:alert(1)']
+PASS  baseline: blocked url raises ValueError   [blocked url (domain:pornhub.com): 'https://es.pornhub.com/po]
+PASS  baseline: _fetch returns '' when the fetch raises
+FAIL  searxng provider exists
+FAIL  searxng is callable   ['ResearchEngine' object has no attribute '_searxng']
+FAIL  searxng request sends format=json
+
+FAILURES: 9/12

@@ -1,0 +1,59 @@
+[package]
+name = "quill"
+version = "0.1.0"
+description = "Quill — a quiet, local-first writing workspace"
+authors = ["Quill"]
+edition = "2021"
+# Export dependencies (printpdf, zip via docx-rs) require 1.88. Tauri v2 has no
+# requirement to stay on the 1.77 baseline.
+rust-version = "1.88"
+
+[lib]
+name = "quill_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-window-state = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5"
+base64 = "0.22"
+sha2 = "0.10"
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+# Export pipeline. All pure Rust, no C dependencies, so all three desktop
+# targets build from the same lockfile.
+html-escape = "0.2"
+printpdf = { version = "0.12", default-features = false, features = ["html"] }
+docx-rs = "0.4"
+zip = { version = "8", default-features = false, features = ["deflate"] }
+tempfile = "3"
+# PocketBase client. rustls rather than native-tls: native-tls would pull in a
+# system OpenSSL and break the promise that all three desktop targets build from
+# one lockfile with no C dependencies.
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "charset", "http2", "stream"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

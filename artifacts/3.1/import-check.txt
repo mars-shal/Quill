@@ -1,0 +1,25 @@
+
+================================================================
+IMPORT CLEANLINESS + MODULE-LEVEL IMPORT CHECK
+================================================================
+--- 1) plain import, warnings escalated to errors ---
+2026-10-09 16:10:09.999 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+import OK; module file = /home/marshall/Documents/projects/InProgress/Quill_New/components/researchEngine.py
+exit=0
+
+--- 2) raw stderr of a plain import (should be empty) ---
+2026-10-09 16:10:11.011 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+stderr bytes: 151
+
+--- 3) with -W all (all warnings shown) ---
+no warnings emitted
+
+--- 4) json and urllib.error are module-level attributes (used by new _searxng) ---
+2026-10-09 16:10:13.498 | INFO     | utilis.ratelimit:<module>:92 - [ratelimit] budget 6000 TPM / 30 RPM (built at import: LIMITER = TokenBudget(...))
+m.json                 -> json module-level: True
+m.urllib.error         -> URLError module-level: True
+m.os                   -> os module-level: True
+_searxng references json.loads   : True
+_searxng references urllib.error : True
+_searxng references os.environ  : True
+_http_get signature: (self, url: str, *, timeout: float = 12, headers: dict[str, str] | None = None) -> bytes

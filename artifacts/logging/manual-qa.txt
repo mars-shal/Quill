@@ -1,0 +1,102 @@
+MANUAL QA - audit logging for SearXNG + entity provenance
+=========================================================
+Date       : 2026-10-10
+Repo       : /home/marshall/Documents/projects/InProgress/Quill_New
+Harness    : /tmp/opencode/quill-logging/manual_qa.py (throwaway, deleted after the run)
+Surface    : a REAL listening HTTP server on 127.0.0.1 (OS-assigned port), answering a
+             realistic SearXNG JSON body - NOT a stub of _http_get. The URL printed as
+             "server actually received" is what the backend genuinely saw on the wire.
+             Entity-provenance cases use stubbed LLM + search, neither of which exists offline.
+
+PASS CRITERIA
+  1. the request line appears with real parameter values (base, path, q, format, categories, language)
+  2. the query is truncated at the 200-char cap with an explicit marker
+  3. instance_returned=0 is distinguishable from instance_returned=20 usable=0
+  4. the two provenance branches read differently from the log alone
+  5. the pre-existing `entity resolution:` line is still emitted, unchanged
+
+
+==============================================================================
+1. _searxng against a REAL listening mock instance
+==============================================================================
+returned hits: 8 (server sent 12 results)
+server actually received: /search?q=Stadio+Olimpico+demolition+Rome&format=json&categories=general%2Cscience&language=en...
+LOG| CALL  ResearchEngine._searxng query=Stadio Olimpico demolition Rome
+LOG| searxng request: base=http://127.0.0.1:33929 url=http://127.0.0.1:33929/search?q=Stadio+Olimpico+demolition+Rome&format=json&categories=general%2Cscience&language=en params: q='Stadio Olimpico demolition Rome' format=json categories=general,science language=en
+LOG| searxng: 1 unresponsive engine(s): [['bing', 1.2]]
+LOG| searxng response: instance_returned=12 usable=10 kept=8 dropped=2
+LOG| RETURN ResearchEngine._searxng -> [{'title': 'Stadio Olimpico - page 0', 'url': 'https://example.org/olimpico/0', 'snippet': 'Olympic Stadium of Rome, 1960.'}, {'title': 'Stadio Olimpico - page 1', 'url': 'https://example.org/olimpico/1', 'snippet': 'Olympic Stadium of Rome, 1960.'}, {'title': 'Stadio Olimpico - page 2', 'url': 'https://example.org/olimpico/2', 'snippet': 'Olympic Stadium of Rome, 1960.'}, {'title': 'Stadio Olimpico - page 3', 'url': 'https://example.org/olimpico/3', 'snippet': 'Olympic Stadium of Rome, 1960.'},... (+500 chars)
+LOG| ResearchEngine._searxng took 0.003s (call #1, total 0.003s, avg 0.0029s)
+
+==============================================================================
+2. _searxng with a query far over the cap (480 chars)
+==============================================================================
+logged q field length: 215
+LOG| searxng request: base=http://127.0.0.1:33929 url=http://127.0.0.1:33929/search?q=tok0000+tok0001+tok0002+tok0003+tok0004+tok0005+tok0006+tok0007+tok0008+tok0009+tok0010+tok0011+tok0012+tok0013+tok0014+tok0015+tok0016+tok0017+tok0018+tok0019+tok0020+tok0021+tok0022+tok0023+tok0024+...%28%2B279+chars%29&format=json&categories=general%2Cscience&language=en params: q='tok0000 tok0001 tok0002 tok0003 tok0004 tok0005 tok0006 tok0007 tok0008 tok0009 tok0010 tok0011 tok0012 tok0013 tok0014 tok0015 tok0016 tok0017 tok0018 tok0019 tok0020 tok0021 tok0022 tok0023 tok0024 ...(+279 chars)' format=json categories=general,science language=en
+
+==============================================================================
+3a. _searxng when the instance returns an EMPTY result set
+==============================================================================
+returned hits: 0
+LOG| searxng response: instance_returned=0 usable=0 kept=0 dropped=0
+
+==============================================================================
+3b. _searxng when the instance returns 20 results and every one is filtered
+==============================================================================
+returned hits: 0
+LOG| searxng response: instance_returned=20 usable=0 kept=0 dropped=0
+
+==============================================================================
+3c. _searxng when the instance is unreachable (hard failure)
+==============================================================================
+returned hits: 0
+LOG| searxng request: base=http://127.0.0.1:1 url=http://127.0.0.1:1/search?q=the+instance+is+gone&format=json&categories=general%2Cscience&language=en params: q='the instance is gone' format=json categories=general,science language=en
+LOG| searxng failed: URLError: <urlopen error [Errno 111] Connection refused>
+NOTE: a hard failure emits the request line + the pre-existing warning, and no outcome line (there is no response to size).
+
+==============================================================================
+4. _resolve_entity - INFERRED anchor (the incident: prompt names no stadium)
+==============================================================================
+resolver returned: 'Stadio dei Marmi'   <- the Carrara homonym, still unchanged (logging only)
+LOG| CALL  ResearchEngine._resolve_entity concept=Thesis on the demolition of a stadium in Rome
+LOG| entity provenance: origin=model-generated (INVENTED: the entity string does NOT occur in the concept/user text) entity='Stadio dei Marmi' concept='Thesis on the demolition of a stadium in Rome' confirmed_by='Stadio dei Marmi - Wikipedia | Stadio dei Marmi (Carrara)' ambiguous=False
+LOG| entity resolution: Thesis on the demolition of a stadium in Rome -> Stadio dei Marmi confirmed by 'Stadio dei Marmi - Wikipedia | Stadio dei Marmi (Carrara)' ambiguous=False
+LOG| RETURN ResearchEngine._resolve_entity -> Stadio dei Marmi
+
+==============================================================================
+5. _resolve_entity - SUPPLIED anchor (the user named it)
+==============================================================================
+resolver returned: 'Stadio Olimpico'
+LOG| CALL  ResearchEngine._resolve_entity concept=History of the Stadio Olimpico in Rome
+LOG| entity provenance: origin=user-supplied (the entity string occurs in the concept/user text) entity='Stadio Olimpico' concept='History of the Stadio Olimpico in Rome' confirmed_by='Stadio Olimpico - Wikipedia | Stadio Olimpico history' ambiguous=False
+LOG| entity resolution: History of the Stadio Olimpico in Rome -> Stadio Olimpico confirmed by 'Stadio Olimpico - Wikipedia | Stadio Olimpico history' ambiguous=False
+LOG| RETURN ResearchEngine._resolve_entity -> Stadio Olimpico
+
+==============================================================================
+6. _resolve_entity - AMBIGUOUS anchor still applied downstream
+==============================================================================
+resolver returned: 'Stadium of Domitian'
+LOG| CALL  ResearchEngine._resolve_entity concept=thesis on the demolition of the Stadium of Rome
+LOG| entity provenance: origin=result-titles (attested in 2+ hit titles, not from the model or the concept) entity='Stadium of Domitian' concept='thesis on the demolition of the Stadium of Rome' confirmed_by='Stadium of Domitian - Wikipedia | Stadium of Domitian reconstructed' ambiguous=True
+LOG| entity anchor risk: ambiguous=true, downstream planner queries will be anchored on 'Stadium of Domitian' (titles admitting other referents: 'Stadium of Domitian - Wikipedia | Stadium of Domitian reconstructed')
+LOG| entity resolution: thesis on the demolition of the Stadium of Rome -> Stadium of Domitian confirmed by 'Stadium of Domitian - Wikipedia | Stadium of Domitian reconstructed' ambiguous=True (resolved from result titles)
+LOG| RETURN ResearchEngine._resolve_entity -> Stadium of Domitian
+
+==============================================================================
+7. _resolve_entity - CACHE HIT on a repeat concept
+==============================================================================
+resolver returned: 'Stadio dei Marmi' (from the entity cache, no re-verification)
+LOG| CALL  ResearchEngine._resolve_entity concept=Thesis on the demolition of a stadium in Rome
+LOG| entity provenance: origin=cache-hit (not re-verified this run) entity='Stadio dei Marmi' concept='Thesis on the demolition of a stadium in Rome'
+LOG| RETURN ResearchEngine._resolve_entity -> Stadio dei Marmi
+
+QA COMPLETE
+
+VERDICT
+  1. PASS - real base http://127.0.0.1:<port> and categories=general,science both logged
+  2. PASS - 480-char query logged as 200 chars + '...(+279 chars)'
+  3. PASS - 'instance_returned=0 usable=0' vs 'instance_returned=20 usable=0'
+  4. PASS - origin=model-generated (INVENTED...) vs origin=user-supplied (...)
+  5. PASS - 'entity resolution:' emitted verbatim in every branch
+  EXTRA: 3c shows a hard failure emits the request line + the pre-existing warning and
+         no outcome line - correct, since there is no response to size.

@@ -1,0 +1,332 @@
+.thought-line {
+  --tl-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --tl-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --tl-font: 16px;
+  --tl-color: currentColor;
+  --tl-glyph: currentColor;
+  --tl-settle: 350ms;
+  --tl-blur: 2px;
+  --tl-shimmer: 1.8s;
+  --tl-done: 0.75;
+  --tl-timer: 0.55;
+
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  color: var(--tl-color);
+  font-family: inherit;
+  font-size: var(--tl-font);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.thought-line__head {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  outline: none;
+  cursor: default;
+}
+
+.thought-line__head[data-toggle] {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.thought-line__glyph {
+  display: inline-flex;
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.2em;
+  color: var(--tl-glyph);
+}
+
+.thought-line__glyph svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.thought-line__dot {
+  width: 0.5em;
+  height: 0.5em;
+  margin: auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.thought-line__label {
+  display: inline-grid;
+}
+
+.thought-line,
+.thought-line__head,
+.thought-line__label {
+  max-width: 100%;
+}
+
+.thought-line__text {
+  grid-area: 1 / 1;
+  width: max-content;
+  /* The head can carry a whole step ("Writing “1.3. Early pedigree analysis…”)
+     since the collapsed label fix; it ellipsises at the line's measure instead
+     of running out of the panel (2026-11-02). */
+  max-width: min(42ch, 100%);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0;
+  filter: blur(var(--tl-blur));
+  transition:
+    opacity var(--tl-settle) var(--tl-ease-out),
+    filter var(--tl-settle) var(--tl-ease-out);
+}
+
+.thought-line__text[data-active] {
+  opacity: 1;
+  filter: blur(0);
+}
+
+.thought-line__text--done[data-active] {
+  opacity: var(--tl-done);
+}
+
+.thought-line__breath {
+  display: inline-block;
+}
+
+.thought-line[data-working] .thought-line__breath[data-shimmer] {
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--tl-color) 50%, transparent) 30%,
+    var(--tl-color) 50%,
+    color-mix(in srgb, var(--tl-color) 50%, transparent) 70%
+  );
+  background-size: 250% 100%;
+  background-position: 125% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* `-webkit-text-fill-color` and NOT `color: transparent`: `--tl-color` is
+     `currentColor`, so `color: transparent` makes currentColor resolve to
+     transparent at this very element -- the gradient is then built from
+     transparent, and background-clip:text paints nothing. The label vanished
+     exactly this way (2026-11-02: head showed the timer but no text while
+     working). text-fill-color hides the glyphs while `color` keeps its real
+     inherited value for the gradient to sample. */
+  -webkit-text-fill-color: transparent;
+  animation: thought-line-shimmer var(--tl-shimmer) linear infinite;
+}
+
+@keyframes thought-line-shimmer {
+  to {
+    background-position: -125% 0;
+  }
+}
+
+.thought-line__timer {
+  font-variant-numeric: tabular-nums;
+  opacity: var(--tl-timer);
+  transition:
+    opacity var(--tl-settle) ease,
+    transform var(--tl-settle) var(--tl-ease-in-out);
+}
+
+.thought-line__timer[data-done] {
+  opacity: var(--tl-done);
+}
+
+.thought-line__chevron {
+  display: inline-flex;
+  margin-left: 0.1em;
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    transform 200ms var(--tl-ease-out);
+}
+
+.thought-line__chevron[data-on] {
+  opacity: 0.55;
+}
+
+.thought-line[data-open] .thought-line__chevron {
+  transform: rotate(180deg);
+}
+
+.thought-line__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.thought-line__trace {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 0;
+  min-width: 100%;
+  transition: grid-template-rows var(--tl-settle) var(--tl-ease-out);
+}
+
+.thought-line__trace[data-open] {
+  grid-template-rows: 1fr;
+}
+
+.thought-line__fold {
+  min-height: 0;
+  overflow-x: visible;
+  overflow-y: clip;
+}
+
+.thought-line__steps {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+  width: max-content;
+  padding: 0.55em 0 0.55em 0;
+  font-size: 0.875em;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/*
+ * The rail.
+ *
+ * Inset to the first and last node rather than to the container, so the line
+ * starts and stops at the dots instead of overhanging them. The insets are in
+ * em and track the row pitch: line-height plus the row's own padding.
+ */
+.thought-line__rail {
+  position: absolute;
+  left: 0.21em;
+  top: 0.72em;
+  bottom: 0.78em;
+  width: 1px;
+  background: color-mix(in srgb, var(--tl-color) 20%, transparent);
+}
+
+.thought-line__step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.16em 0 0.16em 1.25em;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 200ms var(--tl-ease-out),
+    transform 200ms var(--tl-ease-out);
+}
+
+@starting-style {
+  .thought-line__step {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/*
+ * A node, centred on the rail.
+ *
+ * Three states, one shape: a step still to come is barely there, a finished one
+ * is a mid grey, and the live one is the brightest thing on the line. The ring
+ * on the live node is what makes it read as current at a glance -- a change of
+ * shape (the old bullet) would have been a second icon language.
+ */
+.thought-line__node {
+  position: absolute;
+  left: 0.21em;
+  top: 50%;
+  width: 0.4em;
+  height: 0.4em;
+  margin: -0.2em 0 0 -0.2em;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.2;
+  transition:
+    opacity 300ms var(--tl-ease-out),
+    box-shadow 300ms var(--tl-ease-out);
+}
+
+.thought-line__step[data-done] .thought-line__node {
+  opacity: 0.45;
+}
+
+.thought-line__step[data-current] .thought-line__node {
+  opacity: 1;
+  box-shadow: 0 0 0 0.18em color-mix(in srgb, var(--tl-color) 14%, transparent);
+}
+
+/* The active row keeps the single node, bright with a halo: the loader on
+   screen is the orb at the head of the line (2026-11-02 -- the three-dot
+   cluster that used to sit on this row was removed as a second, competing
+   loader). */
+.thought-line__step-text {
+  opacity: 0.3;
+  transition: opacity var(--tl-settle) ease;
+}
+
+.thought-line__step[data-done] .thought-line__step-text {
+  opacity: 0.6;
+}
+
+.thought-line__step[data-current] .thought-line__step-text {
+  opacity: 1;
+}
+
+/*
+ * The live row shimmers, the same sweep the header already uses, so the moving
+ * part of the trace and the moving part of the label are one idiom. It is gated
+ * on the root's `data-shimmer` rather than the media query alone: that flag is
+ * the OS preference *and* the `shimmer` prop, so a caller that asked for a
+ * still line gets a still line.
+ */
+.thought-line[data-shimmer] .thought-line__step[data-current] .thought-line__step-text {
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--tl-color) 45%, transparent) 30%,
+    var(--tl-color) 50%,
+    color-mix(in srgb, var(--tl-color) 45%, transparent) 70%
+  );
+  background-size: 250% 100%;
+  background-position: 125% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* Same rule as the breathing label: `color: transparent` here would make the
+     gradient's currentColor transparent too and hide the current step. */
+  -webkit-text-fill-color: transparent;
+  animation: thought-line-shimmer var(--tl-shimmer) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thought-line__text {
+    filter: none !important;
+    transition: opacity var(--tl-settle) ease;
+  }
+
+  .thought-line__timer {
+    transition: opacity var(--tl-settle) ease;
+  }
+
+  .thought-line__step {
+    transform: none !important;
+    transition: opacity 200ms ease;
+  }
+
+  .thought-line__step[data-current] .thought-line__step-text {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
+}

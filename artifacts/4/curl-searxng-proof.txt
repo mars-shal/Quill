@@ -1,0 +1,22 @@
+### SearXNG raw API proof (independently reproduced)
+date: 2026-10-09T16:46:26+01:00  container: quill-searxng searxng/searxng:latest Up 20 minutes
+
+=== A) format=json on MY instance (the fix) ===
+HTTP/1.1 200 OK
+content-type: application/json
+content-length: 17740
+server-timing: total;dur=5533.329, render;dur=0, total_0_wikipedia;dur=181.867, total_1_mwmbl;dur=186.288, total_2_wikiquote;dur=350.67, total_3_wikibooks;dur=355.505, total_4_wikisource;dur=394.691, total_5_yahoo;dur=678.434, total_6_duckduckgo;dur=1113.162, total_7_wiby;dur=2244.898, load_0_wikipedia;dur=181.235, load_1_mwmbl;dur=177.693, load_2_wikiquote;dur=347.596, load_3_wikibooks;dur=352.878, load_4_wikisource;dur=391.227, load_5_yahoo;dur=667.282, load_6_duckduckgo;dur=1095.333, load_7_wiby;dur=2242.666
+x-content-type-options: nosniff
+http_code=200 size=17740 time=5.534619s ctype=application/json
+   -> saved raw body to artifacts/4/curl-searxng.json
+   parsed: results=24 unresponsive=[['brave', 'Suspended: too many requests']]
+
+=== B) SAME request WITHOUT format=json (default html) ===
+http_code=200 size=76215 time=1.046744s ctype=text/html; charset=utf-8
+
+=== C) format=csv (not in allowlist) -> proves allowlist enforced ===
+http_code=403
+
+403->200 STORY HOLDS: json=200 (allowlisted in search.formats), csv=403, html=200.
+Mount proof: docker inspect shows /tmp/opencode/searxng-settings.yml ->
+/etc/searxng/settings.yml (ro); docker exec cat confirms search.formats:[html,json].

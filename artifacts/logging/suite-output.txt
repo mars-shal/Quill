@@ -1,0 +1,56 @@
+SUITE OUTPUT - audit logging for SearXNG + entity provenance
+==========================================================
+Repo : /home/marshall/Documents/projects/InProgress/Quill_New
+Date : 2026-10-10
+
+Baseline before this change vs. after. Only tests/test_searxng.py changed count;
+the other four suites must be byte-identical, because no other file was touched.
+
+  suite              baseline   after    delta
+  -----------------  --------   ------   -------------------
+  test_searxng.py         70      117   +47 new checks
+  test_safety.py          34       34   unchanged
+  test_writing.py         18       18   unchanged
+  test_plagiarism.py      10       10   unchanged
+  test_regressions.py     51       51   unchanged
+
+Commands and real counts (PASS/FAIL counted from the per-line output, not inferred
+from the exit code - a suite can exit 0 having silently run fewer checks):
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_searxng.py
+ALL PASS: 117/117
+exit=0   PASS=117  FAIL=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_safety.py
+ALL PASS: 34/34
+exit=0   PASS=34  FAIL=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_writing.py
+ALL PASS: 18/18
+exit=0   PASS=18  FAIL=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_plagiarism.py
+ALL PASS: 10/10
+exit=0   PASS=10  FAIL=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_regressions.py
+ALL PASS: 51/51
+exit=0   PASS=51  FAIL=0
+
+
+OFFLINE PROOF
+  The new checks must not touch the network. Re-run with every outbound connect
+  path replaced by a raiser (socket.socket.connect / connect_ex / create_connection /
+  getaddrinfo / gethostbyname):
+
+    $ PYTHONPATH=$PWD .venv/bin/python /tmp/opencode/quill-logging/no_network.py tests/test_searxng.py
+    ALL PASS: 117/117
+    sockets-blocked exit=0
+
+  Negative control (the blocker must actually bite, otherwise the above proves nothing):
+    $ ... no_network.py _netcheck.py
+    BLOCKER ACTIVE: NETWORK ACCESS ATTEMPTED - this suite must stay offline
+
+  No new REQUIRED env var was introduced. tests/test_searxng.py sets QUILL_SEARXNG_URL
+  and QUILL_SEARXNG_CATEGORIES through its own _Env context manager, which restores the
+  prior values on exit; every new case is wrapped in the same manager.

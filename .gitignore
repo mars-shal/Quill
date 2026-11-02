@@ -1,0 +1,71 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+venv/
+
+# Rust / Tauri
+target/
+gui/src-tauri/target/
+gui/src-tauri/gen/
+
+# Sidecar binaries (built per target, not committed)
+gui/src-tauri/binaries/*.exe
+gui/src-tauri/binaries/*-apple-darwin
+gui/src-tauri/binaries/*-unknown-linux-gnu
+gui/src-tauri/binaries/*-pc-windows-msvc
+gui/src-tauri/binaries/*-apple-darwin*
+
+# PocketBase
+pb_data/
+pb_migrations_local/
+*.db
+*.db-shm
+*.db-wal
+backend/pocketbase/pb_data/
+
+# Node
+node_modules/
+gui/node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Local app data / runtime
+gui/.quill/
+.quill/
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# PocketBase binary and runtime state. The binary is fetched by
+# backend/pocketbase/fetch.sh, which verifies a pinned checksum, so there is
+# nothing to review in the repository and nothing large to clone.
+backend/pocketbase/bin/
+backend/pocketbase/pb_data/
+
+# Generated pipeline output (a run writes these; test_main writes its own)
+output/
+output-api/
+test_output/

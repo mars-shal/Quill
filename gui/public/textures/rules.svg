@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="26" viewBox="0 0 100 26" preserveAspectRatio="none">
+  <!-- Ruled lines, spaced to the editor's own 1.72 line-height at 17px. The
+       texture and the type are on the same rhythm, so the rules sit where the
+       descenders already are instead of cutting through the x-height. -->
+  <path d="M0 25.5h100" stroke="#000" stroke-width="0.8" opacity="0.05"/>
+</svg>

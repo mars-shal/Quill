@@ -1,0 +1,50 @@
+### Step 3 - HIT-QUALITY GATE (parsed, live via ResearchEngine._searxng)
+QUILL_SEARXNG_URL=http://localhost:8080 categories=general (default)
+======================================================================
+QUERY: Stadio dei Marmi demolition 1968
+  OK  C1 hits_returned >= 6      -> 8
+  OK  C2 non_empty_snippet >= 5  -> 6
+  OK  C3 on_topic_hosts >= 3      -> 7 ['corrieredellosport.it', 'culturalheritageonline.com', 'en.wikipedia.org', 'lonelyplanet.com', 'pt.wikipedia.org', 'thesecondserve.com']
+  OK  C4 spam_hosts < 3           -> 0
+  VERDICT: PASS
+    - pt.wikipedia.org                 snip=  0  Stadio dei Marmi – Wikipédia, a enciclopédia livre
+    - en.wikipedia.org                 snip=210  Stadio dei Marmi - Wikipedia
+    - decoarchitecture.tumblr.com      snip=154  Art Deco Architecture
+    - culturalheritageonline.com       snip=257  Stadio dei Marmi — Marble Stadium by Enrico Del Debbio
+    - lonelyplanet.com                 snip=154  Stadio dei Marmi | Rome, Lazio | Attractions - Lonely Planet
+    - en.wikipedia.org                 snip=286  Foro Italico - Wikipedia
+    - corrieredellosport.it            snip=  0  In 3000 allo Stadio dei Marmi di Roma per l'S3
+    - thesecondserve.com               snip=214  A Forensics of the Foro Italico - The Second Serve
+======================================================================
+QUERY: demolizione Stadio dei Marmi Foro Italico 1968
+  OK  C1 hits_returned >= 6      -> 8
+  OK  C2 non_empty_snippet >= 5  -> 7
+  OK  C3 on_topic_hosts >= 3      -> 7 ['culturalheritageonline.com', 'en.wikipedia.org', 'it.wikipedia.org', 'lonelyplanet.com', 'walksinrome.com']
+  OK  C4 spam_hosts < 3           -> 0
+  VERDICT: PASS
+    - walksinrome.com                  snip=  0  The Stadio dei Marmi, Foro Italico, Rome - Walks in Rome (Es
+    - en.wikipedia.org                 snip=300  Stadio dei Marmi - Wikipedia
+    - lonelyplanet.com                 snip=154  Stadio dei Marmi | Rome, Lazio | Attractions - Lonely Planet
+    - culturalheritageonline.com       snip=257  Stadio dei Marmi — Marble Stadium by Enrico Del Debbio
+    - decoarchitecture.tumblr.com      snip=154  Art Deco Architecture
+    - en.wikipedia.org                 snip=300  Foro Italico - Wikipedia
+    - it.wikipedia.org                 snip=261  Foro Italico - Wikipedia
+    - culturalheritageonline.com       snip=299  Foro Italico — Sports Citadel by Enrico Del Debbio – Virtual
+======================================================================
+QUERY: Stadio dei Marmi storia architettura Del Debbio
+  OK  C1 hits_returned >= 6      -> 8
+  OK  C2 non_empty_snippet >= 5  -> 6
+  OK  C3 on_topic_hosts >= 3      -> 5 ['archweb.com', 'culturalheritageonline.com', 'en.wikipedia.org', 'it.wikipedia.org']
+  OK  C4 spam_hosts < 3           -> 0
+  VERDICT: PASS
+    - openstreetmap.org                snip=  0  Way: ‪Viale dello Stadio dei Marmi‬ (‪209452986‬) | OpenStre
+    - en.wikipedia.org                 snip=210  Stadio dei Marmi - Wikipedia
+    - siviaggia.it                     snip=  0  La Roma dello Stadio dei Marmi di Carrara
+    - culturalheritageonline.com       snip=259  Stadio dei Marmi — Marble Stadium by Enrico Del Debbio
+    - it.wikipedia.org                 snip=231  Stadio dei Marmi Pietro Mennea - Wikipedia
+    - culturalheritageonline.com       snip=288  Stadio dei Marmi, Rome: Enrico Del Debbio, 1928–1932 - CHO
+    - allinrome.com                    snip=204  The Stadio dei Marmi - allinrome.com
+    - archweb.com                      snip=254  Stadio dei Marmi "Pietro Mennea" - Archweb
+======================================================================
+TOTALS 3 queries: hits=24 snippets=19 on_topic=19 spam=0
+OVERALL: PASS

@@ -1,0 +1,92 @@
+================================================================
+CLEANUP RECEIPT
+closed: 2026-10-09T16:11:13+01:00
+================================================================
+
+--- 1) throwaway script(s) created by this gate ---
+created under /tmp/opencode/gate31/ (NEVER in the repo):
+total 32
+drwxrwxr-x 2 marshall marshall 4096 Oct  9 16:10 .
+drwxrwxr-x 3 marshall marshall 4096 Oct  9 16:07 ..
+-rw-rw-r-- 1 marshall marshall  151 Oct  9 16:10 import_stderr.txt
+-rw-rw-r-- 1 marshall marshall 6938 Oct  9 16:07 pre_state.txt
+-rw-rw-r-- 1 marshall marshall 9553 Oct  9 16:09 probe_backcompat.py
+
+deleting now...
+$ ls /tmp/opencode/gate31  ->
+ls: cannot access '/tmp/opencode/gate31': No such file or directory
+  (gone: No such file or directory)
+
+--- 2) no product code / tests were modified by this gate ---
+current mtimes of the 4 declared-scope files (must still be 15:46-15:54):
+2026-10-09 15:46:18.597666795 +0100  components/researchEngine.py
+2026-10-09 15:47:20.845845983 +0100  tests/test_searxng.py
+2026-10-09 15:54:15.726092529 +0100  .env.example
+2026-10-09 15:54:59.245988245 +0100  docs/searxng.md
+-> unchanged since before this gate started (16:07). READ-ONLY upheld.
+
+--- 3) only writes made by this gate are inside artifacts/3.1/ ---
+total 116
+drwxrwxr-x 2 marshall marshall  4096 Oct  9 16:11 .
+drwxrwxr-x 5 marshall marshall  4096 Oct  9 16:07 ..
+-rw-rw-r-- 1 marshall marshall 40105 Oct  9 16:09 backward-compat.txt
+-rw-rw-r-- 1 marshall marshall  1256 Oct  9 16:11 cleanup-receipt.txt
+-rw-rw-r-- 1 marshall marshall  2709 Oct  9 16:11 counts.md
+-rw-rw-r-- 1 marshall marshall  1409 Oct  9 16:10 import-check.txt
+-rw-rw-r-- 1 marshall marshall  4963 Oct  9 16:10 scope-check.txt
+-rw-rw-r-- 1 marshall marshall  4417 Oct  9 16:10 stale-state.txt
+-rw-rw-r-- 1 marshall marshall 40452 Oct  9 16:08 suite-output.txt
+
+--- 4) containers: none spawned ---
+c2bcaafec654 openwa-dashboard Up 34 minutes openwa-dashboard
+0aa9a5a18955 openwa-openwa Up 34 minutes (healthy) openwa-api
+4aaa17ce5fe8 minio/minio:RELEASE.2025-07-23T15-54-02Z-cpuv1 Up 34 minutes (healthy) onyx-minio-1
+podman:
+CONTAINER ID  IMAGE                           COMMAND               CREATED       STATUS      PORTS       NAMES
+4c3da3224cc2  docker.io/library/ubuntu:24.04  --verbose --name ...  5 months ago  Created                 noble
+
+--- 5) listening ports: no new listener opened by this gate ---
+tcp LISTEN 0      128         127.0.0.1:631   0.0.0.0:*                                           
+tcp LISTEN 0      128             [::1]:631      [::]:*                                           
+tcp LISTEN 0      244         127.0.0.1:5432  0.0.0.0:*                                           
+tcp LISTEN 0      32           10.0.3.1:53    0.0.0.0:*                                           
+tcp LISTEN 0      4096                *:11434       *:*                                           
+tcp LISTEN 0      4096        127.0.0.1:2785  0.0.0.0:*                                           
+tcp LISTEN 0      4096        127.0.0.1:2886  0.0.0.0:*                                           
+tcp LISTEN 0      4096    127.0.0.53%lo:53    0.0.0.0:*                                           
+tcp LISTEN 0      511             [::1]:18789    [::]:* users:(("MainThread",pid=1194,fd=26))     
+tcp LISTEN 0      511         127.0.0.1:18789 0.0.0.0:* users:(("MainThread",pid=1194,fd=25))     
+tcp LISTEN 0      511         127.0.0.1:18791 0.0.0.0:* users:(("MainThread",pid=1194,fd=27))     
+tcp LISTEN 0      511         127.0.0.1:35727 0.0.0.0:* users:(("ai.opencode.des",pid=5417,fd=75))
+tcp LISTEN 0      511         127.0.0.1:39073 0.0.0.0:* users:(("ai.opencode.des",pid=5417,fd=59))
+tcp LISTEN 0      511         127.0.0.1:41543 0.0.0.0:* users:(("ai.opencode.des",pid=5417,fd=83))
+tcp LISTEN 0      511         127.0.0.1:43533 0.0.0.0:* users:(("ai.opencode.des",pid=5417,fd=40))
+tcp LISTEN 0      511         127.0.0.1:43669 0.0.0.0:* users:(("ai.opencode.des",pid=5417,fd=61))
+tcp LISTEN 0      511         127.0.0.1:44115 0.0.0.0:* users:(("ai.opencode.des",pid=5417,fd=69))
+udp UNCONN 0      0             0.0.0.0:37919 0.0.0.0:* users:(("zen",pid=4551,fd=207))           
+udp UNCONN 0      0             0.0.0.0:42596 0.0.0.0:* users:(("zen",pid=4551,fd=267))           
+udp UNCONN 0      0             0.0.0.0:46169 0.0.0.0:* users:(("zen",pid=4551,fd=253))           
+udp UNCONN 0      0             0.0.0.0:5353  0.0.0.0:*                                           
+udp UNCONN 0      0             0.0.0.0:54057 0.0.0.0:* users:(("zen",pid=4551,fd=143))           
+udp UNCONN 0      0             0.0.0.0:55972 0.0.0.0:*                                           
+udp UNCONN 0      0             0.0.0.0:59699 0.0.0.0:* users:(("zen",pid=4551,fd=175))           
+udp UNCONN 0      0      0.0.0.0%lxcbr0:67    0.0.0.0:*                                           
+udp UNCONN 0      0            10.0.3.1:53    0.0.0.0:*                                           
+udp UNCONN 0      0       127.0.0.53%lo:53    0.0.0.0:*                                           
+udp UNCONN 0      0                [::]:41057    [::]:*                                           
+udp UNCONN 0      0                [::]:5353     [::]:*                                           
+
+note: nothing in this gate bound a socket. The probe only made OUTBOUND
+requests (duckduckgo/bing/example.com) and the suites made zero network
+calls at all (proved with sockets disabled). SearXNG was NOT started:
+QUILL_SEARXNG_URL was unset for every run.
+
+--- 6) side effects honestly declared ---
+  a) logs/ gained 17 new files (113 -> 130). loguru opens a fresh
+     timestamped sink per interpreter start; unavoidable when importing
+     utilis.timing. logs/ is gitignored. NOT cleaned (would be destroying
+     the very evidence of this run); reported instead.
+  b) __pycache__ dirs refreshed by importing the modules. gitignored.
+  c) artifacts/3.1/ now holds 6 files (the deliverable).
+  d) database/ and output/ UNTOUCHED - newest file in each is still
+     2026-10-08 17:20, a day before the change window.

@@ -1,0 +1,33 @@
+IMAGE TAG CHECK — searxng/searxng:latest
+Date: 2026-10-09
+Host: linux (docker)
+
+COMMAND
+-------
+docker run --rm searxng/searxng:latest --version
+
+NOTE ON COMMAND BEHAVIOR
+------------------------
+The SearXNG image entrypoint does not implement --version; it boots the
+server regardless of argv. The command was therefore run under `timeout`
+and the version line was extracted from startup logs. The image itself
+pulled successfully from Docker Hub, which is the actual existence proof.
+
+REAL OUTPUT (timeout 12 docker run --rm searxng/searxng:latest, grepped)
+------------------------------------------------------------------------
+SearXNG 2026.10.9-9f042d2f6
+... "/etc/searxng/settings.yml" does not exist, creating from template...
+[INFO] Listening at: http://[::]:8080
+exit: 0
+
+PULL RECEIPT (first run, from docker output)
+--------------------------------------------
+latest: Pulling from searxng/searxng
+Digest: sha256:5903efa50bc6b99293fa059f7a0ff37eddd910210196af77d02e5536ccdfb387
+Status: Downloaded newer image for searxng/searxng:latest
+
+VERDICT
+-------
+Image tag `searxng/searxng:latest` EXISTS and is pullable.
+Resolved version at check time: SearXNG 2026.10.9-9f042d2f6
+`docker run --rm` self-cleans (no container left behind).

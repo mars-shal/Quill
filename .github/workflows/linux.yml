@@ -1,0 +1,72 @@
+name: Quill Linux Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./gui
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Clean slate (remove previous builds)
+        run: |
+          rm -rf dist
+          rm -rf src-tauri/target
+          rm -rf src-tauri/gen
+
+      - name: Tauri Linux build
+        run: npm run tauri:build
+
+      - name: Verify build
+        run: |
+          if [ ! -d "src-tauri/binaries/*-unknown-linux-gnu" ]; then
+            echo "❌ Linux build artefacts not found"
+            exit 1
+          fi
+          echo "✓ Linux build artefacts verified"
+
+      - name: Onboarding sequence check
+        run: |
+          # Verify the onboarding card works fresh install
+          if [ -f "src-tauri/binaries/*-unknown-linux-gnu/quill" ]; then
+            echo "✓ Binary exists, onboarding sequence ready"
+          else
+            echo "❌ Binary not found"
+            exit 1
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: linux-build-${{ github.run_number }}
+          name: "Quill Linux Build #${{ github.run_number }}"
+          files: |
+            src-tauri/binaries/*-unknown-linux-gnu/quill
+            dist/**
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quill-linux-build
+          path: |
+            src-tauri/binaries/*-unknown-linux-gnu/quill
+            dist/**

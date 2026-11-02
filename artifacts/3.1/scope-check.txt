@@ -1,0 +1,106 @@
+================================================================
+SCOPE CHECK - mtime-based (git sees the whole repo as untracked,
+so 'git status' is useless for diffing; mtimes are the evidence)
+generated: 2026-10-09T16:10:24+01:00
+================================================================
+
+NOTE: git tracked-file count = 1  (only README.md is tracked)
+      every other path reports as '??' -> git cannot diff this change.
+
+--- 1) PRIMARY SCOPE PROBE: the exact command from the task brief ---
+$ find components utilis tests -name '*.py' -newermt '2026-10-09 15:00'
+2026-10-09 15:46:18.5976667950  components/researchEngine.py
+2026-10-09 15:47:20.8458459830  tests/test_searxng.py
+
+RESULT: exactly 2 files -> components/researchEngine.py, tests/test_searxng.py
+        (the 2 Python files the brief said to expect)
+
+--- 2) every .py in the repo with its mtime, so the untouched ones are visible ---
+2026-10-07 19:38  ./components/conceptEngine.py
+2026-10-07 19:38  ./components/orchestrator.py
+2026-10-07 19:38  ./components/PlagiarismEngine.py
+2026-10-07 19:38  ./components/sessionManager.py
+2026-10-07 19:38  ./components/writingEngine.py
+2026-10-07 19:38  ./gui/scripts/make-icon.py
+2026-10-07 19:38  ./main.py
+2026-10-07 19:38  ./smoke_concept.py
+2026-10-07 19:38  ./tests/test_plagiarism.py
+2026-10-07 19:38  ./tests/test_regressions.py
+2026-10-07 19:38  ./tests/test_safety.py
+2026-10-07 19:38  ./tests/test_writing.py
+2026-10-07 19:38  ./utilis/coherence.py
+2026-10-07 19:38  ./utilis/database.py
+2026-10-07 19:38  ./utilis/documentparser.py
+2026-10-07 19:38  ./utilis/embeddings.py
+2026-10-07 19:38  ./utilis/grounding.py
+2026-10-07 19:38  ./utilis/knowledgeGraph.py
+2026-10-07 19:38  ./utilis/model.py
+2026-10-07 19:38  ./utilis/pydanticModels.py
+2026-10-07 19:38  ./utilis/ratelimit.py
+2026-10-07 19:38  ./utilis/safety.py
+2026-10-07 19:38  ./utilis/store.py
+2026-10-07 19:38  ./utilis/test/agents.py
+2026-10-07 19:38  ./utilis/test/inspect_tree.py
+2026-10-07 19:38  ./utilis/timing.py
+2026-10-09 15:46  ./components/researchEngine.py
+2026-10-09 15:47  ./tests/test_searxng.py
+
+--- 3) the other two declared-scope files ---
+2026-10-09 15:54:15.726092529 +0100  .env.example
+2026-10-09 15:54:59.245988245 +0100  docs/searxng.md
+
+--- 4) FULL repo sweep, any file type, newer than 15:00, excluding
+       .venv/.git/.omo/logs/__pycache__/artifacts (build+runtime dirs) ---
+2026-10-09 15:46:15  ./gui/dist/auth-bg.webp
+2026-10-09 15:46:15  ./gui/dist/fonts/DMMono-400.woff2
+2026-10-09 15:46:15  ./gui/dist/fonts/DMMono-500.woff2
+2026-10-09 15:46:15  ./gui/dist/fonts/Inter-400.woff2
+2026-10-09 15:46:15  ./gui/dist/fonts/Inter-500.woff2
+2026-10-09 15:46:15  ./gui/dist/fonts/Inter-600.woff2
+2026-10-09 15:46:15  ./gui/dist/fonts/Inter-700.woff2
+2026-10-09 15:46:15  ./gui/dist/fonts/Inter-800.woff2
+2026-10-09 15:46:15  ./gui/dist/quill-brand.png
+2026-10-09 15:46:15  ./gui/dist/quill-mark.png
+2026-10-09 15:46:15  ./gui/dist/textures/dots.svg
+2026-10-09 15:46:15  ./gui/dist/textures/fibres.svg
+2026-10-09 15:46:15  ./gui/dist/textures/grain.svg
+2026-10-09 15:46:15  ./gui/dist/textures/grid.svg
+2026-10-09 15:46:15  ./gui/dist/textures/linen.svg
+2026-10-09 15:46:15  ./gui/dist/textures/rules.svg
+2026-10-09 15:46:16  ./gui/dist/assets/core-DhEqZVGG.js
+2026-10-09 15:46:16  ./gui/dist/assets/index-BafR4u9e.js
+2026-10-09 15:46:16  ./gui/dist/assets/index-BFoFAfkF.css
+2026-10-09 15:46:16  ./gui/dist/assets/index.es-B7ozkYHr.js
+2026-10-09 15:46:16  ./gui/dist/assets/index.es-Ck8VQKpM.js
+2026-10-09 15:46:16  ./gui/dist/assets/index.es-D2GaS7yP.js
+2026-10-09 15:46:16  ./gui/dist/assets/index.es-oYYz7leu.js
+2026-10-09 15:46:16  ./gui/dist/assets/index-lBcCbJoJ.js
+2026-10-09 15:46:16  ./gui/dist/assets/index-LldIFZ7W.js
+2026-10-09 15:46:16  ./gui/dist/index.html
+2026-10-09 15:46:18  ./components/researchEngine.py
+2026-10-09 15:47:20  ./tests/test_searxng.py
+2026-10-09 15:54:15  ./.env.example
+2026-10-09 15:54:59  ./docs/searxng.md
+
+--- 5) DIRTY-WORKTREE ADVERSARIAL: were output/ or database/ touched? ---
+output/    newest file:
+2026-10-08 17:20  output/Desimation-of-the-Stadium-of-Rome.research.md
+database/  newest file:
+2026-10-08 17:20  database/quill.db
+logs/      newest file:
+2026-10-09 16:09  logs/quill-20261009-160956.log
+
+output/ and database/ newest files are 2026-10-08 17:20, i.e. a day BEFORE
+the change window -> neither was written by this change. VERDICT: clean.
+
+--- 6) the ONE out-of-declaration write: gui/dist/ (gitignored build output) ---
+2026-10-09 15:46:16.680796961 +0100  gui/dist
+is it gitignored?
+.gitignore:12:dist/	gui/dist/index.html
+were any gui SOURCE files touched? (they must all be old)
+(no output above = zero gui source files modified)
+
+gui/dist mtime 15:46:16.680 is 1.9s BEFORE components/researchEngine.py
+zsh:45: command not found: vite
+(15:46:18.597). It is a 'vite build' artifact refresh, matched by .gitignore
+.gitignore:12 (dist/), and touches no gui source. Not product code, not a test.

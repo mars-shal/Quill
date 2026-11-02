@@ -1,0 +1,36 @@
+SUITE OUTPUT - 2026-10-10 14:18 UTC
+Repo has no pytest; every suite is a plain script run with PYTHONPATH=$PWD .venv/bin/python.
+================================================================================
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_searxng.py
+PASS count: 168
+FAIL count: 0
+ALL PASS: 168/168
+exit=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_safety.py
+PASS count: 34
+FAIL count: 0
+ALL PASS: 34/34
+exit=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_writing.py
+PASS count: 18
+FAIL count: 0
+ALL PASS: 18/18
+exit=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_plagiarism.py
+PASS count: 10
+FAIL count: 0
+ALL PASS: 10/10
+exit=0
+
+$ PYTHONPATH=$PWD .venv/bin/python tests/test_regressions.py
+PASS count: 51
+FAIL count: 0
+ALL PASS: 51/51
+exit=0
+
+Baselines that must not regress: safety 34, writing 18, plagiarism 10, regressions 51.
+searxng was 117 before this change; it is now 168 (117 original + 51 new checks), all passing.

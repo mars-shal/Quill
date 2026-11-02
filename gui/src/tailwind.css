@@ -1,0 +1,262 @@
+/**
+ * Tailwind, and the bridge between Quill's palette and shadcn's.
+ *
+ * Imported before `styles.css`. Nothing here renders yet -- Phase 1 is
+ * foundation, and the app is meant to look byte-identical afterwards. What this
+ * file establishes is the three things the later phases depend on:
+ *
+ *  1. Tailwind compiles, with utilities available.
+ *  2. shadcn's role variables resolve to Quill's palette for every theme,
+ *     including a reader's own.
+ *  3. `dark:` means `data-mode="dark"`, not `.dark`.
+ *
+ * ---------------------------------------------------------------------------
+ * Preflight is off, deliberately
+ * ---------------------------------------------------------------------------
+ * `@import "tailwindcss"` would pull in preflight: a reset that strips margins,
+ * default `button` and `input` styling, sets `list-style: none`, and makes
+ * every element `border-box`. Quill has 1,750 lines of hand-written CSS built
+ * *without* a reset, and a good deal of it depends on the browser defaults
+ * preflight removes -- the `ul` markers in the outline, the default `select`
+ * arrow, `button`'s native appearance.
+ *
+ * Importing the theme and utilities layers individually is what leaves preflight
+ * out. The reset can arrive in the last phase, once every hand-written rule that
+ * was leaning on it has been replaced by a utility that says so explicitly.
+ *
+ * ---------------------------------------------------------------------------
+ * The cascade, and why Phase 2 has to move `styles.css`
+ * ---------------------------------------------------------------------------
+ *
+ * These two imports register `@layer theme` and `@layer utilities`. Quill's
+ * `styles.css` is unlayered, and **unlayered CSS beats layered CSS** regardless
+ * of specificity. So today a Tailwind utility loses to any Quill rule with the
+ * same name -- which is the safe direction, and the reason Phase 1 can promise
+ * no visual change.
+ *
+ * It is also the wrong direction eventually: a migrated component whose utility
+ * cannot override a leftover hand-written rule is not really migrated. Phase 2
+ * wraps `styles.css` in `@layer components`, which restores `theme <
+ * components < utilities` and lets utilities win, exactly as shadcn expects.
+ * Until then, treat a utility not applying as a signal that its hand-written
+ * counterpart still exists.
+ * *
+ * The same "unlayered wins" rule is what makes a *name* collision survivable
+ * today. Tailwind's scanner reads `src/**` for candidates, and Quill has classes
+ * whose names are also Tailwind utilities -- `.absolute`, `.flex`, `.hidden`,
+ * `.border`, `.container`, `.outline`, `.shadow`, `.filter`, `.static`,
+ * `.sticky`. Those get real Tailwind rules emitted today, and Quill's unlayered
+ * rule outranks them, so nothing looks wrong.
+ *
+ * Phase 2 inverts that ordering, and on that day `.border` would start meaning
+ * Tailwind's `border-width: 1px` rather than whatever Quill means by it. So the
+ * colliding names have to be renamed or consciously accepted before
+ * `styles.css` moves into `@layer components`. `tests/tailwind-bridge.test.mjs`
+ * lists them rather than leaving them to be discovered by a visual diff.
+ *
+ * ---------------------------------------------------------------------------
+ * The role variables, and why they are declared on `body`
+ * ---------------------------------------------------------------------------
+ *
+ * shadcn components read a fixed set of names -- `--background`, `--primary`,
+ * `--muted-foreground`, `--ring` and about thirty more. Quill has its own,
+ * differently-named palette. These declarations are the translation.
+ *
+ * They are on `body`, and they are `var()` references rather than literals,
+ * which is what makes them work for all three theme paths with no JavaScript:
+ *
+ *  - A built-in theme is painted by its own `body[data-theme="…"]` block, which
+ *    redefines `--main` and friends *on body*. So `body`'s own `--background`
+ *    resolves against body's computed `--main`, which is that theme's.
+ *  - A custom theme has no block. `main.jsx` writes its resolved token set onto
+ *    `<html>`, where an inline declaration outranks `:root`. Body inherits
+ *    `--main` from there, so the substitution still finds the right value.
+ *  - `:root` in `styles.css` carries the base, which is what a theme with no
+ *    override inherits.
+ *
+ * Declaring them on `:root` instead would break the first case: `--background`
+ * would be substituted against html's `--main`, and `body[data-theme="night"]`
+ * only ever changes body's copy.
+ *
+ * Nothing is written from JS, so there is no second source of truth to drift,
+ * and a theme cannot supply these names -- `resolveTheme`'s `tokenSubset` filters
+ * a custom theme's tokens to a known list precisely so that an unrecognised name
+ * cannot become one.
+ *
+ * Two names are deliberately NOT mapped, and both reasons are load-bearing:
+ *
+ *  - `--accent` is **not** shadcn's. In shadcn it is a muted hover fill; in Quill
+ *    it is the action colour that every button, link and focus ring reads. So
+ *    shadcn's `--primary` takes Quill's `--accent`, and shadcn's own `--accent`
+ *    points at `--accent-soft`, which already is a soft action-coloured surface.
+ *    Writing `--accent: var(--hover)` here would repaint the entire app.
+ *
+ *  - `--border` and `--sidebar` are not mapped because Quill already uses those
+ *    names for the same things. Aliasing a variable to itself is a cycle, which
+ *    CSS resolves to guaranteed-invalid -- the values would vanish rather than
+ *    appear correct.
+ */
+
+/**
+ * `prefix(tw)` here, and the ordering matters.
+ *
+ * Tailwind v4 implements `prefix()` by appending to the params of an `@theme`
+ * block inside the imported file, then reading `prefix` off that theme. So:
+ *
+ *   - On `theme.css` it *is* read, and the theme prefix becomes `--tw-*`
+ *     (`--tw-spacing`, `--tw-color-red-500`, ...).
+ *   - On `utilities.css` it is a no-op, because that file contains only
+ *     `@tailwind utilities` and no `@theme` for the prefix to attach to.
+ *
+ * That is fine: the prefix lives on the theme, and utility *generation* reads it
+ * from there. Putting it on the utilities import alone does nothing, which is why
+ * both imports are needed and only the theme one carries it.
+ *
+ * ---
+ *
+ * The prefix is a COLON, not a dash
+ * ----------------------------------
+ *
+ * `tw:flex`, not `tw-flex`. This is the single fact that made the prefix look
+ * broken for a while: `printCandidate` emits `${prefix}:` and the candidate
+ * parser *rejects* any candidate whose first segment is not `tw`, so `tw-flex`
+ * parses as an unknown utility and silently generates nothing. Every version
+ * tested (4.1.18 through 4.3.3) behaves the same, and the umbrella import is not
+ * a workaround -- it also emits an empty utilities layer for `tw-flex`.
+ *
+ * Variants stack after the prefix: `tw:dark:bg-black`, `tw:hover:underline`.
+ *
+ * Verified against a two-line stylesheet plus a probe file, with the unprefixed
+ * build as control (`.flex` emitted, `tw:flex` not) so the result cannot be
+ * confused with a source-scanning artifact.
+ *
+ * ---
+ *
+ * Why the prefix is what makes the scanner safe
+ * --------------------------------------------
+ *
+ * Quill's markup uses class names that are also Tailwind utility names --
+ * `outline` on the sections nav, plus `border`, `shadow`, `container`, `ring`,
+ * `table` and `hidden` across the app. The scanner reads any text in a scanned
+ * file, so each one gets a utility emitted for it.
+ *
+ * The tempting reasoning is that this was harmless while `styles.css` was
+ * unlayered, because unlayered CSS beats layered CSS. That is wrong, and it
+ * shipped a visible bug: `<nav class="outline">` rendered with a 1px white box
+ * around it. Unlayered wins only for properties *both* rules set. Quill's
+ * `.outline` sets layout; Tailwind's sets `outline-width`; Quill never mentions
+ * `outline`, so there is nothing to outrank and the two simply combine.
+ *
+ * Prefixing fixes it at the name, where specificity never gets a say: Quill keeps
+ * `.outline`, Tailwind only ever emits `.tw\:outline`, and no two rules can
+ * describe the same element. `KNOWN_COLLISIONS` in
+ * `tests/tailwind-bridge.test.mjs` re-derives the collision set from a real build
+ * rather than trusting that.
+ */
+@import 'tailwindcss/theme.css' layer(theme) prefix(tw);
+
+/**
+ * The scanner is on: `src/**` only.
+ *
+ * Scoped to `src` deliberately. A bare `@import 'tailwindcss'` scans upward from
+ * the stylesheet to the project root, which here means `tests/` too, and the test
+ * fixtures are full of strings like `outline` and `flex` that are not markup.
+ * Those would emit utilities nobody wrote and re-create the original bug class
+ * from the test suite alone.
+ *
+ * `source(none)` is gone, so the utilities layer is expected to exist and to be
+ * non-empty. The collision test asserts exactly that.
+ */
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@source './';
+
+/**
+ * shadcn's `dark:` variant, pointed at Quill's darkness.
+ *
+ * Tailwind's default keys off a `.dark` class, which Quill does not have and
+ * should not grow: it carries `data-mode` already, set from the *resolved*
+ * theme's mode rather than from a theme's name, so a reader's own dark theme
+ * works without being called "night".
+ *
+ * The selector covers the element and its descendants because Tailwind applies
+ * `dark:` to whatever element the utility is on, and `data-mode` is set on
+ * `<body>`.
+ */
+@custom-variant dark (&:where([data-mode='dark'], [data-mode='dark'] *));
+
+/**
+ * Exposes the palette to Tailwind's own scales.
+ *
+ * `inline` is required. Without it Tailwind resolves `var(--color-primary)` at
+ * build time and bakes the fallback into the utility, so switching theme would
+ * change the role variable but not the colour. With `inline`, the utility emits
+ * `background-color: var(--primary)` and follows whatever the theme set.
+ *
+ * `prefix(tw)` here as well as on the import above. `@theme` blocks are merged,
+ * so an unprefixed one would declare `--color-*` while every utility resolves
+ * `--tw-color-*`; the roles would silently stop resolving.
+ */
+@theme inline prefix(tw) {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: calc(var(--radius) - 1px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 2px);
+
+  --font-sans: var(--reading-font);
+  --font-mono: var(--mono);
+}
+
+body {
+  /* Surfaces. Quill's `--main` is the app background and `--sidebar` the rail. */
+  --background: var(--main);
+  --foreground: var(--text-1);
+  --card: var(--main);
+  --card-foreground: var(--text-1);
+  --popover: var(--main);
+  --popover-foreground: var(--text-1);
+
+  /* The action colour. shadcn's `--primary` is what its buttons fill with, so
+     this is the line that decides what "primary" looks like in this app. */
+  --primary: var(--accent);
+  --primary-foreground: var(--on-accent);
+
+  /* Quieter surfaces and the text on them. */
+  --secondary: var(--sidebar);
+  --secondary-foreground: var(--text-1);
+  --muted: var(--sidebar);
+  --muted-foreground: var(--text-2);
+
+  /* shadcn's accent is a hover fill, not the action colour -- see the note
+     above. `--accent-soft` is Quill's own soft action surface. */
+  --accent: var(--accent-soft);
+  --accent-foreground: var(--accent);
+
+  --destructive: var(--danger);
+
+  --input: var(--border);
+  --ring: var(--focus-ring);
+
+  /* shadcn's corner radius, taken from Quill's own. `--radius` is declared here
+     rather than in `styles.css` so the shadcn scale has one origin. */
+  --radius: 0.5rem;
+}

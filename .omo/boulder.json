@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "active_work_id": "provider-registry-and-run-wiring",
+  "works": {
+    "searxng-search-backend": {
+      "work_id": "searxng-search-backend",
+      "active_plan": "/home/marshall/Documents/projects/InProgress/Quill_New/.omo/plans/searxng-search-backend.md",
+      "plan_name": "searxng-search-backend",
+      "status": "active",
+      "started_at": "2026-10-09T18:30:00.000Z",
+      "updated_at": "2026-10-09T18:30:00.000Z",
+      "session_ids": [
+        "opencode:ses_ee37adfa5ffeUFoEtOjqf2XrOv"
+      ],
+      "session_origins": {
+        "opencode:ses_ee37adfa5ffeUFoEtOjqf2XrOv": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {},
+      "notes": "Session ids recorded are the lineage sessions for this decision (Momus plan critique ses_ee37adfa5ffeUFoEtOjqf2XrOv). The executing orchestrator session id could not be enumerated (session_list returns empty in this environment); append it as opencode:<id> when known so the Stop-hook continuation binds correctly."
+    },
+    "narrow-width-settings-fixes-435816ff": {
+      "work_id": "narrow-width-settings-fixes-435816ff",
+      "active_plan": "/home/marshall/Documents/projects/InProgress/Quill_New/.omo/plans/narrow-width-settings-fixes.md",
+      "plan_name": "narrow-width-settings-fixes",
+      "status": "active",
+      "started_at": "2026-10-08T10:47:07.937Z",
+      "updated_at": "2026-10-22T15:30:22.699Z",
+      "session_ids": [
+        "opencode:ses_ef2d0c391fferZye73m17rLcRW"
+      ],
+      "session_origins": {
+        "opencode:ses_ef2d0c391fferZye73m17rLcRW": "direct"
+      },
+      "agent": "atlas",
+      "task_sessions": {
+        "todo:1": {
+          "task_key": "todo:1",
+          "task_label": "1",
+          "task_title": "**[HEAV] Fake provider HTTP server + pure Rust body builder** — new `gui/tests/support/fake-provider.mjs` (or `src-tauri/tests/`), `src-tauri/src/pipeline.rs`. Nothing below is verifiable without this. Register any new test file in `scripts/test-js.sh` or `check-test-lists.mjs` fails.",
+          "session_id": "opencode:ses_e9bc54defffelZryJt4BRKK7cm",
+          "agent": "Sisyphus-Junior",
+          "category": "visual-engineering",
+          "started_at": "2026-10-20T15:04:24.759Z",
+          "status": "running",
+          "updated_at": "2026-10-22T15:30:22.699Z"
+        }
+      }
+    },
+    "provider-registry-and-run-wiring": {
+      "work_id": "provider-registry-and-run-wiring",
+      "active_plan": "/home/marshall/Documents/projects/InProgress/Quill_New/.omo/plans/provider-registry-and-run-wiring.md",
+      "plan_name": "provider-registry-and-run-wiring",
+      "status": "active",
+      "started_at": "2026-10-15T15:56:17.406751.000Z",
+      "updated_at": "2026-10-30T12:30:00.000Z",
+      "session_ids": [],
+      "session_origins": {},
+      "agent": "sisyphus",
+      "task_sessions": {},
+      "notes": "Direct mode: no worktree, no PR. Supersedes searxng-search-backend as active_plan; that entry is preserved untouched. Wave 6 (run resilience from the 2026-10-29 run audit) folded into the plan."
+    }
+  },
+  "active_plan": "/home/marshall/Documents/projects/InProgress/Quill_New/.omo/plans/provider-registry-and-run-wiring.md",
+  "started_at": "2026-10-15T15:56:17.406751.000Z",
+  "status": "active",
+  "updated_at": "2026-10-30T12:30:00.000Z",
+  "session_ids": [],
+  "session_origins": {},
+  "plan_name": "provider-registry-and-run-wiring",
+  "task_sessions": {},
+  "agent": "sisyphus"
+}

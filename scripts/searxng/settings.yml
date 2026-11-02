@@ -1,0 +1,28 @@
+# SearXNG settings for local development, mounted read-only into the container
+# by scripts/dev-sidecar.sh. See docs/searxng.md.
+#
+# `use_default_settings: true` makes SearXNG merge this file over its built-in
+# defaults, so only the keys that matter for Quill are here.
+use_default_settings: true
+
+server:
+  # Required by SearXNG or it generates a random one per boot. This instance is
+  # bound to loopback and holds no user data, so a fixed development value is
+  # the point: it does not change between restarts. Do not reuse it anywhere
+  # else.
+  secret_key: "quill-development-only-secret-key-not-for-deployment"
+
+  # The limiter exists to rate-limit browsers hitting the HTML frontend. Every
+  # Quill request is a programmatic `format=json` call from localhost, which the
+  # bot detection heuristics read as abuse -- it would start answering 429 after
+  # a few research rounds. Off for a loopback-only dev instance.
+  limiter: false
+
+search:
+  # The one line that matters. SearXNG's built-in default is `[html]` only, and
+  # `format=json` without this returns HTTP 403 on every request. The provider
+  # treats 403 as "no results" and falls through to the scrapers, so a missing
+  # `json` here looks like flaky research rather than a config error.
+  formats:
+    - html
+    - json

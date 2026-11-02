@@ -1,0 +1,41 @@
+# Build context for the sidecar image only — everything here is either a
+# secret, a build artifact, or a runtime concern that gets a volume instead.
+.git
+.gitignore
+
+# Python: the image builds its own environment from the lockfile.
+.venv
+venv
+__pycache__
+*.py[oc]
+uv.lock.tmp
+
+# The desktop app is not part of this image (it talks to this API over HTTP).
+gui
+target
+
+# Runtime state and generated output — databases and model caches are volumes,
+# sample outputs are for the repository, not the container.
+database/*.db
+database/*.db-shm
+database/*.db-wal
+logs
+*.log
+artifacts
+output
+output-api
+test_output
+tests
+docs
+.omo
+
+# Secrets — never in an image layer.
+.env
+.env.*
+!.env.example
+
+# Repo extras not needed to run the pipeline.
+backend
+.github
+.idea
+.vscode

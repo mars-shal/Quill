@@ -1,0 +1,2426 @@
+@import './fonts.css';
+
+:root {
+  color-scheme: light;
+  --main: #ffffff;
+  --sidebar: #f4f4f2;
+  --chat: #fafaf9;
+  --backdrop: #e9ebee;
+  --text-1: #1d1d1f;
+  --text-2: #6e6e73;
+  --text-3: #747478;
+  --prose: #333336;
+  --accent: #3d7dff;
+  --accent-soft: rgba(61, 125, 255, 0.12);
+  --border: rgba(0, 0, 0, 0.08);
+  /* Was declared only inside the three theme blocks, so a `data-theme` value
+     outside that set left --border-strong undefined for .panel-mark, .new-cover
+     and .tag-swatch. Declared here so it resolves in every theme. */
+  --border-strong: rgba(0, 0, 0, 0.22);
+  --hover: rgba(0, 0, 0, 0.045);
+  --active: rgba(0, 0, 0, 0.07);
+  --selection: rgba(61, 125, 255, 0.18);
+  --publish: #2b7d4f;
+  --publish-hover: #266e46;
+  /* Surfaces that were hardcoded per rule. --scrollbar-thumb and
+     --backdrop-gradient are re-tuned per theme; --scrim sits over any theme;
+     --brand-filter inverts the greyscale wordmark and panel marks. */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.16);
+  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0) 72%), linear-gradient(180deg, #eceff2, #e8eaee 53%, #e2e5e9);
+  --scrim: rgba(16, 22, 38, 0.46);
+  /* P4-4. How opaque the three panel surfaces are, as a 0-1 alpha the applier
+     multiplies into --main, --sidebar and --chat.
+
+     This exists so a wallpaper is opt-in and the default rendering is unchanged.
+     An alpha of 1 makes every rule that uses these tokens composite to exactly
+     the colour it did before, so a reader who never picks a wallpaper gets the
+     same pixels rather than a "close enough" near-white.
+
+     It is a token rather than a hardcoded opacity because forty-odd rules assume
+     --main is opaque, and a wallpaper behind any of them is where body text
+     stops being readable. One indirection is the difference between the feature
+     being a value and being a rewrite. */
+  /* Only the percentage is consumed -- by the three `--surface-*` mixes below.
+     An `--surface-alpha` 0-1 companion used to sit here too and was read by
+     nothing, which is a trap: it looked like the control and was not. */
+  --surface-alpha-pct: 100%;
+  /* The three panel surfaces live in the `body` rule below, not here. On `:root`
+     they would compute their `color-mix` against `:root`'s own light `--main`
+     and no theme block could reach the substitution. The reasoning is written
+     out there. */
+  /* The wallpaper image itself, empty by default. A bare url() would be
+     "invalid" and paint nothing, but the empty value lets the applier skip the
+     declaration entirely rather than leave a broken-image request in the
+     stylesheet. */
+  --wallpaper: none;
+  --wallpaper-dim: 0;
+  /* The settings-only push on top of --wallpaper-dim. Zero everywhere except
+     the state that asks for it; see the note on `.app-shell::after` for why the
+     Settings page needs one at all. Declared here rather than only on the rule
+     that sets it so the scrim's two inputs sit next to each other, and so the
+     alpha in `::after` never has to resolve a name the cascade has not seen. */
+  --wallpaper-dim-boost: 0;
+
+  /* The full-screen surfaces (onboarding, auth) run on their own palette, and it
+     is deliberately NOT themed. DO NOT add these to the `data-theme` blocks.
+
+     Two reasons, and both are load-bearing. They sit on a photograph, so their
+     contrast has to rest on a fixed veil rather than on whatever a theme happens
+     to paint. And onboarding stage 2 asks the reader to choose a theme: a card
+     that took its colours from --main would flip from light to dark at the exact
+     moment they picked Dark, moving the screen out from under their hand.
+     Declared as tokens rather than as raw hex in twenty rules so the palette is
+     one readable block and `npm run check`'s colour-token guard still holds.
+
+     `:root` itself is a complete, LIGHT token set that coexists with the three
+     `body[data-theme="…"]` blocks. That is deliberate rather than an oversight:
+     it is the fallback for a surface painted before `data-theme` lands, and it is
+     what a reader-authored theme inherits from before its own values are
+     written on. The hazard is that a *new* surface added without a theme block
+     silently renders light in night mode, so `tests/themes.test.mjs` asserts
+     that every token these themes reference is defined here. Adding a token to a
+     theme without adding it to `:root` fails that test. */
+  --screen-veil: linear-gradient(180deg, rgba(9, 11, 16, 0.62), rgba(9, 11, 16, 0.78));
+  --screen-card: #14161b;
+  --screen-card-edge: rgba(255, 255, 255, 0.1);
+  --screen-ink: #f2f4f8;
+  --screen-ink-strong: #ffffff;
+  --screen-ink-muted: rgba(226, 230, 238, 0.68);
+  --screen-ink-faint: rgba(226, 230, 238, 0.5);
+  --screen-brand-ink: #f6f7f9;
+  --screen-control: rgba(255, 255, 255, 0.06);
+  --screen-control-hover: rgba(255, 255, 255, 0.1);
+  --screen-control-edge: rgba(255, 255, 255, 0.15);
+  --screen-rule: rgba(255, 255, 255, 0.09);
+  --screen-accent: #7aa2ff;
+  --screen-accent-wash: rgba(122, 162, 255, 0.42);
+  --screen-danger: #ffb4ab;
+  --screen-danger-wash: rgba(255, 138, 128, 0.13);
+  --screen-primary-ink: #10131a;
+  /* P4-2. The editor's own paper texture, and how far a veil of --main is laid
+     over it. `none` by default, so .editor-page paints nothing extra.
+
+     The veil is the part that makes a reader's own photo safe. The bundled
+     textures are drawn at about 5% black and need nothing; a photo the reader
+     picked can be any brightness in any corner, and body text at 17px over an
+     arbitrary image is unreadable in a way no amount of --surface-alpha fixes,
+     because the texture is inside the page, not behind a panel. So the veil is
+     on by default and the image is under it. */
+  --editor-texture: none;
+  --editor-texture-wash: 0.14;
+  --brand-filter: none;
+  /* The primary button's hover was a stale blue (#326fe7) that no theme token
+     agreed with. Derived from --accent so every theme gets its own shade --
+     which it does not, from here: a `color-mix` of `--accent` declared on
+     `:root` resolves `:root`'s light accent, so every theme was hovering with
+     the light shade. It now lives in the `body` rule below, beside the other
+     derived tokens, for the same reason. */
+  /* Highlight swatches. The tag palette writes these as inline
+     background-color, which outranks any stylesheet rule, so a highlight is
+     always a light swatch and the ink is always dark. See .document-prose mark. */
+  --highlight-bg: #f6e9a8;
+  --highlight-ink: #1d1d1f;
+  --focus-ring: rgba(61, 125, 255, 0.45);
+  --danger: #b3261e;
+  --on-accent: #ffffff;
+  --on-publish: #ffffff;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 3px 8px -3px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  --shadow-3: 0 40px 90px -25px rgba(20, 30, 50, 0.28);
+
+  /* --sheet-* is the library's document tiles as a material: a warm off-white
+     face, a cut edge, a single ink the shadows are mixed from, and the shadow
+     itself (composed on `body`, below).
+
+     `--sheet-` and not `--paper-` on purpose. The "paper" theme is one of the
+     three built-in ones, and a token family named after it would mean two
+     different things a few hundred lines apart: the one warm theme, and every
+     sheet in the app.
+
+     The face is a fixed material rather than a themed one, and that is the whole
+     idea. The same sheet under every lamp is what "paper" means -- the desk
+     goes dark at night and the sheet lying on it does not -- so night re-tunes
+     the shadow and warms the face rather than turning the sheet grey like the
+     twenty other surfaces that all inherit from --main.
+
+     The edge is heavier than --border on purpose. --border is an 8-10% black
+     hairline doing one job: stopping two panels reading as a single field, and
+     in the light themes it did that next to a near-white panel. A white sheet
+     on a near-white page is a different problem -- the only two things that can
+     separate those planes are this edge and the shadow, so the edge carries the
+     plane separation the colour cannot.
+
+     A reader-authored theme inherits all of it: `resolveTheme`'s tokenSubset
+     writes only the names it knows, so a custom dark theme gets the same sheet
+     as night rather than none. */
+  --sheet-face: #fbf8f2;
+  --sheet-edge: rgba(58, 45, 28, 0.17);
+  --sheet-edge-strong: rgba(35, 27, 17, 0.34);
+  --sheet-shade: #4a3a26;
+  --sheet-radius: 10px;
+  /* The kebab sits ON the sheet, so its ink is ink on paper and is fixed for
+     the same reason the face is: --text-1 would be white on a white sheet in
+     night, which is the bug the old `#fff` plate was hiding.
+
+     These figures are for controls that sit on the *sheet* -- the detail menu
+     in list view, the editor's own chrome. A document cover is dark cloth and
+     carries its own `--cover-ink*` family below, so nothing here decides how
+     far a cover may be lifted; that ladder is bounded by its own inks in
+     `COVER_TONES`. */
+  --sheet-ink: rgba(45, 36, 24, 0.62);
+  --sheet-ink-strong: rgba(35, 27, 17, 0.86);
+  --sheet-control: rgba(58, 45, 28, 0.06);
+  --sheet-control-hover: rgba(58, 45, 28, 0.13);
+  /* A cover is bound in cloth, and cloth is cloth in every theme: the shelf
+     does not turn cream because the reader picked a light theme. So the whole
+     cover family is fixed here rather than per theme, unlike the sheet it is
+     printed on. `--cover-cloth` is near-black with a trace of warmth; the
+     document's pigment is dyed into it at the ratio `cover.js` emits, and the
+     per-document ladder lifts it back toward `--sheet-face`. The light inks and
+     the white plate are the only inks that carry text on a black book. */
+  --cover-cloth: #171412;
+  --cover-edge: rgba(255, 255, 255, 0.17);
+  --cover-ink: rgba(255, 250, 241, 0.74);
+  --cover-ink-strong: rgba(255, 251, 243, 0.95);
+  --cover-plate: rgba(255, 255, 255, 0.09);
+  --cover-plate-hover: rgba(255, 255, 255, 0.17);
+  --cover-sheen: rgba(255, 255, 255, 0.09);
+  --cover-spine: rgba(0, 0, 0, 0.4);
+  --cover-spine-edge: rgba(255, 255, 255, 0.11);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --mono: "DM Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --reading-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; }
+html { background: var(--backdrop); }
+body {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-1);
+  background: var(--backdrop);
+  /* The three panel surfaces, mixed toward transparent by --surface-alpha-pct.
+     These MUST be declared here rather than on `:root`. A custom property
+     resolves `var()` against the element it is declared on, so a `--surface` on
+     `:root` computes its `color-mix` using `:root`'s own `--main` -- which is
+     the light base -- and no theme block on body can reach back up to it. The
+     panels then paint light in every theme, while the text on them, which
+     references `--text-1` directly from body, resolves correctly and goes dark:
+     light panels under light text.
+
+     Declared on `body` they compute against the themed `--main`/`--sidebar`/
+     `--chat`, because a `[data-theme]` block on the same element outranks this
+     plain-tag rule. `--surface-alpha-pct` stays on `:root`: it is theme-
+     independent, and inherits down unchanged.
+
+     The tokens exist separately from --main/--sidebar/--chat because those stay
+     opaque. Twenty-odd rules use them for buttons, chips and kbd keys, and a
+     control that turns translucent over a photograph is the first thing to
+     become unreadable. The surfaces that carry body text go translucent; the
+     controls floating on them do not. At 100% each one is the colour it always
+     was: a full-percentage color-mix against transparent returns that colour
+     exactly, not a 1-in-255 approximation. */
+  --surface: color-mix(in srgb, var(--main) var(--surface-alpha-pct), transparent);
+  --surface-sidebar: color-mix(in srgb, var(--sidebar) var(--surface-alpha-pct), transparent);
+  --surface-chat: color-mix(in srgb, var(--chat) var(--surface-alpha-pct), transparent);
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  /* The sheet's two shadows, mixed from one ink rather than written out as four
+     colours. Declared here rather than on `:root`, for exactly the reason
+     `--surface` is: these are derived values, and a derived token on `:root`
+     would compute against `:root`'s own `--sheet-shade` where no theme block
+     could reach back up to it -- so every sheet, night included, would be
+     lifted with the light themes' warm shadow.
+
+     Two layers, tight first, and the order is the trick. The 1-2px layer is
+     contact: the dark line where the sheet is *touching* the page, which is
+     what makes it a sheet rather than a rectangle with a border. The wide soft
+     one is ambient: the few millimetres of air above the page. Collapsed into a
+     single layer -- which is what `--shadow-1` is, correctly, because a control
+     does not rest on the page -- it reads as a card again.
+
+     One shadow, not two. There was a second, deeper pair for the moment a tile
+     was lifted off the page; nothing lifts a tile any more, so it went with the
+     hover that used it. */
+  --sheet-shadow: 0 1px 1px color-mix(in srgb, var(--sheet-shade) 16%, transparent), 0 7px 16px -6px color-mix(in srgb, var(--sheet-shade) 26%, transparent);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+/* The app sets data-theme on <body> for every theme, including "light", so
+   each one needs its own rule. Leaving light to :root defaults made the
+   cascade order-dependent.
+
+   It also sets data-mode to "light" or "dark", alongside data-theme. Anything
+   that is a property of *darkness* rather than of one particular theme keys on
+   data-mode: the wordmark inversion, dark scrollbars, dark code blocks, the
+   dark blockquote rule and the status tints. Keying those
+   on the night theme id meant a custom dark theme inherited none of them and
+   rendered a black wordmark on a black background. */
+body[data-theme="light"] {
+  color-scheme: light;
+  --highlight-bg: #f6e9a8;
+  --highlight-ink: #1d1d1f;
+  --focus-ring: rgba(43, 95, 212, 0.45);
+  --main: #ffffff;
+  --sidebar: #f7f7f8;
+  --chat: #fbfbfc;
+  --backdrop: #ececed;
+  --text-1: #1d1d1f;
+  /* Two darkenings, for two different surfaces. First from #747478, which sat
+     at 4.35:1 on this theme's own --sidebar. Then again from #6e6e73, because
+     --backdrop is the one plane text sits on directly: `.boot-screen` sets
+     `color: var(--text-2); background: var(--backdrop)`, and --backdrop is
+     darker than --sidebar, so 4.30:1 there. `check-contrast.mjs` tests
+     --backdrop now; it did not, which is how a real failure sat behind a green
+     gate. --main/--sidebar/--chat all pass with room to spare, so the fix was
+     ink rather than a darker --backdrop: darkening the backdrop would have
+     bought the ratio by flattening page against rail, which is the trade the
+     night theme's own comment refuses. */
+  --text-2: #69696e;
+  --text-3: #69696d;
+  --prose: #333336;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.22);
+  --hover: rgba(0, 0, 0, 0.04);
+  --active: rgba(0, 0, 0, 0.07);
+  --accent: #2b5fd4;
+  --accent-soft: rgba(43, 95, 212, 0.14);
+  --selection: rgba(43, 95, 212, 0.22);
+  --publish: #2b7d4f;
+  --publish-hover: #266e46;
+  --danger: #b3261e;
+  --on-accent: #ffffff;
+  --on-publish: #ffffff;
+  /* At 0.45 the composited ring reached only 2.00:1 against white, below the
+     3:1 a non-text indicator needs. */
+  --focus-ring: rgba(43, 95, 212, 0.75);
+  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 72%), linear-gradient(180deg, #ece9e2, #e5e1d9 53%, #dfdbd2);
+}
+body[data-theme="paper"] {
+  color-scheme: light;
+  --highlight-bg: #f6e9a8;
+  --highlight-ink: #262320;
+  --main: #fbfaf7;
+  --sidebar: #f2f0eb;
+  --chat: #f8f7f2;
+  --backdrop: #e5e3dd;
+  --text-1: #22201d;
+  --text-2: #67635b;
+  /* Was #a09b91, which reached only 2.65:1 on this theme's own --main and
+     2.43:1 on --sidebar. The stale contrast script listed #77736b here, so it
+     checked a colour the stylesheet never used. Then darkened again for
+     --backdrop, which `.boot-screen` paints text on directly; see the light
+     theme's --text-2 for the full reasoning. */
+  --text-3: #69625a;
+  --prose: #36332e;
+  --border: rgba(35, 30, 22, 0.1);
+  --border-strong: rgba(35, 30, 22, 0.24);
+  --hover: rgba(35, 30, 22, 0.05);
+  --active: rgba(35, 30, 22, 0.08);
+  /* Paper inherited :root's --accent (#3d7dff), which reached 3.61:1 on
+     --main. Declared here so the warm theme has an accent that is legible. */
+  --accent: #2b5fd4;
+  --accent-soft: rgba(43, 95, 212, 0.14);
+  --selection: rgba(43, 95, 212, 0.22);
+  --focus-ring: rgba(43, 95, 212, 0.75);
+  --publish: #2b7d4f;
+  --publish-hover: #266e46;
+  --danger: #b3261e;
+  --on-accent: #ffffff;
+  --on-publish: #ffffff;
+  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 72%), linear-gradient(180deg, #ece9e2, #e5e1d9 53%, #dfdbd2);
+
+  /* The sheets get brighter, and the cut edge gets heavier.
+
+     This theme's page is already warm and its panels are #fbfaf7, so a sheet
+     carrying :root's #fbf8f2 would sit at 1.03:1 against --main: the grid would
+     stop reading as sheets on a desk and become one warm field. A sheet lighter
+     than the page it is resting on is what keeps the two planes apart -- 1.26:1
+     here, the weakest separation of the three themes -- so the edge is firmed
+     to 1.55:1 against that page, because a 1px line is the only cue a near-white
+     plane can be given. */
+  --sheet-face: #fffdf7;
+  --sheet-edge: rgba(58, 45, 28, 0.24);
+}
+body[data-theme="night"] {
+  /* Without this, native controls, scrollbars and form widgets stay light. */
+  color-scheme: dark;
+
+  /* Four greys, and the point is that they are four *steps* rather than four
+     near-identical values.
+     The previous palette ran --main #0f0f11, --sidebar #16161a, --chat #131316 and
+     --backdrop #08080a: every one of them within about three points of L* of every
+     other, so the panels, the page and the space behind them all read as a single
+     dark mass and the app looked muddy. The steps are now roughly four points each
+     -- backdrop, then sidebar, then the page -- which is the smallest difference
+     that still reads as a separate plane.
+
+     Two deliberate choices in there. The sidebar is *darker* than the page rather
+     than lighter, so panels recede and the thing being written is the brightest
+     surface; the old way round put a lighter slab down each side of the text. And
+     --chat is the same value as --main, because the assistant panel is a card on
+     the page, not a third plane, and one fewer grey is the "simpler" the theme was
+     missing.
+
+     Note the contrast ratios between these surfaces are all near 1.1:1, and that
+     is not a failure: WCAG says nothing about plane separation. What separates
+     them here is --border, at 1.37-1.49:1 against each surface, and the ladder of
+     relative luminance -- 0.0027, 0.0060, 0.0110, roughly doubling each step.
+     Every one stays under the 0.012 ceiling that keeps a dark theme genuinely
+     dark, which is why the ladder is three deep rather than four. */
+
+  --main: #121212;
+  --sidebar: #101215;
+  --chat: #191b20;
+  --backdrop: #08090a;
+  --text-1: #ffffff;
+  --text-2: #b8bbc3;
+  /* The previous #777b85 sat at ~4.1:1 on --main, below the 4.5:1 needed for
+     body-size text; lifted so small metadata stays legible. */
+  --text-3: #8f939d;
+  --prose: #dfe0e4;
+  /* Muted relative to the light-theme swatch, but still light: the ink stays
+     dark in every theme because tag colours are stored inline. */
+  --highlight-bg: #e3c765;
+  --highlight-ink: #1d1d1f;
+  --focus-ring: rgba(121, 165, 255, 0.62);
+  --danger: #ff8a80;
+  --on-accent: #0d1117;
+  --publish: #52b788;
+  --publish-hover: #63c496;
+  /* The night publish green is light, so its label must be dark. */
+  --on-publish: #0d1117;
+  --border: rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.3);
+  --hover: rgba(255, 255, 255, 0.07);
+  --active: rgba(255, 255, 255, 0.12);
+  --accent: #79a5ff;
+  --accent-soft: rgba(121, 165, 255, 0.16);
+  --selection: rgba(121, 165, 255, 0.24);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 40px 90px -25px rgba(0, 0, 0, 0.7);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(38, 41, 49, 0.6), rgba(8, 9, 10, 0) 72%), linear-gradient(180deg, #101215, #08090a 56%, #060708);
+  /* The brand assets are 100% greyscale, so a dark theme inverts them instead
+     of sitting them on a white plate. */
+  --brand-filter: invert(1);
+  --brand-filter-opacity: 0.94;
+
+  /* The sheets stay paper. That is the change, and it is the reason a night
+     library reads as a desk rather than as a control panel: a warm off-white
+     sheet on #08090a is 17.3:1 against the page, the largest plane separation
+     anywhere in this theme. Night could not have got it any other way -- its
+     whole argument above is four L* steps of dark separating the panels from
+     each other, and a dark sheet on a dark page has nowhere left to go.
+
+     Two things are re-tuned, and neither is the face. The face is pulled just
+     off pure white: fifteen #fff rectangles in a row is a glare, a cream one
+     reads as stock.
+
+     The shadow ink goes black, because a warm brown shadow on a near-black page
+     is a brown shadow on near-black, which is to say nothing. The layers also
+     widen, because the desk has the room for them: night's --backdrop-gradient
+     lays a pool of light across the top of the page and there a 32-46% black
+     reads as a soft cast shadow rather than a hard outline. Lower down, where
+     the desk is #08090a, the same shadow measures 1.02:1 and is gone -- which is
+     physically right, and is also why the cut edge is the cue that has to carry
+     the bottom of the grid. */
+  --sheet-face: #f2efe7;
+  --sheet-edge: rgba(24, 18, 10, 0.26);
+  --sheet-shade: #000000;
+  --sheet-shadow: 0 1px 2px color-mix(in srgb, var(--sheet-shade) 32%, transparent), 0 10px 24px -10px color-mix(in srgb, var(--sheet-shade) 46%, transparent);
+}
+/* The in-app Reduce Motion toggle, as a blanket over every element it reaches.
+ *
+ * The carve-out is done by EXCLUSION, not by an opt-in rule that fights this
+ * one, and that is the reason for the selector's shape. These four are
+ * `!important`, which nothing else in the author origin can beat: a plain
+ * declaration loses outright, a more specific `!important` wins only on
+ * specificity, `revert` rolls back to the UA origin (0s -- as dead as this), and
+ * the durations an opt-in would have to restore are per-element (0.16/0.18/0.2/
+ * 0.22s), so one blanket value would flatten all of them. An opt-in therefore
+ * loses silently the first time a duration nearby is edited. `:not()` instead
+ * means these elements are never matched, and keep their own declared values --
+ * no cascade to lose, no second place for a duration to be written down.
+ *
+ * Both conditions are load-bearing. `:not(.reduce-motion-exempt *)` drops every
+ * descendant; `:not(.reduce-motion-exempt)` drops the hook element, which the
+ * first cannot match. On the pseudo-element selectors `:not()` still evaluates
+ * against the originating element, so `::before`/`::after` inside the subtree go
+ * with it.
+ *
+ * `.reduce-motion-exempt` is the assistant's root (ChatPanel.jsx) and nothing
+ * else carries it. The `@media (prefers-reduced-motion: reduce)` block below --
+ * same four declarations, no exclusion -- still covers everything including the
+ * assistant: an OS accessibility setting is not an in-app preference, and this
+ * app does not get to overrule it surface by surface.
+ */
+body.reduce-motion *:not(.reduce-motion-exempt):not(.reduce-motion-exempt *),
+body.reduce-motion *:not(.reduce-motion-exempt):not(.reduce-motion-exempt *)::before,
+body.reduce-motion *:not(.reduce-motion-exempt):not(.reduce-motion-exempt *)::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+button, input, textarea, select { font-family: inherit; }
+button { border: 0; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+::selection { background: var(--selection); }
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.editor-shell:focus, .editor-shell:focus-visible, .editor-page:focus, .editor-page:focus-visible, .document-title:focus, .document-title:focus-visible, .document-prose:focus, .document-prose:focus-visible { outline: none; }
+
+.app-shell { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--main); }
+/* The wallpaper, and the scrim over it. Two layers on one element rather than
+   a child, so no z-index has to place them between .app-shell's background and
+   the layers that sit above it.
+
+   --wallpaper-dim is a black overlay at the reader's chosen strength, not a
+   filter: brightness() on the element would dim the text as well, which is the
+   opposite of what a dim is for. The layer is painted at 0 opacity when unset so
+   the compositor skips it.
+
+   Both layers are `pointer-events: none`, and that is load-bearing rather than
+   tidiness. `.app-shell` is `position: relative; z-index: auto`, so it is not a
+   stacking context and these pseudo-elements resolve against the root, where
+   z-index 0 paints them above anything in the app that is `position: static`.
+   Nothing about a wallpaper asks to be clicked, so the declaration is what keeps
+   a full-viewport layer from becoming a click-eater over the entire app.
+
+   That same resolution is why each view layer carries an explicit z-index, and
+   it is not a formality. Against the root, z-index 0 lands ABOVE static content,
+   so a view layer with no z-index is not "below the wallpaper" -- it is beneath
+   a viewport-sized photograph. `.library-layer` is 1 and `.editor-layer` is 2,
+   so both sit over the image and show it through as a translucency, which is
+   the whole point. `.settings-layer` had no z-index, which left it static: with
+   a wallpaper set, the image painted over the entire Settings page and every
+   heading, label and control on it. One declaration, for the same reason the
+   other two have theirs.
+
+   --wallpaper-dim-boost is the one thing layered on top of the reader's own dim,
+   and only while Settings is open. Settings is the densest small type in the
+   app -- 10.5px uppercase labels, 11px hint rows, a tab bar, a grid of choice
+   cards -- set against the same wallpaper that the Library mostly covers with a
+   reading surface and the Editor covers with a page of prose. What is left of
+   the photograph competing with that is a legibility problem, not a preference,
+   so the wallpaper is pushed back for exactly as long as that page is up.
+
+   It ADDS to --wallpaper-dim rather than replacing it: the reader's slider stays
+   the base, and someone who wants no dim in the Library still gets this one in
+   Settings. 0.18 is where the push is unmistakable at a glance while the image
+   is still a photograph and not a grey field -- at the default 35% the two reach
+   0.53 between them, which is about a modal scrim, and a little under half the
+   wallpaper's signal survives it. It is a number on this pseudo-element, never a
+   second control in the UI: one slider, one boost. */
+.app-shell::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--wallpaper);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  content: "";
+}
+.app-shell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(0, 0, 0, calc(var(--wallpaper-dim) + var(--wallpaper-dim-boost)));
+  pointer-events: none;
+  /* Eased rather than snapped: the settings surface arrives beside the
+     wallpaper, and the wallpaper settling back is what says so. 0.18s is inside
+     the 0.2s budget, and the in-app reduce-motion toggle collapses it. The
+     calc interpolates on its own -- Chromium resolved it mid-flight to 0.435 on
+     the way from 0.35 to 0.53 -- so this needs no registered custom property. */
+  transition: background-color 0.18s var(--ease);
+  content: "";
+}
+/* The one state that asks for the extra dim. On `.app-shell` rather than on
+   `::after` because a pseudo-element cannot be matched by a descendant selector;
+   inherited custom properties resolve on the originating element, so the boost
+   reaches the scrim exactly as `--wallpaper-dim` does. */
+.app-shell.settings-open { --wallpaper-dim-boost: 0.18; }
+/* The library <-> editor crossfade, in CSS, off .app-shell's own `data-view`.
+   Both layers are always mounted and both are always in the DOM, so this is a
+   plain opacity transition with no JavaScript driving it and nothing to settle.
+   `.app-shell` already carried `data-view` for other reasons; this is the one
+   that makes the whole screen change a compositor-only operation.
+
+   The editor layer is still conditionally mounted (no document, no editor), so
+   `pointer-events` follows the same rule: an invisible layer must not eat
+   clicks meant for the one under it. */
+.library-layer, .editor-layer { position: fixed; inset: 0; opacity: 0; pointer-events: none; transform: scale(0.992); transition: opacity 0.2s var(--ease), transform 0.2s var(--ease); }
+.app-shell[data-view="library"] .library-layer, .app-shell[data-view="editor"] .editor-layer { opacity: 1; pointer-events: auto; transform: none; }
+.library-layer { z-index: 1; }
+.editor-layer { z-index: 2; }
+
+.eyebrow, .group-label, .nav-group-label {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.eyebrow { margin-bottom: 8px; }
+.group-label, .nav-group-label { padding: 0 7px; margin-bottom: 7px; }
+
+.library-page { position: absolute; inset: 0; overflow: hidden; background: var(--backdrop); }
+.library-backdrop { position: absolute; inset: 0; background: var(--backdrop-gradient); }
+.library-layout { position: relative; z-index: 1; display: grid; grid-template-columns: 218px minmax(0, 1fr); width: 100%; height: 100%; background: var(--surface); }
+.library-sidebar { display: flex; flex-direction: column; min-width: 0; padding: 19px 13px 16px; background: var(--surface-sidebar); border-right: 1px solid var(--border); }
+.library-brand-row { display: flex; align-items: center; justify-content: space-between; min-height: 28px; padding: 0 7px; }
+.library-wordmark { display: block; width: 64px; height: auto; }
+/* Keyed on data-mode, not data-theme, so a custom dark theme inherits the
+   treatment. See the note on data-mode below. */
+.library-wordmark { filter: var(--brand-filter); opacity: var(--brand-filter-opacity, 1); }
+/* Replaces the old decorative macOS traffic lights. Tauri draws a real native
+   title bar, so fake window controls were misleading as well as redundant. */
+.panel-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: var(--shadow-1);
+}
+.panel-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* In a dark theme the mark sits directly on the sidebar rather than on a light
+   plate. Keyed on data-mode so a custom dark theme gets it too. */
+[data-mode="dark"] .panel-mark { background: transparent; border-color: var(--border-strong); }
+[data-mode="dark"] .panel-mark img,
+[data-mode="dark"] .workspace-logo img { filter: var(--brand-filter); }
+.library-nav { display: grid; gap: 22px; margin-top: 42px; }
+.nav-group { min-width: 0; }
+.nav-list { display: grid; gap: 2px; }
+.nav-item { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 31px; padding: 6px 8px; color: var(--text-2); background: transparent; border-radius: 7px; font-size: 13px; text-align: left; transition: color 0.2s var(--ease), background 0.2s var(--ease); }
+.nav-item:hover { color: var(--text-1); background: var(--hover); }
+.nav-item.active { color: var(--text-1); background: var(--active); font-weight: 600; }
+/* The selected row also gets a leading marker. Background alone was easy to
+   miss against the dark sidebar, so a click that did nothing looked identical
+   to one that worked. */
+.nav-item.active::before { width: 3px; height: 15px; margin-left: -5px; background: var(--accent); border-radius: 2px; content: ""; }
+.nav-item { position: relative; }
+.nav-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.nav-item.active svg { color: var(--accent); }
+.nav-item span:nth-child(2) { min-width: 0; flex: 1; }
+.nav-count { color: var(--text-3); font-family: var(--mono); font-size: 10px; }
+.library-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; padding: 31px 36px 30px; }
+.library-main-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.library-main h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+.library-main-head p { margin: 8px 0 0; color: var(--text-2); font-size: 12.5px; }
+.library-main-tools { display: flex; align-items: center; gap: 8px; }
+.soft-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 12px; color: var(--text-2); background: var(--main); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.025); font-size: 12px; font-weight: 600; transition: color 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease); }
+.soft-button:hover { color: var(--text-1); background: var(--hover); border-color: rgba(0, 0, 0, 0.13); }
+.soft-button.primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.soft-button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 26px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.library-count { color: var(--text-2); font-size: 12px; }
+.library-controls, .view-toggle, .density-toggle { display: flex; align-items: center; gap: 8px; }
+.view-toggle, .density-toggle { gap: 3px; padding: 3px; background: var(--sidebar); border-radius: 8px; }
+.view-toggle button { display: grid; place-items: center; width: 27px; height: 25px; color: var(--text-3); background: transparent; border-radius: 5px; }
+.view-toggle button.active, .density-toggle button.active { color: var(--text-1); background: var(--main); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.density-toggle button { min-height: 25px; padding: 0 8px; color: var(--text-3); background: transparent; border-radius: 5px; font-size: 10.5px; font-weight: 600; }
+/* A tile is a book: the cover carries the title, so the label underneath only
+   needs the category and length. Wider minimum than before, because a 150px
+   cover forced long titles to wrap and then clip against the cover edge. */
+/* The books fade in when the screen changes.
+   This is the replacement for fifteen per-tile framer-motion springs, and it is
+   one keyframe on the grid's children plus a stagger -- no rAF, no per-element
+   animation objects. The grid is keyed on the view (see `Library`), so remounting
+   replays it.
+
+   The stagger is capped at twelve and then stops: past about a dozen books a
+   cascade stops reading as "arriving" and starts reading as "slow". */
+
+.document-tile:nth-child(1), .new-document-tile:nth-child(1) { animation-delay: 0ms; }
+.document-tile:nth-child(2), .new-document-tile:nth-child(2) { animation-delay: 22ms; }
+.document-tile:nth-child(3), .new-document-tile:nth-child(3) { animation-delay: 44ms; }
+.document-tile:nth-child(4), .new-document-tile:nth-child(4) { animation-delay: 66ms; }
+.document-tile:nth-child(5), .new-document-tile:nth-child(5) { animation-delay: 88ms; }
+.document-tile:nth-child(6), .new-document-tile:nth-child(6) { animation-delay: 110ms; }
+.document-tile:nth-child(7), .new-document-tile:nth-child(7) { animation-delay: 132ms; }
+.document-tile:nth-child(8), .new-document-tile:nth-child(8) { animation-delay: 154ms; }
+.document-tile:nth-child(9), .new-document-tile:nth-child(9) { animation-delay: 176ms; }
+.document-tile:nth-child(n + 10) { animation-delay: 198ms; }
+
+/* A tile does not move under the pointer. The lift and the press were the last
+   motion in the library, and a grid that shifts fifteen covers while a pointer
+   crosses it is a grid that is being read, not looked at. The entrance stagger
+   above is untouched: arriving is not reacting. */
+
+.library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 32px 28px; align-content: start; min-height: 0; margin-top: 24px; padding: 3px 4px 24px 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+.library-grid.compact { grid-template-columns: repeat(auto-fill, minmax(134px, 1fr)); gap: 24px 20px; }
+.library-grid.list-view { grid-template-columns: 1fr; gap: 6px; }
+/* The empty filter state. `grid-column: 1 / -1` spans the auto-fill columns the
+   grid computes, so the note sits across the shelf rather than in one cell of
+   it. It replaces two skeleton tiles that claimed to be loading forever. */
+.library-empty { grid-column: 1 / -1; display: grid; gap: 5px; padding: 26px 2px; }
+.library-empty p { margin: 0; color: var(--text-1); font-size: 13.5px; font-weight: 600; }
+.library-empty small { color: var(--text-3); font-size: 12px; }
+.document-tile { position: relative; min-width: 0; cursor: pointer; outline: none; }
+/* A cover is a bound book: dark cloth, dyed per document, with the title
+   printed on it in light ink.
+
+   It used to be a tinted sheet -- `--sheet-face` mixed toward a pigment -- and
+   that made the shelf a row of pale cream rectangles. The mix is inverted now:
+   the base is `--cover-cloth`, a near-black fixed once in `:root`, the
+   document's pigment is dyed into it at `--cover-tint` (a constant, so the hue
+   is a property of the cloth rather than of the book), and the per-document
+   ladder lifts the result back toward `--sheet-face` by `--cover-lighten`.
+
+   Both numbers arrive as custom properties from `src/library/cover.js`, which
+   derives the pigment and the lift from the document id; the colour is mixed
+   *here*, over tokens, so a theme change re-binds all fifteen covers without
+   React rendering anything. The fallbacks are the plain cloth, undyed and
+   unlifted -- a black book, which is still a book.
+
+   The border is `--cover-edge`, not `--sheet-edge`: a light hairline is what
+   separates a black book from the page it lies on, and `--sheet-edge` is dark
+   ink drawn for a light sheet. */
+.document-cover { position: relative; aspect-ratio: 4 / 5; overflow: hidden; padding: 0; background: color-mix(in srgb, var(--sheet-face) var(--cover-lighten, 0%), color-mix(in srgb, var(--cover-pigment, var(--accent)) var(--cover-tint, 0%), var(--cover-cloth))); border: 1px solid var(--cover-edge); border-radius: var(--sheet-radius); box-shadow: var(--sheet-shadow); }
+/* Cloth and lamplight, in two layers over the face.
+
+   The sheen is the reason a cover reads as a solid object rather than as a
+   swatch: a flat fill has no light on it, and a gradient from the top-left is
+   the cheapest possible evidence that there is a lamp somewhere above the
+   shelf. It is `--cover-sheen`, a low white, because the cloth is dark in every
+   theme -- the old mix toward `--sheet-face` was written for a light face and
+   would wash the lightness ladder out entirely on black.
+
+   The grain is `textures/grain.svg`, the editor's own paper texture, at its
+   bundled 5.5% black. It tiles at its own 180px so the speckle is the size it
+   was drawn at rather than stretched. */
+.document-cover::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(158deg, var(--cover-sheen), transparent 62%), url("/textures/grain.svg"); background-size: auto, 180px 180px; pointer-events: none; }
+/* The rule above the title is `--cover-ink-strong` at a third, not a hairline of
+   `--border`: a printer's rule is ink that was laid down on the cover, and the
+   cover's own ink is the light stamp on dark cloth. Drawing it in the token the
+   title is printed in is what keeps the two reading as the same hand. */
+.cover-title { position: absolute; z-index: 1; display: -webkit-box; overflow: hidden; padding-top: 8px; color: var(--cover-ink-strong); border-top: 1px solid color-mix(in srgb, var(--cover-ink-strong) 34%, transparent); font-weight: 700; overflow-wrap: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+/* Two layouts, both chosen per document, because alignment is the one
+   book-cover variable that costs a class and nothing else.
+
+   `stacked` is the centred type-on-a-cover stack; `ruled` is the left-hand
+   title with a spine down the binding edge, which is how a cloth-bound book
+   looks from above. Four lines is the clamp: at ~168px wide a long title needs
+   about that many, and the older cover text sheared its last line against the
+   edge because nothing clamped it. */
+.document-cover.stacked .cover-title { right: 13px; bottom: 15px; left: 13px; font-size: 12px; line-height: 1.3; text-align: center; }
+.document-cover.ruled .cover-title { right: 13px; bottom: 15px; left: 19px; font-size: 12.5px; line-height: 1.28; text-align: left; }
+/* The spine, on the binding edge only, and one pixel of highlight down its
+   right-hand side so it reads as a fold catching light rather than as a bar
+   painted on the cover. On dark cloth the fold is a shadow with a light catch;
+   mixed from `--sheet-shade` it was invisible, which is what the spine used to
+   look like on a black cover. */
+.document-cover.ruled::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 8px; background: var(--cover-spine); box-shadow: 1px 0 0 var(--cover-spine-edge); }
+/* The sheet rests. It keeps its contact shadow -- a book lying on a desk has one
+   -- and its cut edge does not firm up under the pointer either, because the two
+   travelled together and a cue that lifts the shadow alone reads as a rendering
+   fault rather than as a hover. */
+
+/* The kebab, on cloth.
+
+   It was white on a dark plate, then ink on a light sheet. The covers are black
+   again, so it is light ink on a wash of white with a light hairline. Naming the
+   cover family rather than reusing the sheet's ink is the part worth keeping:
+   the two panes are independent, and borrowing one for the other is how the
+   control went invisible the last time the cover changed colour.
+
+   `opacity` is absent rather than re-tuned: dimming ink is how you make a
+   control illegible, not how you make it recede. The affordance rests on the
+   wash and the border. */
+.tile-menu { position: absolute; z-index: 2; top: 10px; right: 10px; display: grid; place-items: center; width: 28px; height: 28px; color: var(--cover-ink); background: var(--cover-plate); border: 1px solid var(--cover-edge); border-radius: 8px; transition: color 0.16s var(--ease), background 0.16s var(--ease); }
+.tile-menu:hover { color: var(--cover-ink-strong); background: var(--cover-plate-hover); }
+/* The download trigger, in the kebab's row and to its left.
+
+   It is a `HoldButton` because a download writes a file: a stray click while
+   scanning the shelf should not start an export, and a 900ms hold is enough of
+   a confirmation to be deliberate without being a chore. The tile supplies the
+   cloth colours, so the control belongs to the cover rather than floating over
+   it in the app's chrome palette. `.document-tile` prefix is what outranks the
+   component's own `--sm` size, which is a pill and far too wide for a 28px
+   icon slot. */
+.document-tile .tile-download { position: absolute; z-index: 2; top: 10px; right: 46px; width: 28px; height: 28px; min-width: 0; padding: 0; }
+.list-view .tile-download { position: static; width: 26px; height: 26px; }
+/* The delete trigger, on the cover's top-left corner.
+
+   It had no rule at all, which left it a static inline-block sitting in the
+   tile's flow -- below the book, above its label, as a stray bare cross. A
+   control that removes a document belongs on the book it removes, at the top
+   where the other corner control already is.
+
+   It is placed opposite the kebab (top-right) so the destructive control never
+   sits flush against the one people reach for most, and it borrows the cover's
+   own ink and plate rather than the sheet's, for the reason spelled out on
+   `.tile-menu`. */
+.tile-delete { position: absolute; z-index: 2; top: 10px; left: 10px; display: grid; place-items: center; width: 28px; height: 28px; color: var(--cover-ink); background: var(--cover-plate); border: 1px solid var(--cover-edge); border-radius: 8px; transition: color 0.16s var(--ease), background 0.16s var(--ease); }
+.tile-delete:hover { color: var(--cover-ink-strong); background: var(--cover-plate-hover); }
+/* List view lays its tiles out as a grid of columns, so a floating corner would
+   land on the row's own padding. It joins the other two triggers as a static
+   cell, the way `.tile-menu` does there. */
+.list-view .tile-delete { position: static; width: 26px; height: 26px; }
+/* The label carries the title in both views, and so does the cover -- but for
+   different jobs, and that is the point of keeping both. The cover is what makes
+   the grid read as a shelf of books; the label is what makes it usable, because
+   a 12px title printed on a 168px cover is not something anyone reads while
+   scanning. So the label is where the title is *read* and the cover is where it
+   is *recognised*, and the cover's copy is `aria-hidden` so the tile's own
+   accessible name stays the single announcement. `-webkit-box` plus the clamp
+   needs `min-width: 0` to actually shrink. */
+.tile-copy { display: grid; gap: 4px; min-width: 0; padding: 13px 3px 0; }
+.tile-copy strong { display: -webkit-box; overflow: hidden; color: var(--text-1); font-size: 13.5px; font-weight: 700; line-height: 1.32; overflow-wrap: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.tile-copy span { overflow: hidden; color: var(--text-3); font-size: 11.5px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.library-grid:not(.list-view) .tile-copy { padding-top: 10px; }
+/* The blank sheet. Same family, and still unprinted: transparent rather than
+   `--main`, because `--main` in the light themes is a white fill that would
+   make this the one tile in the grid reading as a document rather than as an
+   invitation to start one. It keeps the resting shadow, which is the part that
+   puts it in the same plane as its neighbours -- a blank sheet lying where the
+   others lie, unprinted.
+
+   It keeps the grain too, which is the one thing it borrows from the covers
+   rather than the other way round. A tile with a different surface texture from
+   every other tile in the same grid reads as a different kind of object
+   whatever its border says, and the texture is free here precisely because it
+   is the texture the covers already use. `position` and `overflow` are what let
+   it be clipped to the rounded corner; without them the pseudo-element would
+   anchor to the tile and square off the border radius.
+
+   The dashed edge stays `--border-strong` and is the one edge in the library
+   that is read against the *page* rather than against a sheet, so it is the one
+   that has to be themed: at :root's warm 17% it is invisible on night's desk. */
+.new-document-tile .new-cover { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; aspect-ratio: 4 / 5; overflow: hidden; color: var(--text-3); background: transparent; border: 1.5px dashed var(--border-strong); border-radius: var(--sheet-radius); box-shadow: var(--sheet-shadow); transition: color 0.16s var(--ease), border-color 0.16s var(--ease), background 0.16s var(--ease); }
+.new-document-tile .new-cover::before { content: ""; position: absolute; inset: 0; background-image: url("/textures/grain.svg"); background-size: 180px 180px; pointer-events: none; }
+/* No label on the cover, in either view. The tile already carries
+   `.tile-copy strong` as its name, and a second copy here would say the same
+   two words twice on one tile while telling the reader nothing the label has not
+   already said. The rules that used to set a font size on it are gone with it. */
+/* The invitation keeps its hover -- a colour and an edge, which cost nothing and
+   tell a pointer that this tile is different from the books beside it -- but not
+   the lift. A tile that grows a shadow under the pointer while every book next
+   to it stays flat reads as a rendering fault, not as an affordance. */
+.new-document-tile:hover .new-cover { color: var(--accent); background: var(--hover); border-color: var(--accent); }
+.new-cover svg { color: currentColor; }
+/* List view: a row with a small book thumbnail. The cover keeps its binding and
+   drops its printing.
+
+   That is a deliberate split rather than an omission. At 34px wide there is no
+   title that is legible and no rule that is visible, so the two layouts would be
+   indistinguishable down here and the only thing a row could carry is the
+   colour -- which is the thing that identifies the book at a glance when the
+   titles are listed beside it anyway. So `.cover-title` and the spine go, and
+   the tint, the sheen and the grain stay, and a row reads as a shelf of spines
+   rather than as a grid of miniature covers.
+
+   The menu button is a child of the tile, not of the cover, which is only true
+   because of this: inside the cover it was laid out in a 34px thumbnail and
+   clipped by the cover's own `overflow: hidden`, leaving the third grid column
+   empty. */
+.list-view .document-tile,
+.list-view .new-document-tile { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 8px 10px; border-radius: 9px; transition: background 0.16s var(--ease); }
+.list-view .document-tile:hover,
+.list-view .new-document-tile:hover { background: var(--hover); }
+.list-view .document-cover, .list-view .new-cover { aspect-ratio: 3 / 4; padding: 0; border-radius: 4px; }
+.list-view .cover-title, .list-view .document-cover::after { display: none; }
+.list-view .tile-copy { display: grid; gap: 2px; padding: 0; }
+.list-view .tile-copy strong { display: block; }
+.list-view .tile-menu { position: static; width: 26px; height: 26px; color: var(--text-2); background: transparent; border-color: transparent; }
+.list-view .tile-menu:hover { color: var(--text-1); background: var(--active); }
+.list-view .new-cover svg { width: 22px; height: 22px; }
+
+/* One column, and the panels are laid over it rather than beside it.
+   The tracks used to be `auto minmax(0, 1fr) auto` while the panels animated
+   `width`: every frame re-solved the grid and re-wrapped the prose, so the page
+   reflowed as the panel slid. A single track plus a fixed-width overlay means the
+   column is laid out once and the reveal is a compositor-only transform. */
+/* The panels *reserve* their space instead of floating over the editor.
+   They were absolutely positioned across the full shell, so an open Sections
+   panel sat on top of the topbar's own controls -- "New document" and "Details"
+   were simply unreachable while it was open. The columns are the fix: the shell
+   lays out left / centre / right, and the panels, still absolutely positioned so
+   their slide is untouched, sit *inside* the space their column holds. So the
+   editor is pushed rather than covered, and the topbar moves with it.
+
+   The column widths are animated as custom properties from `Editor`, which is
+   the one thing here that costs layout per frame -- and only for the 300ms of an
+   open or close. The alternative, a transform-only slide over a static layout,
+   is free but is exactly the behaviour that was wrong. */
+.editor-shell { position: absolute; inset: 0; display: grid; grid-template-columns: var(--shell-left, 0px) minmax(0, 1fr) var(--shell-right, 0px); min-width: 0; background: var(--surface); }
+
+/* The side columns snap rather than slide. This used to be a 0.2s tween on
+   `grid-template-columns`, kept after the framer-motion version was removed
+   because it had the same curve and duration. It is gone because it is a layout
+   animation: `grid-template-columns` cannot be composited, so every frame of the
+   slide relaid out the grid and with it the whole editor, ProseMirror document
+   included, to move the centre column 282px. That is the most expensive thing in
+   the app for the least information -- the panels are already positioned
+   absolutely and revealed by `left-open`/`right-open` above, so nothing about
+   the column change is load-bearing for where the panels sit.
+
+   The panels' own `transform` reveal is likewise not transitioned here. They move
+   when their class flips, with no tween. */
+
+.editor-center { grid-column: 2; }
+.app-shell.zen .editor-topbar, .app-shell.zen .format-toolbar, .app-shell.zen .editor-status { opacity: 0; pointer-events: none; }
+.app-shell.zen .editor-topbar, .app-shell.zen .editor-status { transform: translateY(-6px); }
+.app-shell.zen .editor-center { grid-template-rows: 0 minmax(0, 1fr) 0; }
+.app-shell.zen .editor-page { padding-top: 82px; }
+/* Out of the grid and out of flow: an overlay, not a column. `overflow: hidden`
+   clips the sliding content, and the closed transform parks the panel entirely
+   off its own edge so it cannot be tabbed into or read by a screen reader (the
+   `inert` attribute in main.jsx covers the keyboard and the a11y tree). */
+.editor-panel { position: absolute; top: 0; bottom: 0; z-index: 10; min-width: 0; overflow: hidden; box-shadow: var(--shadow-2);
+  /* The panels slide on the compositor via `x`, and each carries a
+     `box-shadow` over a clipped subtree. Without the hint the browser
+     re-evaluates whether that needs repainting on every frame of the slide,
+     and it usually decides yes. */
+  will-change: transform; }
+/* The closed transforms are the default, and the shell's open-state class is the
+   counterpart that brings a panel back. There is no inline style here any more:
+   the panel used to be animated by framer-motion, which wrote `transform` itself
+   and read `left-open`/`right-open` off the shell only to decide where to slide
+   to. With the animation gone the two states have to live in the stylesheet, so
+   the class is now what actually positions the panel -- and it must be the only
+   thing, or a CSS rule and an inline style drift apart exactly as this comment
+   used to warn. */
+.left-panel { left: 0; width: 282px; background: var(--surface-sidebar); border-right: 1px solid var(--border); transform: translateX(-102%); }
+/* The assistant slides; the sections panel does not. The assistant is the one
+   surface the reader brings up and dismisses in a single keystroke, so its arrival
+   is the one motion in the app worth having -- and it is the surface that already
+   owns every other animation. `transform` only, so it stays on the compositor and
+   the prose column never relayouts, which is what animating the old grid column
+   width used to cost. The in-app reduce-motion toggle still collapses this slide:
+   it is the editor's panel wrapper, not the assistant's own subtree, so it does
+   not carry `.reduce-motion-exempt` and the panel appears rather than travels. */
+.right-panel { right: 0; width: 348px; background: var(--surface-chat); border-left: 1px solid var(--border); transform: translateX(102%); transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.app-shell.left-open .left-panel { transform: translateX(0); }
+.app-shell.right-open .right-panel { transform: translateX(0); }
+.panel-inner { display: flex; flex-direction: column; width: 282px; height: 100%; min-width: 282px; min-height: 0; padding: 0 13px 16px; overflow: hidden; }
+.right-panel .panel-inner { width: 348px; min-width: 348px; padding: 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; height: 48px; min-height: 48px; padding: 0 1px 0 3px; }
+.icon-button, .panel-toggle { position: relative; display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; color: var(--text-2); background: transparent; border-radius: 7px; transition: color 0.2s var(--ease), background 0.2s var(--ease); }
+.icon-button:hover, .panel-toggle:hover { color: var(--text-1); background: var(--hover); }
+.panel-toggle.on { color: var(--accent); background: var(--accent-soft); }
+.workspace-switch { display: flex; align-items: center; gap: 9px; margin: 0 1px 22px; padding: 8px; border-radius: 8px; cursor: pointer; }
+.workspace-switch:hover { background: var(--hover); }
+.workspace-logo { display: grid; place-items: center; width: 32px; height: 32px; flex: none; padding: 4px; background: var(--main); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-1); }
+.workspace-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.workspace-switch > span:nth-child(2) { min-width: 0; flex: 1; }
+.workspace-switch strong, .workspace-switch small { display: block; }
+.workspace-switch strong { color: var(--text-1); font-size: 13.5px; }
+.workspace-switch small { margin-top: 2px; color: var(--text-3); font-size: 10.5px; }
+.workspace-switch > svg { color: var(--text-3); }
+.panel-section { min-width: 0; }
+.outline-section { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; padding: 0 1px; }
+.outline { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; padding: 0 0 12px; scrollbar-width: thin; }
+.outline-row { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; min-height: 31px; padding: 6px 8px; color: var(--text-2); background: transparent; border-radius: 7px; font-size: 13px; text-align: left; transition: color 0.2s var(--ease), background 0.2s var(--ease); }
+.outline-row:hover { color: var(--text-1); background: var(--hover); }
+.outline-row > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline-row.active { color: var(--text-1); background: var(--active); font-weight: 600; }
+.outline-item { min-width: 0; }
+.outline-item.depth-h2 { padding-left: 21px; }
+.outline-item.depth-h3 { padding-left: 40px; }
+.outline-item.depth-h2 .outline-row, .outline-item.depth-h3 .outline-row { min-height: 28px; color: var(--text-2); font-size: 12.5px; }
+.outline-item.depth-h3 .outline-row { font-size: 12px; }
+.fold, .fold-spacer, .child-dot { display: grid; place-items: center; width: 16px; height: 18px; flex: none; color: var(--text-3); }
+.fold { cursor: pointer; transition: transform 0.2s var(--ease); }
+.fold.is-folded { transform: rotate(-90deg); }
+.child-dot { width: 4px; height: 4px; margin-left: 6px; background: var(--text-3); border-radius: 50%; }
+.empty-outline { padding: 12px 8px; color: var(--text-3); font-size: 12px; line-height: 1.5; }
+.add-section { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; color: var(--text-2); background: transparent; border-radius: 7px; font-size: 12.5px; text-align: left; }
+.add-section:hover { color: var(--text-1); background: var(--hover); }
+.collaborators { flex: none; margin-top: 16px; }
+.collaborator { display: flex; align-items: center; gap: 9px; min-height: 39px; }
+.avatar { display: grid; place-items: center; width: 23px; height: 23px; flex: none; color: #fff; border-radius: 50%; font-size: 9px; font-weight: 700; }
+.avatar.orange { background: linear-gradient(135deg, #ff9b54, #f26b4f); }
+.avatar.green { background: linear-gradient(135deg, #47bf82, #2f8f5b); }
+.avatar.purple { background: linear-gradient(135deg, #a982ff, #7655d8); }
+.collaborator > span:nth-child(2) { min-width: 0; flex: 1; }
+.collaborator strong, .collaborator small { display: block; }
+.collaborator strong { color: var(--text-1); font-size: 12px; font-weight: 600; }
+.collaborator small { margin-top: 2px; color: var(--text-3); font-size: 10px; }
+.presence { width: 7px; height: 7px; border: 2px solid var(--sidebar); border-radius: 50%; }
+.presence.online { background: #30d158; }
+.presence.away { background: #febc2e; }
+.invite { display: flex; align-items: center; gap: 9px; margin-top: 9px; padding: 5px 8px; color: var(--text-2); background: transparent; font-size: 12px; }
+.invite:hover { color: var(--text-1); }
+.invite > span { display: grid; place-items: center; width: 22px; height: 22px; border: 1px dashed var(--text-3); border-radius: 50%; }
+/* Settings owns the bottom of both sidebars now, in both views.
+   `margin-top: auto` is what pins it: both columns are flex, so the button takes
+   the leftover space and sits at the bottom rather than directly under the last
+   thing above it. It is a control rather than a plate, so it keeps the
+   `.soft-button` treatment and its own accessible name from its label -- the icon
+   beside it is decorative. */
+.sidebar-settings { width: 100%; margin-top: auto; }
+/* The header's Settings button is a fallback for the sidebar's, not a second
+   entry point. Wide widths let the sidebar own Settings; the 940px query below
+   switches this copy on in the same breath it hides `.library-sidebar`.
+   `inline-flex` is the display `.soft-button` uses, so both widths agree. */
+.settings-fallback { display: none; }
+
+
+.editor-center { display: grid; grid-template-rows: 46px minmax(0, 1fr) 38px; min-width: 0; min-height: 0; background: var(--surface); }
+.editor-topbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; height: 54px; padding: 0 18px; background: color-mix(in srgb, var(--main) 94%, transparent); border-bottom: 1px solid var(--border); transition: opacity 0.2s var(--ease), transform 0.2s var(--ease); }
+.topbar-left, .topbar-right { display: flex; align-items: center; min-width: 0; gap: 7px; }
+.breadcrumb { display: flex; align-items: center; min-width: 0; gap: 8px; margin-left: 7px; color: var(--text-2); font-size: 12px; }
+.breadcrumb button { max-width: 160px; overflow: hidden; color: var(--text-2); background: transparent; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.breadcrumb strong { max-width: 210px; overflow: hidden; padding: 5px 8px; color: var(--text-1); background: var(--hover); border-radius: 7px; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.details-button { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; flex: none; margin-left: 4px; padding: 0 8px; color: var(--text-2); background: transparent; border: 1px solid transparent; border-radius: 7px; font-size: 11px; font-weight: 600; }
+.details-button:hover { color: var(--text-1); background: var(--hover); border-color: var(--border); }
+.topbar-divider { width: 1px; height: 22px; margin: 0 6px; background: var(--border); }
+.save-state { display: inline-flex; align-items: center; gap: 5px; color: var(--text-3); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.save-state.paused { color: var(--publish); }
+.publish-button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; color: var(--on-publish); background: var(--publish); border-radius: 999px; font-size: 11px; font-weight: 600; }
+.publish-button:hover { background: var(--publish-hover); }
+.publish-button.published { background: var(--publish); }
+.format-toolbar { position: sticky; top: 0; z-index: 3; padding: 11px 24px 13px; background: linear-gradient(180deg, var(--main) 0%, color-mix(in srgb, var(--main) 98%, transparent) 68%, transparent 100%); transition: opacity 0.2s var(--ease); }
+/* The bar grew from six controls to a full formatting set, so it needs to be
+   allowed to scroll rather than wrap: wrapping made the sticky toolbar grow
+   over the text on narrow windows. */
+.format-toolbar-inner { display: flex; align-items: center; gap: 6px; width: min(760px, 100%); min-height: 42px; margin: 0 auto; padding: 5px 6px; overflow-x: auto; scrollbar-width: none; background: var(--main); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-1); }
+.format-toolbar-inner::-webkit-scrollbar { display: none; }
+.tool-selects, .tool-group { display: flex; align-items: center; gap: 2px; flex: none; }
+.tool-group { padding-left: 6px; margin-left: 2px; border-left: 1px solid var(--border); }
+.tool-group:first-of-type { border-left: 0; padding-left: 0; margin-left: 0; }
+.format-toolbar select { min-width: 88px; height: 30px; padding: 0 7px; color: var(--text-2); background: var(--main); border: 0; border-radius: 6px; font-size: 12px; font-weight: 500; }
+.format-toolbar select:hover { background: var(--hover); color: var(--text-1); }
+.format-toolbar select:nth-child(2) { min-width: 60px; }
+.tool-divider { width: 1px; height: 22px; margin: 0 3px; background: var(--border); }
+.format-button { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; color: var(--text-2); background: transparent; border-radius: 6px; }
+.format-button:hover:not(:disabled) { color: var(--text-1); background: var(--hover); }
+/* Pressed state, so the bar reports what the caret is actually inside. */
+.format-button.active { color: var(--accent); background: var(--accent-soft); }
+.format-button:disabled { opacity: 0.32; }
+/* Headings shrink with the bar so H1 does not shout over the body text. */
+.format-button.letter { font-size: 14px; }
+.tool-group .format-button[aria-label^="Heading"] { font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: -0.02em; }
+.swatch-button { display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; background: transparent; border-radius: 6px; }
+.swatch-button:hover { background: var(--hover); }
+.swatch-button.active { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.swatch-button .tag-swatch { width: 13px; height: 13px; border: 1px solid var(--border-strong); border-radius: 4px; }
+.format-button.letter { font-size: 14px; }
+.color-control { position: relative; display: grid; place-items: center; width: 30px; height: 30px; color: var(--text-2); background: transparent; border-radius: 6px; cursor: pointer; }
+.color-control:hover { background: var(--hover); }
+.color-control input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.color-dot { width: 14px; height: 14px; background: var(--accent); border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 50%; }
+.editor-scroll { min-width: 0; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
+/* The writing column. It was 700px, which is ~66 characters at 17px -- inside
+   the comfortable range, but on a wide window with both panels open it left a
+   page that read as a strip with two margins' worth of empty surface beside it.
+   860px with the same gutters gives ~88 characters and the document actually
+   uses the window; a narrow window still wins, because `100%` is the floor.
+
+   The title and meta sit inside the same column so the text edge stays
+   consistent from the top of the page to the last line. */
+.editor-page {
+  /* An A4 sheet, so the writing surface is the page the document will print
+     on: 210mm wide, 297mm tall, with ~1in margins like Word's default. `min()`
+     keeps it full-bleed on windows narrower than a sheet, and the media
+     queries further down still take over on small screens. The sheet is
+     raised off the shell with a border+shadow pair rather than recoloured,
+     so every theme's paper texture and prose colours carry over untouched. */
+  width: min(210mm, 100%);
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 25mm 25.4mm 45mm;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--border), 0 12px 32px rgb(0 0 0 / 12%);
+  color: var(--prose);
+  caret-color: var(--accent);
+  outline: none;
+  font-family: var(--reading-font);
+  /* First layer is the veil, so it paints on top of the texture. Repeat is off
+     for the veil, on for the texture: a tile has to repeat, a wash does not. */
+  background-image: linear-gradient(color-mix(in srgb, var(--main) calc((1 - var(--editor-texture-wash)) * 100%), transparent)), var(--editor-texture);
+  background-repeat: no-repeat, repeat;
+  background-position: center;
+}
+.document-title { margin: 0; color: var(--text-1); font-size: 30px; font-weight: 800; letter-spacing: -0.024em; line-height: 1.18; text-wrap: balance; }
+/* The heading is a button so it is reachable by keyboard and announced as an
+   action, but it must read as plain text until the reader shows intent. */
+.document-title-button { display: block; width: 100%; padding: 0; color: inherit; background: none; border: 0; font: inherit; letter-spacing: inherit; line-height: inherit; text-align: left; text-wrap: balance; cursor: text; border-radius: 6px; }
+.document-title-button:hover { color: var(--text-1); }
+/* A quiet underline is the affordance; a box would fight the heading. */
+.document-title-button::after { display: block; height: 1px; margin-top: 3px; background: currentColor; opacity: 0; content: ""; transition: opacity 0.16s var(--ease); }
+.document-title-button:hover::after,
+.document-title-button:focus-visible::after { opacity: 0.28; }
+/* The input must sit exactly where the heading was, or the page jumps on tap. */
+.document-title-input { display: block; width: 100%; margin: 0; padding: 0 0 2px; color: var(--text-1); background: transparent; border: 0; border-bottom: 1.5px solid var(--accent); border-radius: 0; outline: none; font-size: inherit; font-weight: inherit; letter-spacing: inherit; line-height: inherit; }
+.document-meta { margin: 10px 0 30px; color: var(--text-3); font-family: var(--mono); font-size: 11px; letter-spacing: 0.02em; line-height: 1.5; }
+/* --- Document prose -------------------------------------------------------
+ * Single source of truth for the writing surface. The old rules lived here and
+ * were silently overridden by a later `.editor-surface .ProseMirror` block,
+ * which zeroed paragraph margins; the two sets are now merged here and
+ * `.editor-surface` only carries the ProseMirror-specific reset.
+ *
+ * Vertical rhythm uses one scale, `--prose-gap`, so paragraphs, lists and
+ * headings stay in proportion when the reader changes font size.
+ */
+.editor-page {
+  --prose-size: 17px;
+  --prose-leading: 1.72;
+  --prose-gap: 0.95em;
+}
+.document-prose {
+  font-size: var(--prose-size);
+  line-height: var(--prose-leading);
+  color: var(--prose);
+  font-weight: 400;
+  letter-spacing: 0;
+  /* Prose reads better without a forced justification. */
+  text-align: left;
+  hyphens: none;
+  -webkit-hyphens: none;
+  /* Avoid single-word last lines in justified or ragged prose. */
+  text-wrap: pretty;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+}
+.document-prose > * { margin: 0; }
+.document-prose > * + * { margin-top: var(--prose-gap); }
+.document-prose p { margin: 0; }
+
+.document-prose h1,
+.document-prose h2,
+.document-prose h3,
+.document-prose h4 {
+  color: var(--text-1);
+  font-weight: 700;
+  /* Headings sit tight to the text they introduce. */
+  letter-spacing: -0.014em;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.document-prose > h1 { margin-top: 1.1em; font-size: 1.5em; letter-spacing: -0.02em; }
+.document-prose > h2 { margin-top: 1.9em; font-size: 1.235em; }
+.document-prose > h3 { margin-top: 1.55em; font-size: 1.06em; letter-spacing: -0.008em; }
+.document-prose > h4 { margin-top: 1.35em; font-size: 1em; letter-spacing: 0; }
+/* A heading that opens the document should not inherit a large top gap. */
+.document-prose > :first-child { margin-top: 0; }
+
+.document-prose strong,
+.document-prose b { font-weight: 700; }
+.document-prose em,
+.document-prose i { font-style: italic; }
+.document-prose u { text-underline-offset: 2px; }
+.document-prose s { text-decoration-thickness: 1px; }
+
+.document-prose ul,
+.document-prose ol { margin: 0; padding-left: 1.45em; }
+.document-prose li { margin: 0; }
+.document-prose li + li { margin-top: 0.3em; }
+.document-prose li > p { margin: 0; }
+.document-prose li::marker { color: var(--text-3); }
+
+.document-prose blockquote {
+  margin: 0;
+  padding: 0.1em 0 0.1em 1.15em;
+  color: var(--text-2);
+  border-left: 2px solid var(--accent);
+  font-style: italic;
+}
+.document-prose blockquote p { margin: 0; }
+.document-prose blockquote p + p { margin-top: 0.6em; }
+
+.document-prose code {
+  padding: 0.14em 0.36em;
+  color: var(--text-1);
+  background: var(--hover);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.85em;
+  font-variant-ligatures: none;
+}
+.document-prose pre {
+  margin: 0;
+  padding: 13px 15px;
+  overflow-x: auto;
+  color: var(--text-1);
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 0.85em;
+  line-height: 1.62;
+  tab-size: 2;
+}
+.document-prose pre code { padding: 0; background: none; font-size: 1em; }
+
+.document-prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.document-prose hr {
+  height: 1px;
+  margin: 1.9em 0;
+  background: var(--border);
+  border: 0;
+}
+.document-prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.5em auto;
+  border-radius: 8px;
+  box-shadow: var(--shadow-1);
+}
+
+/* Highlight tags (Idea / To research / Quote / Cut later). The swatch is a
+   background tint, so in the dark theme it darkens rather than glowing. */
+.document-prose mark {
+  padding: 0.08em 0.18em;
+  border-radius: 3px;
+  background: var(--highlight-bg);
+  color: var(--highlight-ink);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+/* The section highlight.
+   The shadow is fixed on a pseudo-element and only its opacity moves. The
+   original animated `box-shadow: 0 0 0 0` to `0 0 0 8px`, which re-blurs the
+   region every frame of a 1.6s animation on a document that is already the most
+   expensive thing on screen. The pseudo-element cannot intercept pointer events
+   and `overflow: hidden` on the prose clips the halo to the line. */
+.document-prose .section-flash { position: relative; border-radius: 4px; }
+.document-prose .section-flash::after { content: ''; position: absolute; inset: -2px; z-index: -1; border-radius: 6px; box-shadow: 0 0 0 8px var(--accent-soft); opacity: 0; pointer-events: none; animation: sectionFlash 1.6s var(--ease); }
+@keyframes sectionFlash { 0%, 100% { opacity: 0; } 18%, 60% { opacity: 1; } }
+.editor-status { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; height: 38px; padding: 0 15px; color: var(--text-3); background: color-mix(in srgb, var(--main) 95%, transparent); border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10.5px; white-space: nowrap; transition: opacity 0.2s var(--ease), transform 0.2s var(--ease); }
+.editor-status > div:first-child { display: flex; min-width: 0; gap: 10px; overflow: hidden; }
+.status-hints { display: flex; flex: none; gap: 10px; }
+.status-hints button { padding: 3px 5px; color: var(--text-2); background: transparent; border-radius: 5px; font-family: var(--mono); font-size: 10px; }
+.status-hints button:hover { color: var(--text-1); background: var(--hover); }
+kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border: 1px solid var(--border); border-radius: 3px; font-family: var(--mono); font-size: 9px; }
+
+.assistant-panel { --chat-inset: 18px; display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; }
+.assistant-head { display: flex; align-items: center; gap: 10px; height: 61px; min-height: 61px; padding: 0 15px 0 16px; border-bottom: 1px solid var(--border); }
+.assistant-portrait { width: 25px; height: 25px; overflow: hidden; border-radius: 8px; box-shadow: 0 4px 10px rgba(61, 125, 255, 0.24); }
+.assistant-title { min-width: 0; flex: 1; }
+.assistant-title strong, .assistant-title span { display: block; }
+.assistant-title strong { color: var(--text-1); font-size: 13px; }
+.assistant-title span { margin-top: 2px; color: var(--text-3); font-size: 10.5px; }
+.chat-scroll { min-height: 0; flex: 1; padding: 19px 16px 14px; overflow-y: auto; scrollbar-width: thin; }
+.chat-message { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 18px; }
+.message-avatar { width: 24px; height: 24px; border-radius: 8px; font-size: 10px; }
+.message-avatar svg { width: 16px; height: 16px; }
+.message-content { min-width: 0; flex: 1; }
+.message-label { display: block; margin: 1px 0 5px; color: var(--text-3); font-size: 10.5px; font-weight: 600; }
+.message-body { color: var(--text-2); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.chat-message.ai .message-body { padding: 10px 12px; background: color-mix(in srgb, var(--main) 78%, transparent); border: 1px solid var(--border); border-radius: 4px 12px 12px 12px; }
+.chat-footer { padding: 10px 14px 15px; }
+/* Liquid renders an SVG goo filter over its own subtree, so the wrapper must
+   stay a flex row and the items must not rely on the wrapper for a background
+   — the fill colour is passed to <Liquid> instead. */
+.chat-suggestions, .chat-suggestion-items { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+/* Liquid renders an SVG goo filter over its own subtree, so the wrapper must
+   stay a plain flex row and the items must not be clipped by it. */
+.chat-suggestions { position: relative; z-index: 0; }
+/* Sits at the top of the transcript when older messages are outside the mounted
+   window. Full width and quiet: it is a boundary, not a call to action. */
+.show-earlier { display: block; width: 100%; margin-bottom: 10px; padding: 7px 10px; color: var(--text-2); background: transparent; border: 1px dashed var(--border); border-radius: 9px; font-family: var(--sans); font-size: 11.5px; text-align: center; transition: color 0.2s var(--ease), background 0.2s var(--ease); }
+.show-earlier:hover { color: var(--text-1); background: var(--hover); }
+.chat-suggestion { position: relative; z-index: 1; min-height: 26px; padding: 0 9px; color: var(--text-2); background: var(--main); border: 1px solid var(--border); border-radius: 999px; font-size: 10.5px; }
+.chat-suggestion:hover { color: var(--text-1); background: var(--hover); }
+.chat-box { padding: 9px; background: var(--main); border: 1px solid var(--border); border-radius: 13px; box-shadow: var(--shadow-1); }
+.chat-box textarea { display: block; width: 100%; min-height: 30px; max-height: 110px; resize: none; padding: 3px 4px; color: var(--text-1); background: transparent; border: 0; outline: 0; font-size: 12.5px; line-height: 1.45; }
+.chat-box textarea::placeholder { color: var(--text-3); }
+.chat-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
+.chat-control-left { display: flex; align-items: center; gap: 3px; }
+.chat-control, .chat-mode { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 6px; color: var(--text-2); background: transparent; border-radius: 6px; font-size: 11px; }
+.chat-control:hover, .chat-mode:hover { color: var(--text-1); background: var(--hover); }
+.send-button { display: grid; place-items: center; width: 30px; height: 30px; color: var(--on-accent); background: var(--accent); border-radius: 8px; }
+.attachment-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin-bottom: 8px; padding: 5px 7px; color: var(--text-2); background: var(--sidebar); border-radius: 6px; font-size: 10px; }
+.queued-chip { display: flex; align-items: center; gap: 6px; width: fit-content; margin-bottom: 8px; padding: 5px 10px; color: var(--text-3); background: var(--hover); border: 1px solid var(--border); border-radius: 999px; font-size: 10.5px; white-space: nowrap; }
+.attachment-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-chip button { display: grid; place-items: center; color: var(--text-3); background: transparent; }
+/* --- Write a thesis ----------------------------------------------------------
+   A card above the composer rather than a dialog: a run takes twenty minutes, so
+   the reader has to be able to close it and carry on reading the draft while it
+   works. The progress itself is in the transcript, which is where the assistant
+   already says things; this is only the request and the state of the service. */
+.chat-control.active { color: var(--text-1); background: var(--hover); }
+.run-card { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; padding: 10px; background: var(--main); border: 1px solid var(--border); border-radius: 13px; box-shadow: var(--shadow-1); }
+.run-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.run-label { color: var(--text-1); font-size: 12px; font-weight: 600; }
+/* The service's own state. Quiet for stopped, accent for the two states the
+   reader is waiting on, danger for the one they have to act on. */
+.run-state { color: var(--text-3); font-size: 10.5px; text-align: right; }
+.run-state.run-ready, .run-state.run-starting { color: var(--accent); }
+.run-state.run-failed { color: var(--danger); }
+.run-prompt { display: block; width: 100%; min-height: 52px; resize: vertical; padding: 7px 8px; color: var(--text-1); background: var(--chat); border: 1px solid var(--border); border-radius: 9px; font-family: var(--sans); font-size: 12.5px; line-height: 1.45; }
+.run-prompt::placeholder { color: var(--text-3); }
+.run-prompt:disabled { opacity: 0.62; }
+.run-actions { display: flex; align-items: center; gap: 7px; }
+.run-actions .soft-button { min-height: 30px; padding: 0 11px; font-size: 11.5px; }
+/* The phase reads like the `.message-status` it sits beside: this is the last
+   thing that happened, not the run's log. */
+.run-phase { min-width: 0; overflow: hidden; color: var(--text-3); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.run-error { margin: 0; color: var(--danger); font-size: 11px; line-height: 1.5; }
+/* Progress rows are the same rows as everything else in the transcript, a shade
+   quieter so twenty minutes of them do not read as twenty minutes of replies. */
+.chat-message.ai.is-run .message-body { color: var(--text-2); }
+
+.selection-bubble { position: fixed; z-index: 80; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--main); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2); transform: translateX(-50%); }
+.selection-bubble button { display: grid; place-items: center; width: 29px; height: 30px; color: var(--text-2); background: transparent; border-radius: 7px; }
+.selection-bubble button:hover { color: var(--text-1); background: var(--hover); }
+.selection-bubble span { width: 1px; height: 21px; margin: 0 2px; background: var(--border); }
+.tag-popover { position: fixed; z-index: 81; top: 90px; right: 370px; width: 198px; padding: 7px; color: var(--text-2); background: var(--main); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2); }
+.tag-popover-head { padding: 5px 7px 8px; color: var(--text-3); font-size: 10.5px; font-weight: 600; }
+.tag-popover button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 0 7px; color: var(--text-2); background: transparent; border-radius: 6px; font-size: 12px; text-align: left; }
+.tag-popover button:hover { color: var(--text-1); background: var(--hover); }
+.tag-popover button kbd { margin-left: auto; }
+.tag-swatch { width: 10px; height: 10px; border-radius: 3px; }
+
+.modal-layer { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; }
+/* No `backdrop-filter`. It was `blur(3px)` across the whole viewport, on every
+   dialog in the app, and a backdrop filter has to re-snapshot and re-blur the
+   page behind it on every frame that page changes -- which, with panels on
+   springs and framer-motion running underneath, is most frames. The scrim is now
+   carried entirely by its own colour, which is why `--scrim` is a little heavier
+   than it was. ModalLayer's comment about not *animating* the filter was right
+   and was not the whole problem: the cost is in having one at all. */
+.modal-scrim { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--scrim); }
+.dialog { position: relative; z-index: 1; width: min(420px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); overflow: hidden; color: var(--text-1); background: var(--main); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-3); }
+/* --- Settings, as a page ---------------------------------------------------
+   It used to be `.dialog.settings-dialog` inside `ModalLayer`: a scrim, a focus
+   trap, and a scroll region floating over a dimmed library. It is now the whole
+   window, which buys the two things a dialog could not give it -- a real column
+   to lay sections out in, and a header that stays put while the body scrolls.
+
+   And it is no longer the whole window: `.settings-layer` is a flex sibling of
+   `.library-layer` inside `.app-shell` rather than an absolute overlay covering
+   it. The library sidebar is the fastest route out of the document you are in,
+   and burying it under a full-page surface meant that changing a reading font
+   cost a round trip through the library and back. Beside it, the collection
+   filters stay live -- clicking one still changes what "back" will show. */
+.settings-layer {
+  /* z-index 1, for the reason spelled out on `.app-shell::before`: the wallpaper
+     and its scrim resolve against the root at z-index 0, so a static page paints
+     UNDER them. `.library-layer` and `.editor-layer` both carry a z-index for
+     this and this layer was the one that did not, which is why a set wallpaper
+     covered the settings page outright. Matching `.library-layer` also puts the
+     scrim below the settings text, so the settings-only dim pushes the wallpaper
+     back instead of laying another veil over the copy. */
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  background: var(--main);
+}
+/* The shell only becomes a flex row while Settings is open. Everywhere else its
+   two layers are `position: fixed` and stack by themselves, and there is nothing
+   for a flex context to arrange. */
+.app-shell.settings-open { display: flex; }
+/* The library layer is out of flow -- it is `position: fixed`, crossfaded against
+   the editor -- so it contributes no width to the row above. It has to give up
+   its `inset: 0` and take the sidebar's width explicitly, or it would keep
+   covering the full viewport on top of the page next to it. `.library-page` is
+   absolute, so this box is what it measures against. */
+.app-shell.settings-open .library-layer { position: relative; inset: auto; width: 218px; flex: none; }
+/* Opacity and pointer-events are keyed on `data-view`, so opening Settings from
+   a document would otherwise leave an invisible sidebar beside the page -- and an
+   invisible one that still took clicks. */
+.app-shell.settings-open .library-layer { opacity: 1; pointer-events: auto; transform: none; }
+.app-shell.settings-open .library-main { display: none; }
+/* The editor does not go behind the page. It stays mounted either way, because the
+   crossfade depends on both layers existing; `display: none` takes it out of
+   paint and out of the tab order without unmounting ProseMirror. */
+.app-shell.settings-open .editor-layer { display: none; }
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  /* Without this the column's automatic minimum height is its content's, so in
+     a short window the page grows past the viewport instead of shrinking and
+     handing its overflow to `.settings-form`. `body` sets `overflow:hidden` and
+     `.app-shell` clips, so there is no window scroll to fall back on and
+     everything below the fold is unreachable. */
+  min-height: 0;
+  outline: none;
+}
+.settings-page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--main);
+}
+.settings-page-title h1 { margin: 0; font-size: 21px; letter-spacing: -0.02em; }
+/* A tab bar across the top, and one section at a time.
+   It replaced a rail of `#anchor` links into one long scroll. Only one of the two
+   reasons for that is the reference: the other is the tab order. The rail's links
+   jumped around a single scroll region, so "Appearance" and "Writing" were each
+   both before and after every control they sat beside. With one section showing,
+   reading order and tab order are the same thing.
+
+   The active tab is a raised lighter block rather than bold ink. That is what
+   `.view-toggle` and `.density-toggle` already do for "the one you are on" -- a
+   `--sidebar` track with a `--main` block sitting in it -- so a tab bar reads as
+   the same control family rather than as a new vocabulary borrowed from another
+   product. It is also a shape difference instead of a weight difference, which
+   means it survives a reader who cannot see the weight change. Bold ink was the
+   smaller change and the weaker cue. */
+.settings-tabbar { flex: none; padding: 14px 28px 0; background: var(--main); border-bottom: 1px solid var(--border); }
+.settings-tabs { display: inline-flex; align-items: center; gap: 3px; padding: 3px; background: var(--sidebar); border-radius: 8px; }
+.settings-tab { min-height: 27px; padding: 0 12px; color: var(--text-2); background: transparent; border-radius: 5px; font-size: 12px; font-weight: 600; transition: color 0.16s var(--ease), background 0.16s var(--ease); }
+.settings-tab:hover { color: var(--text-1); }
+.settings-tab.active { color: var(--text-1); background: var(--main); box-shadow: var(--shadow-1); }
+.settings-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+@media (max-width: 720px) {
+  .settings-page-head { padding: 16px 18px 14px; }
+  .settings-tabbar { padding: 12px 18px 0; }
+}
+
+.dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 18px; border-bottom: 1px solid var(--border); }
+.dialog-head h2 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+.dialog-head .eyebrow { margin-bottom: 6px; }
+.dialog-close { display: grid; place-items: center; width: 30px; height: 30px; flex: none; color: var(--text-2); background: var(--hover); border-radius: 8px; }
+.dialog-close:hover { color: var(--text-1); background: var(--active); }
+.dialog-form { max-height: calc(min(760px, 100vh - 32px) - 72px); padding: 20px 24px 0; overflow-y: auto; }
+.field-label { display: block; margin: 0 0 6px; color: var(--text-2); font-size: 11px; font-weight: 600; }
+.field-label small { color: var(--text-3); font-weight: 400; }
+.dialog input, .dialog select { width: 100%; min-height: 36px; margin-bottom: 14px; padding: 0 10px; color: var(--text-1); background: var(--main); border: 1px solid var(--border); border-radius: 8px; outline: 0; font-size: 12px; }
+
+/* Settings became a page rather than a dialog, so `.dialog input` stopped
+   matching it and every text field on the page fell back to the browser's own:
+   the model, endpoint and API key rendered as bare boxes. Scoped to text-like
+   types because BackgroundPicker's sliders live inside the same page and a
+   blanket `.settings-page input` would give them a border and padding. */
+.settings-page input:not([type='range']):not([type='color']):not([type='checkbox']) {
+  width: 100%; min-height: 36px; margin-bottom: 14px; padding: 0 10px;
+  color: var(--text-1); background: var(--main);
+  border: 1px solid var(--border); border-radius: 8px; outline: 0; font-size: 12px;
+}
+.settings-page input:not([type='range']):not([type='color']):not([type='checkbox']):focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.settings-page input::placeholder { color: var(--text-3); }
+.dialog input:focus, .dialog select:focus { border-color: rgba(61, 125, 255, 0.55); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field-group { margin-top: 2px; }
+.collection-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-bottom: 16px; }
+.collection-option { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 8px; color: var(--text-2); background: var(--sidebar); border-radius: 7px; font-size: 11px; }
+.collection-option:has(input:checked) { color: var(--accent); background: var(--accent-soft); }
+.collection-option input { width: 13px; min-height: 13px; margin: 0; accent-color: var(--accent); }
+.dialog-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.dialog-grid > div:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.dialog-note { margin: 5px 0 16px; color: var(--text-3); font-size: 10.5px; line-height: 1.45; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 0 -24px; padding: 16px 24px 20px; border-top: 1px solid var(--border); }
+.settings-form { padding-top: 0; }
+.settings-section { padding: 26px 28px; border-bottom: 1px solid var(--border); }
+/* The inactive panels are hidden, not unmounted -- see the note in
+   `SettingsPage` about the theme editor's draft -- so this has to hold against
+   any `display` a future rule sets on `.settings-section`. The UA's
+   `[hidden] { display: none }` is a specificity-0,1,0 rule and any author
+   `display` would beat it; this one cannot. */
+.settings-section[hidden] { display: none; }
+/* The scroll container. `min-height:0` is what lets it shrink below its content
+   inside the page's column -- without it the automatic minimum size keeps the
+   form at full height and the overflow escapes the page instead of scrolling
+   inside it. */
+.settings-form { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; padding-bottom: 40px;
+  /* The thin scrollbar the library grid and the editor already use. Without it
+     this one scroll region is the only pane in the app drawing a full-width
+     default scrollbar, which reads as heavy and repaints more of the surface on
+     every step. `contain` stops the wheel from chaining out to the page behind,
+     which is what made the scroll feel like it was fighting something. */
+  scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent;
+  overscroll-behavior: contain; }
+.settings-section:last-child { border-bottom: none; }
+.settings-section-head { margin-bottom: 14px; }
+.settings-section h3 { margin: 0; font-size: 14px; letter-spacing: -0.01em; }
+.settings-section-head p { margin: 5px 0 0; color: var(--text-2); font-size: 11.5px; line-height: 1.45; }
+.settings-status { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; color: var(--text-3); background: var(--sidebar); border-radius: 999px; font-family: var(--mono); font-size: 9.5px; white-space: nowrap; }
+.settings-status.connected { color: var(--publish); background: color-mix(in srgb, var(--publish) 10%, transparent); }
+.settings-status.error { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.settings-note { margin: 0; padding: 0 0 4px; }
+
+/* The save toast: what acknowledges a write now that the status line and the
+   Save button are both gone.
+
+   Always in the document and empty until something is written -- that is a live
+   region's requirement rather than a stylistic one, and the reason this is not
+   `{toast && ...}`. `pointer-events: none` because it sits over the corner of
+   the page and there is nothing under it to click.
+
+   `position: fixed` against the viewport rather than absolute: the settings page
+   is a scroll region, so an absolute pill would ride the scroll and arrive and
+   leave with the content. It transitions `opacity` and `transform` and nothing
+   else, and the duration is the `TOAST_FADE` constant in `SettingsPage.jsx` --
+   one number kept in two files, and under the 0.2s budget
+   `tests/motion.test.mjs` holds every transition in the app to. Under
+   `prefers-reduced-motion`, and under the app's own `body.reduce-motion`, the
+   blanket rules above collapse the transition to a cut, which is the right
+   outcome here: the pill appears and goes without travelling. */
+.settings-toast {
+  position: fixed;
+  right: 26px;
+  bottom: 24px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 13px;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.18s var(--ease), transform 0.18s var(--ease);
+}
+.settings-toast.on { opacity: 1; transform: translateY(0); }
+.settings-toast svg { flex: none; }
+
+/* A row: the name and its explanation on the left, the control on the right.
+   This is the shape both references use for a settings list, and it is the
+   opposite of the `dialog-grid` this replaced -- label above field, two cells
+   across. Stacked cells make a page that has to be *scanned* column by column;
+   a row makes it a list of things each with a name, which is what a settings
+   page is. */
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 13px 0; border-top: 1px solid var(--border); }
+.settings-row-copy { min-width: 0; }
+.settings-row-label { display: block; color: var(--text-1); font-size: 12.5px; font-weight: 600; }
+.settings-row-label small { display: inline; margin-left: 5px; color: var(--text-3); font-size: 10px; font-weight: 400; }
+.settings-row-copy small { display: block; margin-top: 3px; color: var(--text-2); font-size: 11.5px; line-height: 1.45; }
+/* 236px is wide enough for the longest value here -- a URL in the endpoint field
+   is an input, but `gpt-4o-mini` and `claude-3-5-sonnet` are both longer than
+   the trigger's own minimum -- and narrow enough that the label keeps the left
+   half of a 900px window. */
+.settings-row-control { display: flex; align-items: center; justify-content: flex-end; gap: 8px; width: 236px; flex: none; }
+/* The API key's row is the one control wider than a select: an input, a reveal
+   and the only button on this page that does something all by itself do not fit
+   in 236px together. */
+.settings-row-control.grow { width: auto; flex: 1; max-width: 440px; }
+/* `margin-bottom` is the page's field rhythm and belongs to a stacked form. In a
+   row it pushes the control off the label's baseline, and the specificity has to
+   match `.settings-page input:not(...)` above to win. */
+.settings-page .settings-row input { margin-bottom: 0; }
+.settings-row-control .dialog-select { width: 100%; }
+/* A full-width group of cards, where a control needs the room to be looked at.
+   `:first-of-type` suppresses the rule under the section head, which already
+   separates. */
+.settings-block { padding: 14px 0; border-top: 1px solid var(--border); }
+.settings-block:first-of-type { padding-top: 0; border-top: 0; }
+
+.secret-field { display: flex; align-items: center; gap: 6px; }
+.secret-field input { min-width: 0; flex: 1; }
+.secret-field button { width: 44px; min-height: 36px; color: var(--text-2); background: var(--hover); border-radius: 8px; font-size: 10.5px; font-weight: 700; }
+
+/* --- Selectable cards -------------------------------------------------------
+   Two grids use this class: the theme cards and the library-density cards. Both
+   are a `role="radiogroup"` over Radix's own items, so the selected card is
+   announced as the value of a single control -- which is the argument the theme
+   dropdown was originally built on, and the reason it survived the move to cards.
+
+   Selection is an accent border plus the corner badge and nothing else. There is
+   deliberately no accent wash behind a theme card: the thumbnail inside is a
+   picture of the theme, and tinting the card would colour the evidence. */
+.choice-cards { display: grid; gap: 10px; }
+.choice-card { position: relative; display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 9px; color: var(--text-1); background: var(--main); border: 1px solid var(--border); border-radius: 10px; text-align: left; cursor: pointer; transition: border-color 0.16s var(--ease); }
+.choice-card:hover { border-color: var(--border-strong); }
+.choice-card[data-state="checked"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.choice-card:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.choice-card-name { font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.choice-card-note { color: var(--text-2); font-size: 10.5px; line-height: 1.4; }
+/* Driven off Radix's own `data-state` rather than a class computed in React: the
+   group already owns the selection, and a second copy of it is a second thing to
+   keep in step. */
+.choice-card-badge { display: none; position: absolute; top: 6px; right: 6px; width: 19px; height: 19px; place-items: center; color: var(--on-accent); background: var(--accent); border-radius: 999px; box-shadow: 0 0 0 2px var(--main); }
+.choice-card[data-state="checked"] .choice-card-badge { display: grid; }
+
+
+@media (max-width: 940px) {
+  .library-layout { grid-template-columns: 1fr; }
+  .library-sidebar { display: none; }
+  /* `.library-sidebar` just went away, so the header copy of Settings comes back
+     -- otherwise a narrow window has no route into Settings at all. */
+  .settings-fallback { display: inline-flex; }
+  /* The wide-window settings split (styles.css:1066) reserves a 218px library
+     column so the sidebar can host its Settings button. Below 940px that
+     sidebar is `display: none`, so the reservation is pure dead space -- an
+     empty 218px strip beside the settings page. Collapsing the layer lets
+     `.settings-layer` (`flex: 1`) take the full width. Same specificity as the
+     rule it overrides and later in the file, so the cascade does the work. */
+  .app-shell.settings-open .library-layer { width: 0; min-width: 0; flex: 0 0 0; overflow: hidden; pointer-events: none; }
+  .library-main { padding: 26px 26px 24px; }
+  /* Narrow screens go back to overlaying. Reserving a 282px column out of a
+     900px window would leave the page with almost nothing, so below this width
+     the panel is meant to cover the editor -- it is a drawer, not a column. */
+  .editor-shell { grid-template-columns: 0 minmax(0, 1fr) 0; }
+  .left-panel { width: min(86vw, 282px); }
+  .right-panel { width: min(86vw, 348px); }
+  .panel-inner, .right-panel .panel-inner { width: 100%; min-width: 0; }
+  .editor-page { padding-inline: 28px; }
+  .editor-topbar { padding-inline: 12px; }
+  .breadcrumb strong { max-width: 150px; }
+  .status-hints { display: none; }
+  .tag-popover { right: 20px; }
+}
+@media (max-width: 560px) {
+  .library-main { padding: 24px 18px 22px; }
+  .library-main-head { align-items: flex-start; }
+  .library-main h1 { font-size: 23px; }
+  .library-main-tools .soft-button:not(.primary) span { display: none; }
+  .library-main-tools .soft-button:not(.primary) { width: 34px; padding: 0; }
+  .library-toolbar { margin-top: 20px; }
+  .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 12px; margin-top: 16px; }
+  .editor-page { padding: 22px 18px 140px; }
+  .format-toolbar { padding-inline: 9px; }
+  .format-toolbar-inner { overflow-x: auto; justify-content: flex-start; scrollbar-width: none; }
+  .format-toolbar-inner::-webkit-scrollbar { display: none; }
+  .breadcrumb button:nth-of-type(2), .breadcrumb > span:nth-of-type(2) { display: none; }
+  .breadcrumb strong { max-width: 132px; }
+  .save-state { display: none; }
+  .publish-button { padding-inline: 10px; }
+  .editor-status { padding-inline: 10px; font-size: 9px; }
+  .editor-status > div:first-child { gap: 5px; }
+  .dialog { max-height: calc(100dvh - 20px); }
+  .dialog-form { max-height: calc(100dvh - 92px); }
+  .dialog-head, .dialog-actions, .settings-section { padding-inline: 18px; }
+  .dialog-grid, .collection-options { grid-template-columns: 1fr; }
+  .dialog-grid > div:last-child:nth-child(odd) { grid-column: auto; }
+  /* A row that cannot fit its label and its control side by side stops trying,
+     and the control takes the full width under the label rather than being
+     squeezed to a field 90px wide. */
+  .settings-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .settings-row-control { width: auto; }
+  .settings-row-control.grow { max-width: none; }
+  /* Nothing in this block sets the theme grid's columns, and that used to be an
+     accident waiting to happen rather than a fact.
+
+     It used to carry `repeat(2, ...)` on both `.theme-cards` and
+     `.theme-cards-list`. Both were INERT: the base theme rules sit *after* this
+     query at equal specificity and re-declare the same property, so the later
+     rule won and neither line ever fired. They were kept as a record of the idea
+     that lost. A third declaration here -- the new-theme button pinned to a
+     fixed column -- was NOT re-declared downstream, and the moment the base rule
+     stopped pinning that button it went live: it won by default, spanned all
+     three tracks, and because the button's mark is an aspect-ratio square the
+     button became a 504px, 504px slab at exactly the width the grid is smallest.
+     A half-live media query fails silently, which is why the paragraph explaining
+     the inert pair was longer than the pair.
+
+     All three lines are now gone rather than kept as a memorial. The base rule
+     is `repeat(auto-fill, minmax(220px, 1fr))`, and that one formula already
+     decides the column count at every width, this breakpoint included: at 560px
+     the grid has 524px of content, so `floor((524 + 10) / (220 + 10))` is 2 --
+     the same two columns the deleted pair asked for, arrived at by the same
+     arithmetic at 420px (1), 700px (2), 900px (3), 1440px (5) and 1920px (7).
+     A declaration in here can no longer be right, because there is nothing left
+     for it to override: the count is width-derived, so any per-breakpoint count
+     is either redundant or a lie waiting for the next width that disagrees.
+
+     What the deleted pair would have cost, had it ever fired, is the reason the
+     cap argument is the same argument now: two columns across 524px makes each
+     square ~237px, wider than the ~205px the grid is at on a 1440px window -- so
+     the picker would grow as the window shrank. */
+  /* No rule for the new-theme button here, and the omission is load-bearing.
+     Auto-placement puts it at track 1 of the first row the group does not
+     reach -- row 2 with three themes, and row 2, 3 or 4 as the reader adds more
+     -- and its mark then occupies one track of the outer grid, the same track
+     the cards inside the group occupy, because the group spans every track plus
+     the gaps between them and divides that across the same `auto-fill` formula
+     and the same 10px gaps, so card and mark are the identical fraction at every
+     width. Pinning the button from here would override that arithmetic at
+     precisely the width where the grid is smallest, which is how a one-line
+     query produced a full-width slab. */
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
+.assistant-panel { background: var(--chat); }
+.assistant-head { background: color-mix(in srgb, var(--main) 78%, var(--chat)); }
+.assistant-portrait { color: var(--accent); background: var(--main); border: 1px solid var(--border); box-shadow: none; }
+.chat-scroll { padding: 28px var(--chat-inset) 22px; background: var(--chat); scrollbar-gutter: stable; }
+.chat-message { gap: 0; margin-bottom: 24px; }
+.message-avatar, .message-label { display: none; }
+.message-content { width: 100%; }
+.message-body { color: var(--text-1); font-size: 13.5px; line-height: 1.65; }
+.chat-message.user .message-body { max-width: 92%; padding: 11px 14px; background: color-mix(in srgb, var(--main) 72%, var(--sidebar)); border: 1px solid var(--border); border-radius: 18px 18px 6px 18px; }
+.chat-message.ai .message-body { padding: 0; background: transparent; border: 0; border-radius: 0; }
+/* A turn the assistant could not answer. It keeps the transcript's shape but
+   not its confidence: muted text, and the reason in its own status line rather
+   than a fabricated reply. Reuses existing tokens so the contrast gate still
+   describes it. */
+.chat-message.error .message-body { max-width: 92%; padding: 11px 14px; background: color-mix(in srgb, var(--main) 72%, var(--sidebar)); border: 1px solid var(--border); border-radius: 18px 18px 6px 18px; color: var(--text-2); }
+.message-status { display: flex; align-items: center; gap: 5px; margin-top: 10px; color: var(--text-3); font-size: 10.5px; }
+.message-status svg { flex: none; }
+.typing-status { gap: 8px; }
+.chat-footer { padding: 12px var(--chat-inset) 16px; background: var(--chat); }
+.chat-suggestions { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 10px; scrollbar-width: none; }
+.chat-suggestions::-webkit-scrollbar { display: none; }
+.chat-suggestions button { flex: none; min-height: 24px; padding: 0 4px; color: var(--text-3); background: transparent; border: 0; border-radius: 0; font-size: 10.5px; }
+.chat-suggestions button:hover { color: var(--text-1); background: transparent; }
+.chat-box { display: flex; flex-direction: column; min-height: 126px; padding: 12px; border-radius: 20px; box-shadow: 0 8px 24px rgba(20, 30, 50, 0.08); }
+.chat-box textarea { flex: 1; min-height: 70px; max-height: 160px; padding: 2px; font-size: 13px; }
+.chat-controls { margin-top: auto; padding-top: 8px; }
+.chat-control-left { flex: 1; }
+.chat-control, .chat-mode { min-height: 32px; }
+.send-button { width: 34px; height: 34px; color: var(--main); background: var(--text-1); border-radius: 50%; }
+.chat-mode { display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 8px; color: var(--text-2); background: transparent; border-radius: 8px; font-size: 11px; }
+.chat-mode:hover, .chat-mode.active { color: var(--text-1); background: var(--hover); }
+.chat-mode svg { color: var(--text-3); }
+/* A single row that never wraps. The controls keep their intrinsic width and
+   the row scrolls instead, because a wrapped "New chat" label reads as two
+   separate controls. */
+.assistant-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; height: auto; min-height: 52px; margin: 10px 12px 4px; padding: 6px 7px; background: var(--main); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-1); }
+.assistant-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; width: 100%; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.assistant-head-actions::-webkit-scrollbar { display: none; }
+/* The model picker hugs its own content: the field is as wide as its text
+   needs (plus room for the chevron, which is absolutely placed over the right
+   padding), so a short id reads as a snug pill instead of a half-empty bar.
+   The popover below (`.model-popover`) carries its own fixed width, so long
+   option names never stretch the trigger. */
+.model-picker { position: relative; display: inline-flex; align-items: center; flex: none; width: max-content; margin-right: auto; }
+.model-picker > svg { position: absolute; right: 8px; color: var(--text-3); pointer-events: none; transition: transform 0.16s var(--ease); }
+.model-picker[data-open] > svg { transform: rotate(180deg); }
+.model-trigger {
+  /* The trigger half of the model listbox (the listbox comment in ChatPanel
+     is the design argument). Content-fit: no leading badge, the id starts at
+     the left padding, and the right padding is the chevron's lane so text
+     never runs under it. The label still ellipsises rather than wrapping or
+     shoving the head's buttons around. */
+  display: block;
+  /* The native button face paints its own fill and ignores `background`
+     without this -- the "black box" the field kept showing. */
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  overflow: hidden;
+  max-width: none;
+  width: auto;
+  min-height: 34px;
+  padding: 0 28px 0 12px;
+  color: var(--text-2);
+  /* The head is already the field's surface; a filled pill here read as a
+     black box pasted onto it. The border keeps the controller's outline. */
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.model-trigger:hover { color: var(--text-1); background: var(--active); }
+/* No focus ring on the picker: the accent outline read as a blue edge drawn
+   around the field. The chevron's rotation reports the open state instead. */
+.model-trigger:focus-visible { outline: none; }
+.assistant-head-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 32px; color: var(--text-2); background: transparent; border: 1px solid transparent; border-radius: 10px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+.assistant-head-action:hover { color: var(--text-1); background: var(--hover); }
+.run-thoughts { margin-top: 7px; color: var(--text-3); }
+.assistant-head-action { flex: none; min-height: 34px; padding: 0 11px; border-radius: 10px; }
+.share-popover { position: absolute; z-index: 14; top: calc(100% + 6px); right: 12px; width: min(260px, calc(100% - 24px)); padding: 12px; background: var(--main); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2); }
+.share-popover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.share-popover-head strong, .share-popover-head span { display: block; }
+.share-popover-head strong { font-size: 12px; }
+.share-popover-head span { margin-top: 3px; color: var(--text-3); font-size: 10px; }
+.share-close { display: grid; place-items: center; width: 26px; height: 26px; color: var(--text-2); background: var(--hover); border-radius: 6px; }
+.share-copy { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 32px; margin-top: 12px; padding: 0 9px; color: var(--text-1); background: var(--hover); border-radius: 7px; font-size: 11px; }
+
+/* The model listbox, drawn as a card -- the reference designs want rows with
+   a badge and a selection dot, which the OS popup of a native select can be
+   given in no theme. It hangs off .assistant-head (position: relative), never
+   off .assistant-head-actions: that row scrolls horizontally and would clip a
+   child that reaches below it. */
+.model-popover { position: absolute; z-index: 15; top: calc(100% + 8px); left: 8px; width: min(340px, calc(100% - 16px)); padding: 6px; background: var(--main); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-2); }
+.model-option { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; padding: 0 9px; color: var(--text-2); background: transparent; border: 0; border-radius: 9px; font-family: inherit; font-size: 12px; font-weight: 500; text-align: left; cursor: pointer; }
+.model-option:hover, .model-option:focus-visible { color: var(--text-1); background: var(--hover); outline: none; }
+.model-option.is-selected { color: var(--text-1); background: var(--active); }
+.model-option-badge { display: grid; place-items: center; flex: none; width: 20px; height: 20px; color: var(--on-accent); background: var(--accent); border-radius: 6px; }
+.model-option-badge--muted { color: var(--text-2); background: var(--hover); }
+.model-option-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.model-option-dot { flex: none; width: 6px; height: 6px; margin-left: auto; background: var(--accent); border-radius: 50%; }
+.model-popover-sep { height: 1px; margin: 5px 4px; background: var(--border); }
+.model-option-action { color: var(--text-3); }
+
+@media (max-width: 560px) {
+  .assistant-head { padding-inline: 10px; }
+  .assistant-head-action span { display: none; }
+  .assistant-head-action { width: 30px; padding: 0; }
+  .model-picker { min-width: 0; }
+  .model-trigger { max-width: 112px; min-width: 0; }
+}
+
+/* Startup / failure states shown while the platform store is opening. */
+/* The boot states are an overlay on the persistent shell rather than a
+   replacement for it, so the workspace underneath keeps its state. */
+.boot-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: var(--backdrop);
+}
+
+.boot-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  height: 100%;
+  color: var(--text-2);
+  background: var(--backdrop);
+  text-align: center;
+}
+.boot-screen .boot-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 12px;
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-1);
+}
+.boot-screen .boot-mark img { width: 100%; height: 100%; object-fit: contain; }
+.boot-screen p { margin: 0; font-size: 13px; }
+.boot-screen h1 { margin: 0; color: var(--text-1); font-size: 18px; letter-spacing: -0.02em; }
+.boot-error p { max-width: 420px; color: var(--danger); line-height: 1.6; }
+
+/* --- Tiptap editor surface -------------------------------------------------
+ * ProseMirror-specific reset only. All typography lives in the
+ * `.document-prose` block above; an earlier version of this block redefined
+ * paragraph margins at a higher specificity, which silently cancelled them.
+ */
+.editor-surface { min-height: 40vh; }
+
+.editor-surface .ProseMirror {
+  /* The editable element itself must not show a focus ring; the surrounding
+     `.editor-page` keeps the accessible focus treatment. */
+  outline: none;
+  /* ProseMirror ships `white-space: pre-wrap`, which preserves literal
+     newlines and spaces inside the editable region and is the usual cause of
+     line height looking wrong. Blocks handle their own spacing, so normal
+     whitespace behaviour is correct here. */
+  white-space: normal;
+  /* Ligatures are restored deliberately: ProseMirror disables them so that
+     cursor arithmetic stays simple, but the reading experience matters more. */
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  min-height: 40vh;
+}
+
+/* Placeholder for an empty document. Requires the Placeholder extension; the
+   rule is inert until that is added, and costs nothing to keep. */
+.editor-surface .ProseMirror p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: var(--text-3);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+/* --- Export dialog ------------------------------------------------------- */
+.format-options { display: grid; gap: 8px; }
+.format-option {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name ext" "desc ext";
+  gap: 2px 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  transition: border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.format-option:hover:not(:disabled) { background: var(--hover); border-color: rgba(0, 0, 0, 0.16); }
+.format-option.active { border-color: var(--accent); background: var(--accent-soft); }
+.format-option:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.format-option:disabled { opacity: 0.5; cursor: not-allowed; }
+.format-option-name { grid-area: name; color: var(--text-1); font-size: 13px; font-weight: 600; }
+.format-option-desc { grid-area: desc; color: var(--text-2); font-size: 11.5px; line-height: 1.4; }
+.format-option-ext {
+  grid-area: ext;
+  padding: 3px 7px;
+  color: var(--text-2);
+  background: var(--hover);
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.format-option.active .format-option-ext { color: var(--accent); background: var(--main); }
+
+.export-result {
+  padding: 11px 13px;
+  background: var(--hover);
+  border-radius: 8px;
+}
+.export-result-head {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin: 0;
+  color: var(--publish);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.export-result-path {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.export-warnings {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.dialog-error { margin: 0; color: var(--danger); font-size: 12.5px; line-height: 1.55; }
+
+/* --- Crash screen --------------------------------------------------------- */
+.boot-stack {
+  max-width: 520px;
+  max-height: 220px;
+  overflow: auto;
+  text-align: left;
+  color: var(--text-2);
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.boot-stack summary { padding: 9px 12px; cursor: pointer; font-size: 12px; font-weight: 600; }
+.boot-stack pre {
+  margin: 0;
+  padding: 0 12px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+/* --- Dark refinements ----------------------------------------------------- */
+/* The tokens above cover colour, but a few surfaces need explicit help once the
+   native colour scheme is dark. Every rule here keys on data-mode rather than
+   data-theme="night": these are properties of darkness, not of the night
+   preset, so a custom dark theme has to inherit them. */
+[data-mode="dark"] .format-toolbar,
+[data-mode="dark"] .editor-status {
+  color-scheme: dark;
+}
+[data-mode="dark"] .editor-surface .ProseMirror code,
+[data-mode="dark"] .editor-surface .ProseMirror pre {
+  /* A translucent white overlay reads as a bright block on a dark surface. */
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+[data-mode="dark"] .editor-surface .ProseMirror blockquote {
+  border-left-color: var(--accent);
+}
+[data-mode="dark"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+[data-mode="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+[data-mode="dark"] ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.26); background-clip: content-box; }
+/* Both status pills are tints of the token that carries their meaning, so they
+   follow whichever publish/danger colour the theme defines. */
+[data-mode="dark"] .settings-status.connected { color: var(--publish); background: color-mix(in srgb, var(--publish) 14%, transparent); }
+[data-mode="dark"] .settings-status.error { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+
+/* --- Assistant panel: effect hosts ---------------------------------------
+ * The five Libraries.dev effects each own one role. They render real canvases
+ * and SVG filters, so every host needs an explicit box: an unstyled inline
+ * element would collapse the canvas to nothing.
+ */
+
+/* BotAvatar: the face on each assistant message. */
+.chat-message.ai .message-content { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 9px; align-items: start; }
+.chat-message.ai .message-avatar { display: block; width: 26px; height: 26px; line-height: 0; }
+.chat-message.ai .message-avatar canvas { display: block; width: 26px !important; height: 26px !important; }
+.chat-message.ai .message-body { grid-column: 2; }
+.chat-message.ai .message-status { grid-column: 2; }
+/* Sources sit under the answer, in the same column as the body and status, so a
+   grounded reply reads as one block: answer, then what it rested on. */
+.chat-message.ai .message-sources { grid-column: 2; margin-top: 8px; font-size: 11px; }
+.message-sources summary { display: inline-flex; align-items: center; gap: 4px; color: var(--text-3); cursor: pointer; list-style: none; }
+.message-sources summary::-webkit-details-marker { display: none; }
+.message-sources summary svg { transition: transform 0.2s var(--ease); }
+.message-sources[open] summary svg { transform: rotate(90deg); }
+.message-sources ul { margin: 7px 0 0; padding: 0 0 0 2px; list-style: none; display: grid; gap: 5px; }
+.message-sources li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-sources a { color: var(--text-2); text-decoration: none; border-bottom: 1px solid var(--border); }
+.message-sources a:hover { color: var(--text-1); border-bottom-color: var(--text-2); }
+/* A turn that wrote to the document confirms it rather than restating it: the
+   check leads, the body reads as one short line, and nothing here invites the
+   reader to copy text that already lives in the editor. */
+.chat-message.is-written .message-body { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+.chat-message.is-written .message-body svg { flex: none; color: var(--text-1); }
+.chat-message.is-pending .message-content { grid-template-columns: minmax(0, 1fr); }
+.chat-message.is-pending .message-status { grid-column: 1; justify-content: flex-start; }
+
+/* ThinkingOrb: replaces the old three-dot typing indicator, sitting inline
+   before the word "Thinking" at the 20px inline-text scale. */
+.typing-status { display: inline-flex; align-items: center; gap: 9px; min-height: 28px; }
+.typing-status canvas { display: block; flex: none; }
+
+/* BorderBeam: a travelling line along the composer while a reply streams. The
+   beam is drawn on the wrapper, so the wrapper owns the radius and the inner
+   box must not paint over it. */
+.chat-beam { position: relative; display: block; border-radius: 11px; }
+.chat-beam .chat-box { position: relative; z-index: 1; }
+
+/* MetalFx: wraps the send button. The shader draws a ring, so the host has to
+   be exactly the button's box. */
+.send-button { position: relative; z-index: 1; }
+
+/* The assistant list is scrollable; the effects must not add a second scroll
+   layer, and a wide filter region can otherwise force horizontal overflow. */
+.chat-scroll, .chat-footer { min-width: 0; }
+.chat-footer { position: relative; z-index: 2; }
+
+/* --------------------------------------------------------------------------
+   Theme picker.
+
+   Cards, at the top of the Appearance section. The picker is a field of its own
+   row rather than one cell of the two-column grid because nine cards do not fit
+   in half a dialog, and a picker squeezed to 300px shows swatches too small to
+   choose between. It is full width now: `auto-fill` turns the window's spare
+   space into more columns rather than fatter cards, so there is no dead space
+   to the right of the grid and no cap to argue about. `.density-cards` still
+   carries its own `max-width`, because a 400px field of *two* tiles is a
+   deliberate figure and adding a third column to it would change what it
+   depicts -- but a grid of nine squares does not have a figure to depict.
+   -------------------------------------------------------------------------- */
+.theme-picker { display: flex; flex-direction: column; gap: 12px; }
+/* As many columns as fit, never fewer than 220px each.
+
+   `repeat(3, minmax(0, 1fr))` with a `max-width` was two mechanisms solving one
+   problem, and `auto-fill` with a floor solves it with one. The old pair said
+   "three columns, and stop the row at 660px"; the row then left ~900px of dead
+   space to the right on a 1920px window, which is a layout that looks like a bug
+   even though it is only a leftover argument.
+
+   Why `auto-fill` and not `auto-fit`, since they differ only in what happens
+   when there are fewer items than tracks and this grid routinely has nine items:
+   `auto-fit` collapses the *empty* tracks to zero and hands their width to the
+   survivors, so with three themes on a wide window the three cards would stretch
+   to the full row and the preview would go back to being "however wide the
+   window is". `auto-fill` keeps every track at its floor and packs the row with
+   as many as fit, so the card size is a function of the column count alone and
+   adding a tenth theme costs track width instead of adding one.
+
+   Why the floor is 220px and not the 660/3 = 213.3 it replaced. The square is
+   not the track: `.choice-card` spends `1px` of border plus `9px` of padding on
+   each side, so a preview is 20px narrower than its track and a 220px floor is a
+   ~200px square -- the band the preview note below says a miniature has to sit
+   in before it is read rather than merely glanced at. Rounding up to 220 rather
+   than down to 200 also keeps the count at 7 on a 1920px window (7 x 220 + 6 x 10
+   = 1600 <= 1646, while 8 would need 8 x 220 + 70 = 1830): nine themes fill a
+   seven-wide first row with two left over, and the square stays at ~207px
+   instead of the ~177px an eighth column would force.
+
+   The floor is also what bounds the square from above, which is the job the
+   `max-width` was doing, and it does it by adding columns rather than by
+   refusing to grow. A track only exceeds the floor by the row's leftover, and a
+   row in `n` columns tops out at `220 + 230 / n`: at three or more columns that
+   is 297px or less, a 277px square at worst, so on every window that lays three
+   themes side by side the miniature cannot leave the ~200-280px band where it is
+   still read rather than merely a large colour field -- and widening the window
+   lowers that ceiling instead of raising it, which is the whole point.
+
+   The cost, stated plainly because it is the one behaviour that gets worse: the
+   floor is also the width below which columns stop being added, so below three
+   columns the square *grows* as the window narrows. At 900px it is ~255px; at
+   700px, where 644px of content holds two columns, ~297px; and at 420px, where
+   384px of content cannot hold two 220px tracks, one card fills the row at
+   ~364px. That is what buying a row that is never short of width costs in the
+   narrow band where there are no cards to put beside each other anyway -- and
+   the app cannot reach it: the window floor is 900px (tauri.conf.json
+   `minWidth`), so two and one column are browser-preview widths only. */
+.theme-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; align-items: start; }
+/* The group spans every track, and the "make a theme" button follows it as
+   an ordinary auto-placed grid item. They cannot be siblings *inside* the group
+   -- a radiogroup may only contain radios, and the new-theme card selects nothing
+   -- so the button has to live outside it. The only question is how the two meet.
+
+   The button used to take `grid-column: 3` while the group took `1 / -2`, and
+   that was the whole defect. The group was a two-column box in tracks 1-2 and the
+   button sat in track 1 of the same row, so the built-ins wrapped *inside* the
+   group onto a second row and painted *below* the button that was reading as
+   their fourth column: three themes came out as
+
+       [Light] [Paper] [Make a theme]
+       [Dark]     [  ]        [  ]
+
+   with a dead hole in the button's track. DOM order was already correct --
+   Light, Paper, Dark, then the button -- so this was never a tab-order bug, only
+   a paint-order one, and the whole fix is here rather than in the component.
+
+   Spanning `1 / -1` leaves the group the only item on its rows, so the button
+   auto-places below every card at any count. `display: contents` on the group,
+   which would make the radios direct items of one flat grid, was rejected on
+   layout and not on semantics: it agrees with DOM order at three themes but
+   drops the button into a half-filled row at four and five, with a saved theme
+   beside it -- the same defect relocated to whichever `n % 3` the reader lands
+   on. Spanning holds the button strictly last for every `n`, which is the
+   property the section wants: the themes are one list, the button acts on it.
+
+   `repeat(auto-fill, minmax(220px, 1fr))` rather than
+   `grid-template-columns: subgrid`, on purpose. Both yield the same tracks, but
+   `subgrid` is missing on older WebKit and an unsupported value is dropped
+   rather than refused, which would leave the group one implicit column and stack
+   every card in it. The arithmetic below is what makes the plain repeat exact.
+
+   THE TWO TRACK SETS ARE IDENTICAL BY CONSTRUCTION, not by coincidence, and the
+   property this depends on is that the group's border-box width *is* the outer
+   grid's content width. `grid-column: 1 / -1` spans from the outer grid's first
+   track's start line to the last track's end line, which is the content box, and
+   the group adds no padding, no border and no margin of its own -- so writing
+   `W` for that width and `g = 10` for the gap, `n = floor((W + g) / (220 + g))`
+   is computed from the same `W` on both sides, and each side then lays out
+   `(W - (n - 1) g) / n`. Same `W`, same `g`, same floor, same `1fr` maximum:
+   same `n` and same track width `t`, at every window size. The two grids are not
+   similar here, they are the same function of the same input.
+
+   That identity is the whole reason the card in the group and the "make a theme"
+   button beside it stay flush -- and it is now load-bearing in a way it was not
+   before. With a fixed `repeat(3, ...)` and a cap, a mistake would have shown up
+   as both grids still agreeing on 3 tracks; with `auto-fill`, changing the floor
+   on `.theme-cards` alone would silently move the group to a different `n` and
+   the button's square would stop matching the cards'. The two declarations are
+   therefore kept on consecutive lines and are meant to be edited as a pair; the
+   QA harness asserts the equality in the DOM (`trackCountsMatch`, and the
+   measured card width against the measured `.theme-new-mark`) rather than
+   trusting the argument above.
+
+   It also cannot lose the group, which is the other half of why `contents` was
+   not the answer: that property has a history of dropping elements out of the
+   accessibility tree, and a radiogroup that stopped being a group would be nine
+   radios with no name and no shared value. Here the role rides an ordinary
+   `display: grid` box -- asserted on the element by `tests/theme-picker.test.mjs`
+   and again against the live Chromium AX tree by the QA harness, which requires
+   the group node's direct children to be the radios. */
+.theme-cards-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; grid-column: 1 / -1; }
+
+/* The card's face. It replaces `.theme-swatch`, which was three nested blocks
+   standing in for an app that was never drawn, and it keeps that swatch's
+   radius: at card size the preview *is* the top of the card, so the rounded
+   corners have to be the card's rounded corners rather than a second shape
+   sitting inside it.
+
+   Square, and derived rather than declared. `aspect-ratio: 1` off the existing
+   `width: 100%` is the whole sizing rule, because the card's width is the one
+   thing here that is already fluid -- the settings page is a flex column that
+   takes whatever the window leaves over the library rail. A `height` in pixels
+   would have to be guessed per breakpoint and would be wrong at every one of
+   them: the square is ~207px on a 1920px window and ~365px where 384px of
+   content can only hold one 220px track, so any single number is a square at
+   one width and a letterbox at the other. `auto-fill` bounds that range from
+   above -- the floor caps how much a column can grow before a new one appears
+   -- which is why the ratio is the right tool and a fixed height still is not.
+   `height: auto` is stated alongside the ratio so the ratio is what wins rather
+   than a stale fixed height. */
+.theme-card .theme-preview { width: 100%; height: auto; aspect-ratio: 1; gap: 7px; padding: 7px; border-radius: 7px; overflow: hidden; }
+/* No `grid-column` here on purpose. The button is the grid's last item in DOM
+   order and the group above spans every column, so auto-placement puts it at
+   track 1 of the first row the group does not reach -- the second row for three
+   themes, and the second, third or fourth as the reader adds more. Pinning it to
+   a fixed column is what used to interleave it with the cards; leaving it
+   auto-placed is what keeps it after them. `min-height: 0` and
+   `justify-content: flex-start` are unchanged: the first stops the button
+   inheriting the grid's row height, the second keeps the name under the square
+   rather than centring it. */
+.theme-new { min-height: 0; justify-content: flex-start; border-style: dashed; }
+/* The dashed placeholder stands in for a card face, so it is the same square for
+   the same reason: it occupies one track of the outer grid, the same track a
+   card in `.theme-cards-list` occupies, and a fixed height here would drift out
+   of line with them the moment either grid resized.
+
+   That flushness now rests entirely on the two track sets being the same size,
+   and it is worth writing the identity down rather than assuming it, because
+   `auto-fill` made it a real dependency where the old fixed `repeat(3)` made it
+   a coincidence that had to be re-checked anyway. Write `W` for the content
+   width of `.theme-cards` -- which is also, because the group spans `1 / -1`
+   and adds no padding or border, the content width of `.theme-cards-list` --
+   and `g = 10`. Both grids compute `n = floor((W + g) / (220 + g))` and then
+   `(W - (n - 1) g) / n`. Identical inputs, identical formula, so both tracks
+   are `t` and this button's mark is `t - 20` wide exactly as every card's
+   preview is, at every width, capped or not, five themes or nine.
+
+   The equality survives `1fr` rounding because the two sides round the *same*
+   leftover, not because either is exact: both subtract `(n - 1) * 10` from the
+   same `W`, so the remainder that `1fr` distributes is the same remainder. A
+   cap would not have shifted it either -- it changed `W` for both sides at
+   once -- and removing the cap therefore cannot have shifted it, which is why
+   this note needed no new mechanism, only a new justification. That is also
+   what lets `.theme-cards-list` declare a plain repeat instead of `subgrid`
+   and still land on the same tracks. */
+.theme-new-mark { display: grid; place-items: center; width: 100%; height: auto; aspect-ratio: 1; color: var(--text-3); background: var(--sidebar); border-radius: 7px; }
+.theme-new:hover .theme-new-mark { color: var(--accent); }
+/* Edit/Delete for the one saved theme the reader is on. Still a row of its own
+   rather than hover-only buttons on the card: a keyboard reader tabbing to the
+   current theme has to be able to reach them without a pointer, and nine cards of
+   hover-only icons was the reason they moved here in the first place. */
+.theme-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.theme-actions-buttons { display: flex; gap: 6px; flex: none; }
+.theme-actions-buttons .soft-button { min-height: 30px; padding: 0 11px; font-size: 11.5px; }
+
+/* --- Library density --------------------------------------------------------
+   Two cards, and each one draws the grid it stands for rather than carrying a
+   glyph. The choice is between `168px` columns with `32px` of gap and `134px`
+   with `24px`; "Comfortable" and "Compact" are the two words the app already used
+   for that, and neither of them tells a reader what will change. The tiles here
+   are made of the same `--sheet-*` tokens the real grid is, so the picture cannot
+   drift away from the thing it depicts. */
+.density-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 400px; }
+.density-thumb { display: grid; gap: 7px; padding: 11px 12px; background: var(--backdrop); border-radius: 7px; }
+.density-thumb-row { display: flex; }
+.density-thumb-row.comfortable { gap: 11px; }
+.density-thumb-row.compact { gap: 5px; }
+.density-thumb-tile { height: 24px; background: var(--sheet-face); border: 1px solid var(--sheet-edge); border-radius: 2px; box-shadow: var(--sheet-shadow); }
+.density-thumb-row.comfortable .density-thumb-tile { width: 40px; }
+.density-thumb-row.compact .density-thumb-tile { width: 27px; height: 17px; }
+
+.theme-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sidebar) 55%, var(--main));
+}
+.theme-editor-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.theme-editor-head input { width: 100%; }
+.theme-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* The preview carries a resolved token set on itself, which is why its own
+   chrome cannot use var(--...) for anything the theme sets: those would show the
+   surrounding theme, not the one being edited. */
+.theme-preview {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.theme-preview-sidebar { display: flex; flex: 0 0 34px; flex-direction: column; gap: 5px; padding: 7px 6px; border-radius: 6px; }
+.theme-preview-sidebar i { display: block; width: 100%; height: 3px; border-radius: 2px; }
+.theme-preview-sidebar i:last-child { width: 62%; }
+.theme-preview-page { display: flex; flex: 1; flex-direction: column; gap: 5px; padding: 9px 10px; border-radius: 6px; }
+.theme-preview-page b { font-size: 12px; font-weight: 500; }
+.theme-preview-page em { font-size: 12px; font-style: normal; text-decoration: underline; }
+.theme-preview-page mark { align-self: flex-start; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+/* The compact form's last row. It exists only so the link and the mark sit on
+   one line at card size; the editor stacks its five samples down the page and
+   needs no such row. `margin-top: auto` is what pins it to the foot of the page
+   block, which is where a real page puts them. */
+.theme-preview-foot { display: flex; align-items: center; gap: 6px; margin-top: auto; }
+
+/* Compact, i.e. the card. The editor's preview is read and this one is glanced
+   at, so everything inside is a step down: a narrower sidebar, shorter rules,
+   10px text. Nothing new is introduced -- it is the same blocks and the same
+   tokens at the size a card can afford. The single-line clamp is the one thing
+   that is load-bearing: a flex item's default `min-width: auto` lets a word run
+   the card's own edge and push the preview's rounding out of shape.
+
+   Squaring the card gave this interior vertical room it did not have, and none
+   of these rules needed to move to survive it. The page block is still a column
+   of three children, the foot is still the last one, and `margin-top: auto` now
+   has a real distance to travel to the foot of the page instead of a few pixels
+   -- which is closer to where a real page puts a link and a mark, so the square
+   suits this block rather than fighting it. The 10px clamp keeps its meaning
+   and gains more: at a third of a 1440px window the preview is ~362px across
+   and leaves ~300px of line, so "Body text" and "Metadata" are nowhere near the
+   ellipsis they were sized against. The sidebar's two rules are the one thing
+   that now reads thin -- 2px bars at the top of a tall column -- and they were
+   left alone deliberately: adding rules to fill the height would be inventing
+   content the editor's larger preview does not have, and the card's job is to
+   show the shape of a page, not to fill a box. */
+.theme-preview[data-compact="true"] .theme-preview-sidebar { flex: 0 0 20px; gap: 4px; padding: 6px 5px; border-radius: 4px; }
+.theme-preview[data-compact="true"] .theme-preview-sidebar i { height: 2px; }
+.theme-preview[data-compact="true"] .theme-preview-page { gap: 3px; padding: 7px 8px; border-radius: 4px; min-width: 0; }
+.theme-preview[data-compact="true"] .theme-preview-page b,
+.theme-preview[data-compact="true"] .theme-preview-page em,
+.theme-preview[data-compact="true"] .theme-preview-page mark { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.theme-preview[data-compact="true"] .theme-preview-page mark { padding: 0 4px; border-radius: 3px; }
+.theme-preview[data-compact="true"] .theme-preview-foot { gap: 5px; }
+
+.theme-knobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px 10px; }
+.theme-knob { display: flex; align-items: center; gap: 8px; min-width: 0; cursor: pointer; }
+.theme-knob input[type='color'] {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+}
+.theme-knob span { display: flex; flex-direction: column; min-width: 0; }
+.theme-knob strong { font-size: 11px; font-weight: 600; }
+.theme-knob small { color: var(--text-3); font-size: 10px; }
+
+.theme-verdict { margin: 0; padding: 9px 11px; border-radius: 9px; font-size: 12px; }
+.theme-verdict.ok { display: flex; align-items: center; gap: 6px; color: var(--publish); background: color-mix(in srgb, var(--publish) 12%, transparent); }
+/* --danger rather than a new red: an unreadable palette is the one place in
+   settings where a warning has to read as a stop. */
+.theme-verdict.failing { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.theme-verdict.failing strong { display: block; margin-bottom: 4px; font-size: 12px; }
+.theme-verdict.failing ul { margin: 0; padding-left: 17px; }
+.theme-verdict.failing li { font-variant-numeric: tabular-nums; }
+.theme-verdict.failing p { margin: 5px 0 0; color: var(--text-2); font-size: 11px; }
+.theme-problem { color: var(--danger); }
+
+/* The cards' own hover transition, named rather than left to the global block
+   above: the card border is the selection cue, and a border that is still fading
+   when a theme has already changed reads as a card that has not taken yet. */
+@media (prefers-reduced-motion: reduce) {
+  .choice-card, .theme-card, .theme-new, .density-cards { transition: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   P4-2, P4-3, P4-4: the background controls.
+   --------------------------------------------------------------------------- */
+
+.background-picker { display: grid; gap: 16px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.background-group { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
+.background-group > legend { padding: 0; }
+/* `legend` inside a grid loses the field-label sizing that spans the rest of the
+   dialog, so it is restated rather than left to inherit from a selector that
+   does not match here. */
+.background-group > legend.field-label { display: block; }
+.texture-row { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* `flex: 0 0 auto` is load-bearing. The row wraps, but a flex item still shrinks
+   by default, and because the chip's min-content width is smaller than its
+   natural width -- the label can wrap -- the browser fitted all eight chips onto
+   two rows by squashing them instead of by wrapping them. The fixed 26px preview
+   track then overflowed the chip and got clipped to a sliver, while the labels
+   wrapped to two lines and made every chip twice as tall as it should be. Chips
+   now keep their natural width and the row wraps when it runs out of room. */
+.texture-chip { display: grid; grid-template-columns: 26px auto; grid-template-rows: auto auto; align-items: center; column-gap: 9px; flex: 0 0 auto; max-width: 100%; min-width: 0; padding: 7px 12px 7px 7px; color: var(--text-2); background: transparent; border: 1px solid var(--border); border-radius: 9px; text-align: left; transition: border-color 0.16s var(--ease), background 0.16s var(--ease), color 0.16s var(--ease); }
+.texture-chip:hover:not(:disabled) { color: var(--text-1); background: var(--hover); }
+.texture-chip.selected { color: var(--text-1); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.texture-chip:disabled { opacity: 0.55; cursor: progress; }
+.texture-chip-preview { grid-row: 1 / 3; width: 26px; height: 26px; background-size: 100px 100px; background-position: center; border: 1px solid var(--border); border-radius: 5px; }
+/* One line each, so the two rows are the name and the hint and never a stack of
+   wrapped fragments. */
+.texture-chip-name, .texture-chip-hint { max-width: 15ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.texture-chip-name { align-self: end; }
+.texture-chip-hint { align-self: start; }
+/* The `plain` swatch is the "no texture" answer, so it has to look like absence
+   rather than like a failed load: the theme's own surface, no image. */
+.texture-chip-preview.plain { background-image: none; background: var(--main); }
+.texture-chip-name { font-size: 12px; font-weight: 600; }
+.texture-chip-hint { color: var(--text-3); font-size: 10px; }
+
+.picked-row { display: flex; align-items: center; gap: 9px; }
+.picked-swatch { width: 26px; height: 26px; flex: none; background-size: cover; background-position: center; border: 1px solid var(--border); border-radius: 5px; }
+.picked-name { flex: 1; color: var(--text-2); font-size: 12px; }
+
+.slider-row { display: grid; grid-template-columns: minmax(0, 1fr) 160px 46px; align-items: center; gap: 12px; }
+.slider-row > span { display: grid; gap: 2px; min-width: 0; }
+.slider-row strong { color: var(--text-1); font-size: 12px; font-weight: 600; }
+.slider-row small { color: var(--text-3); font-size: 10px; }
+.slider-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+.slider-row output { color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+
+.background-check { display: grid; gap: 6px; padding: 11px 12px; background: var(--hover); border-radius: 8px; }
+.background-check-ok { margin: 0; color: var(--publish); font-size: 12px; }
+.background-check-bad { margin: 0; color: var(--danger); font-size: 12px; font-weight: 600; }
+.background-check-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.background-check-list li { display: flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 11px; line-height: 1.45; }
+.background-check-swatch { width: 12px; height: 12px; flex: none; border: 1px solid var(--border-strong); border-radius: 3px; }
+.background-error { margin: 0; color: var(--danger); font-size: 12px; }
+
+/* A folded section.
+   Settings had three sections and the tallest was the provider block -- five
+   fields, a key field and a button -- which most readers never touch, because
+   the app is perfectly usable without an assistant. It is now a disclosure, so
+   the dialog opens on the two things people actually change. Nothing is removed:
+   the section is still there, still complete, and still saves the same values. */
+/* The wallpaper's two fine-tuning sliders. They only do anything once a
+   wallpaper exists, and while picking a texture they are pure noise -- three
+   sliders in a row for an image that is not there yet. The readability check
+   below stays visible at all times, because it is the thing that tells a reader
+   whether the result works. */
+.background-fine { margin-top: 4px; }
+.background-fine > summary { padding: 7px 0; color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; }
+.background-fine > summary::-webkit-details-marker { display: none; }
+.background-fine > summary::before { content: "›"; display: inline-block; margin-right: 6px; transition: transform 0.16s var(--ease); }
+.background-fine[open] > summary::before { transform: rotate(90deg); }
+.background-fine > summary:hover { color: var(--text-1); }
+
+/* First run.
+   Full-screen and on the fixed --screen-* palette rather than the theme's
+   tokens, because choosing the theme is step two of this card: a card that
+   repainted itself on every swatch press would answer the question before the
+   reader had finished asking it. It sits above the boot layer (20) and above
+   Settings, which is a flex sibling rather than a layered surface -- the last
+   step closes this card before opening that page, so the two never stack. */
+.onboarding-layer { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; background: var(--backdrop); }
+.onboarding-card { width: min(560px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; padding: 26px 30px 22px; color: var(--screen-ink); background: var(--screen-card); border: 1px solid var(--screen-card-edge); border-radius: 18px; box-shadow: var(--shadow-2); }
+.onboarding-card h1 { margin: 16px 0 8px; color: var(--screen-ink-strong); font-size: 21px; letter-spacing: -0.01em; }
+.onboarding-progress { display: flex; gap: 6px; margin-bottom: 4px; }
+.onboarding-progress span { width: 22px; height: 3px; background: var(--screen-rule); border-radius: 2px; }
+.onboarding-progress span[data-on] { background: var(--screen-accent); }
+.onboarding-mark { display: grid; place-items: center; width: 42px; height: 42px; margin-top: 6px; background: var(--screen-control); border-radius: 12px; }
+.onboarding-mark img { width: 26px; height: 26px; }
+.onboarding-lede { margin: 0 0 14px; color: var(--screen-ink-muted); font-size: 13.5px; line-height: 1.6; }
+.onboarding-points { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; color: var(--screen-ink-muted); font-size: 13px; line-height: 1.5; }
+.onboarding-points li { position: relative; padding-left: 18px; }
+.onboarding-points li::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--screen-accent); border-radius: 50%; }
+.onboarding-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 8px; }
+.onboarding-theme { display: grid; gap: 6px; justify-items: start; padding: 10px; color: var(--screen-ink-muted); background: var(--screen-control); border: 1px solid var(--screen-control-edge); border-radius: 10px; font-size: 12px; text-align: left; }
+.onboarding-theme:hover { color: var(--screen-ink); background: var(--screen-control-hover); }
+.onboarding-theme[data-on] { color: var(--screen-ink-strong); border-color: var(--screen-accent); box-shadow: 0 0 0 1px var(--screen-accent-wash); }
+.onboarding-swatch { display: flex; gap: 3px; width: 100%; }
+.onboarding-swatch i { flex: 1; height: 20px; border-radius: 4px; }
+.onboarding-theme-name { font-weight: 600; }
+.onboarding-theme-mode { color: var(--screen-ink-faint); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+.onboarding-tools { display: grid; gap: 8px; }
+.onboarding-tool { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 11px 13px; color: var(--screen-ink); background: var(--screen-control); border: 1px solid var(--screen-control-edge); border-radius: 10px; text-align: left; }
+.onboarding-tool:hover:not(:disabled) { background: var(--screen-control-hover); }
+.onboarding-tool:disabled { opacity: 0.6; }
+.onboarding-tool strong, .onboarding-tool em { display: block; }
+.onboarding-tool strong { color: var(--screen-ink-strong); font-size: 13px; }
+.onboarding-tool em { margin-top: 2px; color: var(--screen-ink-faint); font-size: 11px; font-style: normal; }
+.onboarding-tool b { flex: none; color: var(--screen-accent); font-size: 12px; }
+.onboarding-empty { margin: 0; padding: 12px; color: var(--screen-ink-faint); background: var(--screen-control); border-radius: 10px; font-size: 12.5px; line-height: 1.5; }
+.onboarding-error { margin: 8px 0 0; color: var(--screen-danger); font-size: 12px; }
+.onboarding-alts { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; }
+.onboarding-alt { padding: 0; color: var(--screen-ink-muted); background: transparent; border: 0; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.onboarding-alt:hover { color: var(--screen-ink); }
+.onboarding-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; }
+.onboarding-back { padding: 0; color: var(--screen-ink-faint); background: transparent; border: 0; font-size: 12.5px; }
+.onboarding-back:hover { color: var(--screen-ink); }
+.onboarding-next { min-height: 36px; padding: 0 16px; color: var(--screen-primary-ink); background: var(--screen-ink-strong); border-radius: 9px; font-size: 12.5px; font-weight: 600; }
+.onboarding-next:hover { background: var(--screen-ink); }

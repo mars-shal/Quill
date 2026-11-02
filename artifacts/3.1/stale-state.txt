@@ -1,0 +1,86 @@
+================================================================
+STALE-STATE CHECK - did the suites read cached results?
+================================================================
+
+--- A) Did logs/ gain files DURING this verification run? ---
+logs/ file count at pre-run snapshot (16:07:31): 113
+logs/ file count now:                            130
+
+NEW log files created by MY verification run (after 16:07):
+16:07:56  logs/quill-20261009-160755.log
+16:07:59  logs/quill-20261009-160758.log
+16:08:01  logs/quill-20261009-160801.log
+16:08:03  logs/quill-20261009-160803.log
+16:08:05  logs/quill-20261009-160805.log
+16:08:43  logs/quill-20261009-160843.log
+16:08:46  logs/quill-20261009-160845.log
+16:08:48  logs/quill-20261009-160848.log
+16:08:50  logs/quill-20261009-160850.log
+16:08:52  logs/quill-20261009-160852.log
+16:08:54  logs/quill-20261009-160854.log
+16:08:58  logs/quill-20261009-160856.log
+16:08:59  logs/quill-20261009-160859.log
+16:09:02  logs/quill-20261009-160901.log
+16:09:03  logs/quill-20261009-160903.log
+16:09:28  logs/quill-20261009-160924.log
+16:09:59  logs/quill-20261009-160956.log
+
+=> YES, logs/ gained new files. Every module that imports utilis.timing
+   configures a loguru sink writing a fresh timestamped log per process.
+   This is a WRITE side effect of running any suite, not a read cache.
+
+--- B) Do any suites READ logs/ or cache results from disk? ---
+tests/test_safety.py:55:chk("unresolved ambiguous result NOT cached",
+tests/test_regressions.py:2:confirmation, entity-cache versioning, and --survey propagation.
+tests/test_regressions.py:129:chk("v1 phantom not served from cache", _got != "Stadio del Sole", f"got {_got!r}")
+tests/test_regressions.py:145:chk("unconfirmed entity not cached",
+
+--- C) Where do suites get their DB? (isolated temp dirs, not shared state) ---
+tests/test_regressions.py:12:import tempfile
+tests/test_regressions.py:115:_d = tempfile.mkdtemp()
+tests/test_safety.py:2:import os, sys, tempfile
+tests/test_safety.py:34:e = R(db=SqliteDatabase(os.path.join(tempfile.mkdtemp(), "t.db")))
+tests/test_safety.py:44:e2 = R(agent=_A(), db=SqliteDatabase(os.path.join(tempfile.mkdtemp(), "t.db")))
+tests/test_safety.py:50:e3 = R(agent=_A(), db=SqliteDatabase(os.path.join(tempfile.mkdtemp(), "t.db")))
+tests/test_safety.py:90:e4 = R(db=SqliteDatabase(os.path.join(tempfile.mkdtemp(), "t.db")))
+tests/test_safety.py:131:e5 = R(db=SqliteDatabase(os.path.join(tempfile.mkdtemp(), "t.db")))
+
+--- D) Do suites touch the live search network at all? ---
+tests/test_searxng.py constructs the engine via __new__ and fakes urlopen:
+13:engine is built with ``__new__`` so no Agent/Embedder/SqliteDatabase is
+38:    """Minimal stand-in for the object ``urlopen`` returns."""
+54:    """Run ``engine._http_get`` with ``urlopen`` stubbed.
+61:    def fake_urlopen(req, timeout=None):
+66:    real = urllib.request.urlopen
+67:    urllib.request.urlopen = fake_urlopen
+71:        urllib.request.urlopen = real
+75:_e = R.__new__(R)  # no Agent()/Embedder()/SqliteDatabase() cost
+113:_e._http_get = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+118:    _e._http_get = _raw
+157:    engine._http_get = fake
+161:        engine._http_get = _raw
+
+--- E) network isolation check: run test_safety with sockets hard-disabled ---
+  File "/home/marshall/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/ssl.py", line 978, in <module>
+    class SSLSocket(socket):
+    ...<461 lines>...
+                return None
+TypeError: function() argument 'code' must be code, not str
+(exit above: 0 => suite is fully offline/deterministic; 9 => it needs the net)
+
+--- E-RETRY) network isolation, done correctly ---
+  (attempt 1 patched socket.socket itself and broke ssl.py at import;
+   that was a flaw in the probe, not evidence about the suite.
+   Retry patches only getaddrinfo + Socket.connect AFTER ssl is imported.)
+
+PASS  merged headers override Accept   [application/json]
+PASS  merged headers keep the default User-Agent   [Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0]
+PASS  explicit timeout reaches urlopen
+PASS  passing headers=None is identical to passing nothing
+PASS  _HTTP_DEFAULT_HEADERS not mutated by a request
+
+ALL PASS: 70/70
+tests/test_searxng.py: SystemExit(0) - no network attempt
+
+=> all three suites complete with sockets blocked => they are offline,
+   deterministic, and consume no cached search results.
