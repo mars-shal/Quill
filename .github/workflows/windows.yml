@@ -19,12 +19,12 @@ jobs:
         working-directory: ./gui
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           # The lockfile lives next to package.json, not at the repository
           # root; without this setup-node fails before anything runs.
@@ -63,9 +63,8 @@ jobs:
           tag_name: windows-build-${{ github.run_number }}
           name: "Quill Windows Build #${{ github.run_number }}"
           files: |
-            gui/src-tauri/target/release/bundle/**/*.msi
-            gui/src-tauri/target/release/bundle/**/*.exe
-            gui/dist/**
+            gui/src-tauri/target/release/bundle/msi/*.msi
+            gui/src-tauri/target/release/bundle/nsis/*.exe
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows build artefact
@@ -73,5 +72,6 @@ jobs:
         with:
           name: quill-windows-build
           path: |
-            gui/src-tauri/target/release/bundle/**
+            gui/src-tauri/target/release/bundle/msi/*.msi
+            gui/src-tauri/target/release/bundle/nsis/*.exe
             gui/dist/**

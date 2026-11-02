@@ -19,7 +19,7 @@ jobs:
         working-directory: ./gui
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Tauri v2 links against webkit2gtk-4.1 and GTK at build time and the
       # runner image ships none of the -dev packages.
@@ -36,9 +36,9 @@ jobs:
             patchelf
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           # The lockfile lives next to package.json, not at the repository
           # root; without this setup-node fails before anything runs.
@@ -80,8 +80,9 @@ jobs:
           tag_name: linux-build-${{ github.run_number }}
           name: "Quill Linux Build #${{ github.run_number }}"
           files: |
-            gui/src-tauri/target/release/bundle/**
-            gui/dist/**
+            gui/src-tauri/target/release/bundle/deb/*.deb
+            gui/src-tauri/target/release/bundle/rpm/*.rpm
+            gui/src-tauri/target/release/bundle/appimage/*.AppImage
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux build artefact
@@ -89,6 +90,8 @@ jobs:
         with:
           name: quill-linux-build
           path: |
-            gui/src-tauri/target/release/bundle/**
+            gui/src-tauri/target/release/bundle/deb/*.deb
+            gui/src-tauri/target/release/bundle/rpm/*.rpm
+            gui/src-tauri/target/release/bundle/appimage/*.AppImage
             gui/src-tauri/target/release/quill
             gui/dist/**
