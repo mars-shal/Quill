@@ -55,9 +55,14 @@ const PAGE_SELECTS = ['provider', 'font']
 const DIALOG_CONTROLS = ['detail-kind', 'detail-status']
 
 const openDetails = async () => {
-  const menu = root.querySelector('.document-tile .tile-menu')
-  assert.ok(menu, 'a tile has a menu button')
-  await clickAndSettle(menu)
+  const tile = root.querySelector('.document-tile')
+  assert.ok(tile, 'a document tile rendered')
+  tile.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 90 }))
+  await tick()
+  const details = [...root.querySelectorAll('.tile-context [role="menuitem"]')]
+    .find((node) => node.textContent === 'Details')
+  assert.ok(details, 'the right-click menu offered Details')
+  await clickAndSettle(details)
   assert.ok(root.querySelector('.details-dialog'), 'the details dialog opened')
 }
 

@@ -10,11 +10,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Collaboration from '@tiptap/extension-collaboration'
-import { TextStyle } from '@tiptap/extension-text-style'
 import Highlight from '@tiptap/extension-highlight'
 import { Markdown } from '@tiptap/markdown'
 import { Mathematics } from '@tiptap/extension-mathematics'
 import { Image } from '@tiptap/extension-image'
+import { TextAlign } from '@tiptap/extension-text-align'
+import { TableKit } from '@tiptap/extension-table'
+import { TextStyleWithTracking, LineHeight } from './typography.js'
 import { LocalYDoc } from '../platform/ydoc.js'
 
 /**
@@ -33,13 +35,21 @@ function baseExtensions() {
     }),
     // StarterKit v3 already provides Underline, Strike and Link, so only what
     // it does not cover is added: Highlight (the Idea/Research/Quote/Cut tags),
-    // TextStyle (setColor, setFontFamily, setFontSize), Markdown so export
-    // never round-trips through HTML, Mathematics for LaTeX support, and Image.
-    TextStyle,
+    // TextStyle (setColor, setFontFamily, setFontSize) extended with
+    // letter-spacing, Markdown so export never round-trips through HTML,
+    // Mathematics for LaTeX support, Image, TextAlign for the alignment menu,
+    // TableKit for tables, and LineHeight for the spacing menu.
+    TextStyleWithTracking,
     Highlight,
     Markdown,
     Mathematics,
     Image,
+    TextAlign.configure({
+      types: ['heading', 'paragraph'],
+      alignments: ['left', 'center', 'right', 'justify'],
+    }),
+    TableKit.configure({ table: { resizable: false } }),
+    LineHeight,
   ]
 }
 

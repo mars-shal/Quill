@@ -586,6 +586,12 @@ function App() {
     // Onboarding asks the same question in its last step, so it triggers the
     // same probe rather than adding a second, differently-timed one.
     if (!settingsOpen && !onboarding) return undefined
+    // The reader can switch local-tool detection off entirely; the rows are
+    // hidden by the same setting, so nothing here runs for them either.
+    if (settings.localTools === false) {
+      setLocalTools([])
+      return undefined
+    }
     let cancelled = false
     store
       .detectCliTools()
@@ -599,7 +605,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [settingsOpen, onboarding])
+  }, [settingsOpen, onboarding, settings.localTools])
 
   /**
    * Closes the first-run card and records that it happened.
@@ -710,6 +716,48 @@ function App() {
     } catch (error) {
       console.error('Failed to select the provider', error)
       return false
+    }
+  }, [])
+
+  /** Persists edits to the active provider row (endpoint, label, ...). */
+  const saveProvider = useCallback(async (patch) => {
+    try {
+      const provider = activeProvider ?? (await store.getActiveProvider())
+      if (!provider) return null
+      const updated = await store.updateProvider({ id: provider.id, ...patch })
+      if (updated) {
+        setActiveProvider(updated)
+        return updated
+      }
+    } catch (error) {
+      console.error('Failed to update the provider', error)
+    }
+    return null
+  }, [activeProvider])
+
+  /**
+   * Creates and activates a provider row for a BYOK preset (Groq, OpenAI,
+   * OpenRouter, ...).
+   *
+   * A preset is not a phantom slot: it materialises a real row with a real
+   * endpoint, so the key typed next files under the row a run will actually
+   * use -- the exact thing the old name-only menu got wrong.
+   */
+  const createProvider = useCallback(async (row) => {
+    try {
+      const written = await store.createProvider(row)
+      const active = await store.setActiveProvider(written.id)
+      const list = await store.listProviders()
+      setProviders(list)
+      setActiveProvider(active)
+      const ready = store.isLocalEndpoint(written.baseUrl)
+        ? true
+        : Boolean((await store.getProviderSecretStatus(written.id)).hasCredential)
+      setProviderReady(ready)
+      return written
+    } catch (error) {
+      console.error('Failed to create the provider', error)
+      return null
     }
   }, [])
 
@@ -828,7 +876,7 @@ function App() {
         </div>
       )}
       {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}
-      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} />}
+      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} />}
       <BootLayer key="boot-layer" bootstrapped={bootstrapped} bootError={bootError} libraryEmpty={!currentDoc} onCreate={createDocument} reducedMotion={reducedMotion} />
       {onboarding && bootstrapped && !bootError && (
         <OnboardingFlow

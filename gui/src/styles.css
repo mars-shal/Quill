@@ -835,6 +835,65 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .list-view .tile-menu:hover { color: var(--text-1); background: var(--active); }
 .list-view .new-cover svg { width: 22px; height: 22px; }
 
+/* --- The library as books ---------------------------------------------------
+   Redrawn from the reference (2026-11-03): a cloth book with a ribbon marking
+   the place, the title given room to read, and enough shadow to sit on the
+   desk rather than float as a swatch. The per-document pigment system stays --
+   a shelf of different bindings still reads as books, and the contrast gate
+   still has its colours to check. */
+.document-cover {
+  aspect-ratio: 5 / 7;
+  box-shadow: var(--sheet-shadow), 0 14px 26px rgba(0, 0, 0, 0.28);
+}
+.cover-ribbon {
+  position: absolute;
+  top: 0;
+  right: 24%;
+  width: 13px;
+  height: 38px;
+  background: linear-gradient(180deg, #ded8b8, #b9b18a);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+}
+.list-view .cover-ribbon { display: none; }
+.document-cover.stacked .cover-title { font-size: 14px; }
+.document-cover.ruled .cover-title { font-size: 14px; }
+
+/* Right-click menu: the three floating tile buttons (details, download,
+   delete) live here instead of as chrome parked over every cover. */
+.context-scrim { position: fixed; inset: 0; z-index: 59; }
+.tile-context {
+  position: fixed;
+  z-index: 60;
+  min-width: 184px;
+  padding: 6px;
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-2);
+}
+.tile-context button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.tile-context button:hover { color: var(--text-1); background: var(--hover); }
+.tile-context button.danger:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
 /* One column, and the panels are laid over it rather than beside it.
    The tracks used to be `auto minmax(0, 1fr) auto` while the panels animated
    `width`: every frame re-solved the grid and re-wrapped the prose, so the page
@@ -890,7 +949,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
    the class is now what actually positions the panel -- and it must be the only
    thing, or a CSS rule and an inline style drift apart exactly as this comment
    used to warn. */
-.left-panel { left: 0; width: 282px; background: var(--surface-sidebar); border-right: 1px solid var(--border); transform: translateX(-102%); }
+.left-panel { left: 0; width: 282px; background: var(--surface); border-right: 1px solid var(--border); transform: translateX(-102%); }
 /* The assistant slides; the sections panel does not. The assistant is the one
    surface the reader brings up and dismisses in a single keystroke, so its arrival
    is the one motion in the app worth having -- and it is the surface that already
@@ -899,7 +958,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
    width used to cost. The in-app reduce-motion toggle still collapses this slide:
    it is the editor's panel wrapper, not the assistant's own subtree, so it does
    not carry `.reduce-motion-exempt` and the panel appears rather than travels. */
-.right-panel { right: 0; width: 348px; background: var(--surface-chat); border-left: 1px solid var(--border); transform: translateX(102%); transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
+.right-panel { right: 0; width: 348px; background: var(--surface); border-left: 1px solid var(--border); transform: translateX(102%); transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); }
 .app-shell.left-open .left-panel { transform: translateX(0); }
 .app-shell.right-open .right-panel { transform: translateX(0); }
 .panel-inner { display: flex; flex-direction: column; width: 282px; height: 100%; min-width: 282px; min-height: 0; padding: 0 13px 16px; overflow: hidden; }
@@ -1173,6 +1232,29 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   margin: 1.5em auto;
   border-radius: 8px;
   box-shadow: var(--shadow-1);
+}
+
+/* Tables: TableKit provides the structure and commands, nothing else -- the
+   borders, padding and header treatment live here (2026-11-03). */
+.document-prose table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: inherit;
+}
+.document-prose th,
+.document-prose td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.document-prose th {
+  background: var(--hover);
+  color: var(--text-1);
+  font-weight: 600;
 }
 
 /* Highlight tags (Idea / To research / Quote / Cut later). The swatch is a
@@ -1646,10 +1728,10 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
-.assistant-panel { background: var(--chat); }
+.assistant-panel { background: var(--surface); }
 .assistant-head { background: color-mix(in srgb, var(--main) 78%, var(--chat)); }
 .assistant-portrait { color: var(--accent); background: var(--main); border: 1px solid var(--border); box-shadow: none; }
-.chat-scroll { padding: 28px var(--chat-inset) 22px; background: var(--chat); scrollbar-gutter: stable; }
+.chat-scroll { padding: 28px var(--chat-inset) 22px; background: var(--surface); scrollbar-gutter: stable; }
 .chat-message { gap: 0; margin-bottom: 24px; }
 .message-avatar, .message-label { display: none; }
 .message-content { width: 100%; }
@@ -1664,7 +1746,7 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .message-status { display: flex; align-items: center; gap: 5px; margin-top: 10px; color: var(--text-3); font-size: 10.5px; }
 .message-status svg { flex: none; }
 .typing-status { gap: 8px; }
-.chat-footer { padding: 12px var(--chat-inset) 16px; background: var(--chat); }
+.chat-footer { padding: 12px var(--chat-inset) 16px; background: var(--surface); }
 .chat-suggestions { flex-wrap: nowrap; overflow-x: auto; margin-bottom: 10px; scrollbar-width: none; }
 .chat-suggestions::-webkit-scrollbar { display: none; }
 .chat-suggestions button { flex: none; min-height: 24px; padding: 0 4px; color: var(--text-3); background: transparent; border: 0; border-radius: 0; font-size: 10.5px; }

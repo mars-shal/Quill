@@ -19,11 +19,10 @@
  *    the grid is showing the stripped number.
  */
 
-import React, { memo, useMemo } from 'react'
+import React, { memo, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon.jsx'
 import { coverStyle, coverTreatment } from './cover.js'
 import { Button } from './ui/button.jsx'
-import HoldButton from './ui/HoldButton.jsx'
 
 const navGroups = [
   {
@@ -72,6 +71,34 @@ const Library = memo(function Library({ docs, filter, onFilter, onOpenDoc, onNew
     })
     return sortAscending ? [...next].reverse() : next
   }, [docs, filter, sortAscending])
+
+  // Right-click replaces the three floating tile buttons (details, download,
+  // delete): one menu, one place, no chrome parked over every cover.
+  //
+  // The tile takes focus when the menu opens and the items refuse it on
+  // mousedown, so closing -- including a dialog opened from the menu -- lands
+  // focus back on the tile rather than on <body>.
+  const [contextMenu, setContextMenu] = useState(null)
+  const closeContextMenu = () => setContextMenu(null)
+  const openContextMenu = (event, doc) => {
+    event.preventDefault()
+    event.currentTarget.focus()
+    setContextMenu({
+      id: doc.id,
+      title: doc.title,
+      tile: event.currentTarget,
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 196)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 176)),
+    })
+  }
+  useEffect(() => {
+    if (!contextMenu) return undefined
+    const onKey = (event) => {
+      if (event.key === 'Escape') setContextMenu(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [contextMenu])
   // One pass over `docs` per change, keyed by the nav labels, instead of a
   // `docs.filter` per sidebar item per render.
   const navCounts = useMemo(() => {
@@ -160,12 +187,45 @@ const Library = memo(function Library({ docs, filter, onFilter, onOpenDoc, onNew
               <small>Pick another collection, or start something new.</small>
             </div>
           ) : (
-            filteredDocs.map((doc) => { const tile = tiles.get(doc.id); const cover = tile.cover; return <article key={doc.id} className={`document-tile ${viewMode === 'list' ? 'list-tile' : ''}`} tabIndex="0" role="button" aria-label={`Open ${doc.title}`} onClick={() => onOpenDoc(doc.id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenDoc(doc.id) } }}><div className={`document-cover ${cover.layout}`} style={coverStyle(cover)} aria-hidden="true"><span className="cover-title">{doc.title}</span></div><button className="tile-menu" type="button" aria-label={`Edit details for ${doc.title}`} onClick={(event) => { event.stopPropagation(); onDetails(doc.id) }}><Icon name="more" size={15} /></button>{onDelete && <button className="tile-delete" type="button" aria-label={`Delete ${doc.title}`} onClick={(event) => { event.stopPropagation(); if (typeof window !== 'undefined' && window.confirm?.(`Delete "${doc.title}"?`)) onDelete(doc.id); else onDelete(doc.id); }}><Icon name="close" size={14} /></button>}<HoldButton className="tile-download" size="sm" holdTime={900} radius={8} wave={false} glow={false} backgroundColor="var(--cover-plate)" fillColor="var(--accent)" textColor="var(--cover-ink-strong)" fillTextColor="var(--on-accent)" icon={<Icon name="download" size={14} />} doneIcon={<Icon name="check" size={14} />} doneLabel="" children="" ariaLabel={`Download ${doc.title}`} onHold={() => onDownload(doc.id)} /><div className="tile-copy"><strong>{doc.title}</strong><span>{doc.kind} · {tile?.words ?? 0} words</span></div></article> })
+            filteredDocs.map((doc) => { const tile = tiles.get(doc.id); const cover = tile.cover; return <article key={doc.id} className={`document-tile ${viewMode === 'list' ? 'list-tile' : ''}`} tabIndex="0" role="button" aria-label={`Open ${doc.title}`} onClick={() => onOpenDoc(doc.id)} onContextMenu={(event) => openContextMenu(event, doc)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenDoc(doc.id) } }}><div className={`document-cover ${cover.layout}`} style={coverStyle(cover)} aria-hidden="true"><span className="cover-ribbon" /><span className="cover-title">{doc.title}</span></div><div className="tile-copy"><strong>{doc.title}</strong><span>{doc.kind} · {tile?.words ?? 0} words</span></div></article> })
           )}
           <article key="new-document" className={`document-tile new-document-tile ${viewMode === 'list' ? 'list-tile' : ''}`} tabIndex="0" role="button" aria-label="Create a new document" onClick={onNew} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNew() } }}><div className="new-cover"><Icon name="plus" size={18} /><span>New document</span></div><div className="tile-copy"><strong>New document</strong><span>Starts a blank draft</span></div></article>
         </div>
       </main>
     </div>
+    {contextMenu && (
+      <>
+        <div
+          className="context-scrim"
+          onClick={closeContextMenu}
+          onContextMenu={(event) => { event.preventDefault(); closeContextMenu() }}
+        />
+        <div className="tile-context" role="menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          {/* mousedown is refused so focus never leaves the tile: a dialog
+              opened from here restores focus to the tile on Escape, which is
+              the trigger the reader actually used. */}
+          <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => { const { id, tile } = contextMenu; closeContextMenu(); tile?.focus(); onOpenDoc(id) }}>Open</button>
+          <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => { const { id, tile } = contextMenu; closeContextMenu(); tile?.focus(); onDetails(id) }}>Details</button>
+          <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => { const { id, tile } = contextMenu; closeContextMenu(); tile?.focus(); onDownload(id) }}>Download</button>
+          {onDelete && (
+            <button
+              type="button"
+              role="menuitem"
+              className="danger"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const { id, title, tile } = contextMenu
+                closeContextMenu()
+                tile?.focus()
+                if (typeof window !== 'undefined' && window.confirm?.(`Delete "${title}"?`)) onDelete(id)
+              }}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      </>
+    )}
   </section>
 })
 

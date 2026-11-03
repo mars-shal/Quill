@@ -97,8 +97,17 @@ const HIGHLIGHT_TAGS = [
   { color: '#fecaca', name: 'Cut later', key: '4' },
 ]
 
-const READING_FONTS = ['Inter', 'Georgia', 'DM Mono']
-const READING_SIZES = ['13', '14', '16', '18', '20', '24']
+// The Word defaults, requested wholesale, plus the app's own faces. These are
+// applied as inline `font-family`, so whatever the system (or fontconfig's
+// metric substitutes) provides renders -- the picker offers names, not files.
+const READING_FONTS = [
+  'Arial', 'Arial Black', 'Calibri', 'Calibri Light', 'Cambria', 'Comic Sans MS',
+  'Consolas', 'Courier New', 'Franklin Gothic', 'Garamond', 'Georgia', 'Impact',
+  'Lucida Sans', 'Palatino Linotype', 'Segoe UI', 'Tahoma', 'Times New Roman',
+  'Trebuchet MS', 'Verdana',
+  'Inter', 'DM Mono',
+]
+const READING_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '22', '24', '28', '32', '36', '48', '72']
 
 /**
  * A thesis run, in the panel's own vocabulary.
@@ -315,10 +324,36 @@ function useSelectionTick(editor) {
  */
 function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpen, onToggleTags, applyTag, onInsertImage, onInsertMath }) {
   useSelectionTick(editor)
+  // Before the early return: hooks must run unconditionally.
+  const [insertChoice, setInsertChoice] = useState('')
 
   if (!editor) return null
 
   const keepSelection = (event) => event.preventDefault()
+
+  // The menus that read their value straight off the document, so the toolbar
+  // shows what the selection actually has rather than the last thing clicked.
+  const ALIGNMENTS = ['left', 'center', 'right', 'justify']
+  const currentAlign = ALIGNMENTS.find((a) => editor.isActive({ textAlign: a })) || 'left'
+  const currentLineHeight = String(
+    (editor.isActive('heading')
+      ? editor.getAttributes('heading').lineHeight
+      : editor.getAttributes('paragraph').lineHeight) || '',
+  )
+  const currentLetterSpacing = String(editor.getAttributes('textStyle').letterSpacing || '')
+  const spacingValue = currentLineHeight
+    ? `lh-${currentLineHeight}`
+    : currentLetterSpacing
+      ? `ls-${currentLetterSpacing}`
+      : ''
+
+  // A family or size applied elsewhere can be absent from the fixed lists;
+  // Radix renders a value with no matching item as blank, so the applied
+  // value joins its own list instead of vanishing from the trigger.
+  const fontOptions = [...READING_FONTS]
+  if (font && !fontOptions.includes(font)) fontOptions.unshift(font)
+  const sizeOptions = [...READING_SIZES]
+  if (size && !sizeOptions.includes(size)) sizeOptions.unshift(size)
 
   const tools = [
     { kind: 'group', label: 'Heading', items: [1, 2, 3].map((level) => ({
@@ -342,10 +377,6 @@ function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpe
       { key: 'code', label: 'Code block', icon: 'draft', active: editor.isActive('codeBlock'), run: () => runCommand('toggleCodeBlock') },
       { key: 'rule', label: 'Horizontal rule', icon: 'minus', run: () => runCommand('setHorizontalRule') },
     ] },
-    { kind: 'group', label: 'Insert', items: [
-      { key: 'image', label: 'Insert image', title: 'Insert image', icon: 'image', enabled: !!onInsertImage, run: onInsertImage },
-      { key: 'math', label: 'Insert formula', title: 'Insert LaTeX formula', icon: 'formula', enabled: !!onInsertMath, run: onInsertMath },
-    ] },
     { kind: 'group', label: 'History', items: [
       { key: 'undo', label: 'Undo', icon: 'undo', run: () => runCommand('undo'), enabled: editor.can().undo() },
       { key: 'redo', label: 'Redo', icon: 'redo', run: () => runCommand('redo'), enabled: editor.can().redo() },
@@ -364,7 +395,7 @@ function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpe
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {READING_FONTS.map((name) => (
+            {fontOptions.map((name) => (
               <SelectItem key={name} value={name}>{name}</SelectItem>
             ))}
           </SelectContent>
@@ -378,9 +409,68 @@ function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpe
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {READING_SIZES.map((value) => (
+            {sizeOptions.map((value) => (
               <SelectItem key={value} value={value}>{value}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={currentAlign} onValueChange={(value) => runCommand('setTextAlign', value)}>
+          <SelectTrigger
+            className="tool-select"
+            aria-label="Alignment"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="left">Left</SelectItem>
+            <SelectItem value="center">Center</SelectItem>
+            <SelectItem value="right">Right</SelectItem>
+            <SelectItem value="justify">Justify</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={spacingValue} onValueChange={(value) => {
+          if (value.startsWith('lh-')) runCommand('setLineHeight', value.slice(3))
+          else if (value === 'ls-normal') runCommand('unsetLetterSpacing')
+          else if (value.startsWith('ls-')) runCommand('setLetterSpacing', value.slice(3))
+        }}>
+          <SelectTrigger
+            className="tool-select"
+            aria-label="Line and letter spacing"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <SelectValue placeholder="Spacing" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="lh-1">Single spacing</SelectItem>
+            <SelectItem value="lh-1.15">Spacing 1.15</SelectItem>
+            <SelectItem value="lh-1.5">Spacing 1.5</SelectItem>
+            <SelectItem value="lh-2">Double spacing</SelectItem>
+            <SelectItem value="ls-normal">Normal letters</SelectItem>
+            <SelectItem value="ls--0.02em">Tight letters</SelectItem>
+            <SelectItem value="ls-0.06em">Wide letters</SelectItem>
+            <SelectItem value="ls-0.12em">Wider letters</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={insertChoice} onValueChange={(value) => {
+          // Reset immediately: a controlled Select only fires when its value
+          // changes, so without this the same item could not be chosen twice.
+          setInsertChoice('')
+          if (value === 'image') onInsertImage?.()
+          else if (value === 'math') onInsertMath?.()
+          else if (value === 'table') runCommand('insertTable', { rows: 3, cols: 3, withHeaderRow: true })
+        }}>
+          <SelectTrigger
+            className="tool-select"
+            aria-label="Insert"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <SelectValue placeholder="Insert" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="image">Image…</SelectItem>
+            <SelectItem value="math">Formula…</SelectItem>
+            <SelectItem value="table">Table (3 × 3)</SelectItem>
           </SelectContent>
         </Select>
       </div>

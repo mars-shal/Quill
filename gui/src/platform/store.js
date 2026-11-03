@@ -246,6 +246,10 @@ export const defaultSettings = {
   // null means "whatever this theme needs", which is 0.05 for a light theme and
   // 0.14 for a dark one. A number is the reader's own choice, and it wins.
   textureWash: null,
+  // Whether Settings scans this machine for CLIs and local servers (Ollama,
+  // opencode, Codex, ...). Off means: no detection, no "On this machine" rows
+  // -- the panel a reader who never wants local agents should not pay for.
+  localTools: true,
 }
 
 /**

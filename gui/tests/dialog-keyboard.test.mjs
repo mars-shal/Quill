@@ -114,9 +114,14 @@ test('Escape leaves the settings page', async () => {
 })
 
 test('Escape closes the details dialog', async () => {
-  const menu = root.querySelector('.document-tile .tile-menu')
-  assert.ok(menu, 'a tile has a menu button')
-  await click(menu)
+  const tile = root.querySelector('.document-tile')
+  assert.ok(tile, 'a document tile rendered')
+  tile.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 90 }))
+  await tick()
+  const details = [...root.querySelectorAll('.tile-context [role="menuitem"]')]
+    .find((node) => node.textContent === 'Details')
+  assert.ok(details, 'the right-click menu offered Details')
+  await click(details)
   assert.ok(root.querySelector('.details-dialog'), 'the details dialog opened')
 
   await escape()
@@ -170,13 +175,17 @@ test('leaving Settings returns focus to the control that opened it', async () =>
 })
 
 test('the details dialog restores focus to its own trigger', async () => {
-  const menu = root.querySelector('.document-tile .tile-menu')
-  await click(menu)
+  const tile = root.querySelector('.document-tile')
+  tile.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 90 }))
+  await tick()
+  const details = [...root.querySelectorAll('.tile-context [role="menuitem"]')]
+    .find((node) => node.textContent === 'Details')
+  await click(details)
   await escape()
   assert.match(
     activeElementLabel(),
-    /tile-menu|Edit details/,
-    `focus must return to the tile menu, got ${activeElementLabel()}`,
+    /Open /,
+    `focus must return to the tile the menu opened from, got ${activeElementLabel()}`,
   )
 })
 

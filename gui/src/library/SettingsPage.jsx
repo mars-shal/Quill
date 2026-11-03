@@ -287,6 +287,8 @@ function SettingsPage({
   onSelectModel,
   localTools,
   onAdoptTool,
+  onSaveProvider,
+  onCreateProvider,
 }) {
   const [draft, setDraft] = useState(settings);
   const [apiKey, setApiKey] = useState(sessionApiKey);
@@ -385,6 +387,8 @@ function SettingsPage({
   };
 
   const connect = async () => {
+    // The endpoint is saved on its own blur -- which fires before this button
+    // is even clicked -- so a URL edit never needs a key press to stick.
     if (!apiKey.trim()) {
       setConnectionState("error");
       return;
@@ -535,6 +539,8 @@ function SettingsPage({
               onSelectModel,
               localTools,
               onAdoptTool,
+              onSaveProvider,
+              onCreateProvider,
             };
             return SETTINGS_SECTIONS.map((section) => {
               const Panel = section.Panel;
@@ -593,6 +599,19 @@ function SettingsPage({
  * thought -- which provider, asked for what, authenticated how -- and stacked
  * cells break them into four unrelated questions.
  */
+/**
+ * BYOK shortcuts. Each materialises a *real* registry row (endpoint, vendor,
+ * default model) when chosen -- the key typed next then files under the row a
+ * run will actually use, which is what the old name-only slots never did.
+ */
+const PROVIDER_PRESETS = [
+  { key: "groq", label: "Groq", baseUrl: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
+  { key: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+  { key: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
+  { key: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+  { key: "mistral", label: "Mistral", baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" },
+];
+
 function AssistantPanel({
   draft,
   update,
@@ -610,6 +629,8 @@ function AssistantPanel({
   onSelectModel,
   localTools = [],
   onAdoptTool,
+  onSaveProvider,
+  onCreateProvider,
 }) {
   // The provider's live model list, read here for the same reason the assistant
   // panel reads it: the stored list drifts the moment a vendor ships a model,
@@ -621,6 +642,22 @@ function AssistantPanel({
   const [modelsError, setModelsError] = useState("");
   const [modelsRevision, setModelsRevision] = useState(0);
   const providerId = activeProvider?.id;
+
+  // The endpoint as the reader is editing it: committed on blur and alongside
+  // Connect rather than per keystroke (a URL is typed a character at a time).
+  // Re-syncs whenever the underlying row changes its endpoint, so switching
+  // providers or saving shows what the row actually holds.
+  const [endpointDraft, setEndpointDraft] = useState(activeProvider?.baseUrl ?? "");
+  useEffect(() => {
+    setEndpointDraft(activeProvider?.baseUrl ?? "");
+  }, [activeProvider?.baseUrl]);
+
+  const saveEndpoint = async () => {
+    const next = endpointDraft.trim();
+    if (!activeProvider || !next || next === activeProvider.baseUrl) return;
+    const updated = await onSaveProvider?.({ baseUrl: next });
+    if (updated) setEndpointDraft(updated.baseUrl ?? next);
+  };
 
   useEffect(() => {
     if (!providerId) {
@@ -705,6 +742,34 @@ function AssistantPanel({
           <Select
             value={activeProvider?.id ?? ""}
             onValueChange={async (value) => {
+              // A preset creates (or reuses) a real row for its endpoint, so
+              // the key that follows files under the row a run will use.
+              if (value.startsWith("preset:")) {
+                const preset = PROVIDER_PRESETS.find((p) => p.key === value.slice(7));
+                if (!preset) return;
+                const sameEndpoint = (p) =>
+                  String(p.baseUrl || "").replace(/\/+$/, "") === preset.baseUrl.replace(/\/+$/, "");
+                const existing = providers.find(sameEndpoint);
+                const row =
+                  existing ??
+                  (await onCreateProvider?.({
+                    id: slugify(preset.label),
+                    label: preset.label,
+                    vendor: "compatible",
+                    protocol: "openai_chat",
+                    baseUrl: preset.baseUrl,
+                    defaultModel: preset.model,
+                    models: [],
+                  }));
+                if (!row) return;
+                update("provider", row.id);
+                setEndpointDraft(preset.baseUrl);
+                setApiKey("");
+                setConnectionState("idle");
+                const ready = await onSelectProvider(row.id);
+                setConnectionState(ready ? "ready" : "idle");
+                return;
+              }
               update("provider", value);
               setApiKey("");
               setConnectionState("idle");
@@ -719,6 +784,11 @@ function AssistantPanel({
               {providers.map((provider) => (
                 <SelectItem key={provider.id} value={provider.id}>
                   {provider.label || provider.id}
+                </SelectItem>
+              ))}
+              {PROVIDER_PRESETS.map((preset) => (
+                <SelectItem key={preset.key} value={`preset:${preset.key}`}>
+                  {preset.label}…
                 </SelectItem>
               ))}
             </SelectContent>
@@ -784,8 +854,10 @@ function AssistantPanel({
           <input
             id="endpoint"
             type="url"
-            value={activeProvider?.baseUrl ?? ""}
-            readOnly
+            value={endpointDraft}
+            placeholder="https://api.example.com/v1"
+            onChange={(event) => setEndpointDraft(event.target.value)}
+            onBlur={saveEndpoint}
           />
         </div>
       </div>
@@ -845,6 +917,22 @@ function AssistantPanel({
         The key is written to your operating system's credential store and used
         for requests to the provider above. It is not kept in this window.
       </p>
+      {/* Detection is a choice, not a fixture: off stops the probe entirely
+          (the same setting gates the scan in the shell) and hides the rows
+          below, so a reader who never wants local agents pays for none of it. */}
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <span className="settings-row-label">Local tools</span>
+          <small>Scan this machine for CLIs and local servers (Ollama, opencode, Codex, …).</small>
+        </div>
+        <div className="settings-row-control">
+          <Switch
+            checked={draft.localTools !== false}
+            onCheckedChange={(value) => update("localTools", value)}
+          />
+        </div>
+      </div>
+      {draft.localTools !== false && (<>
       {/*
         What is already installed, reported rather than offered as a menu of
         things to install.
@@ -913,6 +1001,7 @@ function AssistantPanel({
           </div>
         );
       })}
+      </>)}
     </>
   );
 }
