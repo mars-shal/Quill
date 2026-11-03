@@ -88,13 +88,20 @@ test('bootstrapping used the expected commands', () => {
   assert.ok(commands.includes('list_documents'), `calls: ${commands.join(', ')}`)
 })
 
-test('the account is read after bootstrap, not inside it', () => {
+test('the account is read after bootstrap, not inside it', async () => {
   // `account_state` makes a live network call with an 8s timeout when sync is on,
   // so folding it into `bootstrap` would put the app's launch behind the network
   // round trip. This used to live in `account.test.mjs`, which mounted the app for
   // the account chip's benefit; the chip is gone, but the ordering it guarded is
   // not — the state is still read, and it is still what `Editor`'s export author
   // comes from.
+  //
+  // The call lands from an effect once bootstrapped flips, so the assertion
+  // waits for it rather than racing the effect (it intermittently arrived one
+  // tick late and failed as a missing call).
+  for (let i = 0; i < 60 && !calls.some((call) => call.command === 'account_state'); i += 1) {
+    await tick(25)
+  }
   const order = calls.map((call) => call.command)
   const bootIndex = order.indexOf('bootstrap')
   const accountIndex = order.indexOf('account_state')

@@ -2,6 +2,14 @@
 
 :root {
   color-scheme: light;
+  /* The library's books, copied one for one from the reference cover: dark
+     warm cloth, cream ink, a sage ribbon, cream page edges. Global tokens on
+     purpose -- every book on the shelf is the same design, which is the point
+     of copying it -- and declared here so every theme inherits them. */
+  --book-cloth: #17140f;
+  --book-ink: #ece4d2;
+  --book-ribbon: #d9d3ac;
+  --book-page-edge: #e6ddc9;
   --main: #ffffff;
   --sidebar: #f4f4f2;
   --chat: #fafaf9;
@@ -835,28 +843,78 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .list-view .tile-menu:hover { color: var(--text-1); background: var(--active); }
 .list-view .new-cover svg { width: 22px; height: 22px; }
 
-/* --- The library as books ---------------------------------------------------
-   Redrawn from the reference (2026-11-03): a cloth book with a ribbon marking
-   the place, the title given room to read, and enough shadow to sit on the
-   desk rather than float as a swatch. The per-document pigment system stays --
-   a shelf of different bindings still reads as books, and the contrast gate
-   still has its colours to check. */
+/* --- The library as books, one for one from the reference -------------------
+   The Definitive Book of Type cover: dark warm cloth, cream type centred in
+   the middle band, a badge at the head, the edition line at the foot, and a
+   ribbon that stands above the top edge and tucks *behind* the cloth. The
+   cloth/ink/ribbon are the global --book-* tokens rather than per-document
+   pigments: every book on the shelf is the same design, which is the point of
+   copying it. The tile's padding-top is the room the ribbon stands in. */
 .document-cover {
-  aspect-ratio: 5 / 7;
-  box-shadow: var(--sheet-shadow), 0 14px 26px rgba(0, 0, 0, 0.28);
+  aspect-ratio: 3 / 4;
+  overflow: visible;
+  background: var(--book-cloth);
+  box-shadow:
+    var(--sheet-shadow),
+    0 16px 30px rgba(0, 0, 0, 0.32),
+    inset -4px 0 0 -3px var(--book-page-edge);
 }
+/* z-index: -1 puts the ribbon behind the cover's background, so only the
+   part above the top edge shows -- the reference's bookmark disappears at
+   the cover rather than lying on top of it. */
 .cover-ribbon {
   position: absolute;
-  top: 0;
-  right: 24%;
-  width: 13px;
-  height: 38px;
-  background: linear-gradient(180deg, #ded8b8, #b9b18a);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 76%, 0 100%);
+  z-index: -1;
+  top: -34px;
+  right: 26%;
+  width: 15px;
+  height: 74px;
+  background: linear-gradient(180deg, var(--book-ribbon), color-mix(in srgb, var(--book-ribbon) 82%, black));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%);
 }
-.list-view .cover-ribbon { display: none; }
-.document-cover.stacked .cover-title { font-size: 14px; }
-.document-cover.ruled .cover-title { font-size: 14px; }
+.cover-badge {
+  position: absolute;
+  z-index: 1;
+  top: 11px;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  background: var(--book-ink);
+  border-radius: 5px;
+  transform: translateX(-50%);
+}
+.cover-badge img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* Both layouts get the reference's centred middle-band title; these selectors
+   match the layout rules' specificity and come later, so they win. */
+.document-cover.stacked .cover-title,
+.document-cover.ruled .cover-title {
+  top: 30%;
+  right: 16px;
+  bottom: 46px;
+  left: 16px;
+  color: var(--book-ink);
+  border-top: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+.cover-edition {
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  left: 14px;
+  color: var(--book-ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+.list-view .cover-ribbon,
+.list-view .cover-badge,
+.list-view .cover-edition { display: none; }
+.document-tile { padding-top: 34px; }
 
 /* Right-click menu: the three floating tile buttons (details, download,
    delete) live here instead of as chrome parked over every cover. */
