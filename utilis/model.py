@@ -177,6 +177,45 @@ def _is_local_endpoint(base_url: str) -> bool:
     return host in {"localhost", "::1", "0.0.0.0"} or host.startswith("127.")
 
 
+def _usage_tokens(response) -> int | None:
+    """Total tokens the provider reported, or None when it reported nothing."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    total = getattr(usage, "total_tokens", None)
+    if total is None:
+        inp = getattr(usage, "prompt_tokens", None) or getattr(usage, "input_tokens", None) or 0
+        out = getattr(usage, "completion_tokens", None) or getattr(usage, "output_tokens", None) or 0
+        total = int(inp or 0) + int(out or 0)
+    try:
+        return int(total)
+    except (TypeError, ValueError):
+        return None
+
+
+def _record_usage(model: str, tokens: int) -> None:
+    """Accumulate today's token spend per model for the Settings usage table.
+
+    Telemetry: a failure here must never fail a turn, so every error is
+    swallowed at debug level.
+    """
+    if tokens <= 0:
+        return
+    try:
+        from datetime import datetime, timezone
+        from utilis.store import open_store
+
+        key = f"usage:{datetime.now(timezone.utc).date().isoformat()}"
+        db = open_store()
+        usage = db.get(key)
+        if not isinstance(usage, dict):
+            usage = {}
+        usage[model] = int(usage.get(model, 0)) + int(tokens)
+        db.set(key, usage)
+    except Exception:  # noqa: BLE001 - statistics, never fatal
+        logger.debug("usage recording failed", exc_info=True)
+
+
 class Agent:
     """One provider client, configured explicitly.
 
@@ -286,7 +325,12 @@ class Agent:
             if temperature is not None:
                 kwargs["temperature"] = temperature
             kwargs.update(_reasoning_kwargs(name))
-            return self.OpenAi.responses.create(**kwargs).output_text
+            out = self.OpenAi.responses.create(**kwargs)
+            _record_usage(
+                name,
+                _usage_tokens(out) or (estimate_tokens(prompt) + estimate_tokens(instructions)),
+            )
+            return out.output_text
 
         messages = [
             {"role": "system", "content": instructions},
@@ -296,7 +340,12 @@ class Agent:
         if temperature is not None:
             kwargs["temperature"] = temperature
         kwargs.update(_reasoning_kwargs(name))
-        return self.OpenAi.chat.completions.create(**kwargs).choices[0].message.content
+        resp = self.OpenAi.chat.completions.create(**kwargs)
+        _record_usage(
+            name,
+            _usage_tokens(resp) or (estimate_tokens(prompt) + estimate_tokens(instructions)),
+        )
+        return resp.choices[0].message.content
 
     def _complete_cli(self, name: str, prompt: str, instructions: str) -> str:
         """Sends the turn to a CLI agent (``protocol: "cli"``).

@@ -106,6 +106,7 @@ pub fn run() {
             pipeline::api_cancel_run,
             pipeline::api_stream_run,
             pipeline::pipeline_status,
+            pipeline::usage_stats,
             pipeline::pipeline_start,
             pipeline::pipeline_stop,
             commands::delete_custom_theme,

@@ -709,6 +709,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True, "runs": len(RUNS),
                                     "searxng": os.environ.get("QUILL_SEARXNG_URL", "(default localhost:8080)"),
                                     "gap_research": bool(os.environ.get("QUILL_GAP_RESEARCH"))})
+        if path == "/usage":
+            # Today's token spend per model, accumulated by the model layer on
+            # every call (provider-reported totals, estimates as fallback) --
+            # the Settings usage table reads this.
+            from datetime import datetime, timezone
+            from utilis.store import open_store
+
+            today = datetime.now(timezone.utc).date().isoformat()
+            models = open_store().get(f"usage:{today}")
+            if not isinstance(models, dict):
+                models = {}
+            return self._json(200, {
+                "date": today,
+                "limit": int(os.environ.get("QUILL_TPD", "200000")),
+                "models": models,
+            })
         if path == "/runs":
             with _RUNS_LOCK:
                 return self._json(200, {"runs": [r.snapshot() for r in RUNS.values()]})

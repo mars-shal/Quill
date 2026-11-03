@@ -1501,7 +1501,15 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .dialog-note { margin: 5px 0 16px; color: var(--text-3); font-size: 10.5px; line-height: 1.45; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin: 0 -24px; padding: 16px 24px 20px; border-top: 1px solid var(--border); }
 .settings-form { padding-top: 0; }
-.settings-section { padding: 26px 28px; border-bottom: 1px solid var(--border); }
+.settings-section {
+  /* A card, not a band: the reference system sets each block off the page
+     with a rounded1px edge rather than a full-bleed rule (2026-11-03). */
+  margin: 0 0 14px;
+  padding: 20px 22px;
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
 /* The inactive panels are hidden, not unmounted -- see the note in
    `SettingsPage` about the theme editor's draft -- so this has to hold against
    any `display` a future rule sets on `.settings-section`. The UA's
@@ -1578,6 +1586,63 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
    a row makes it a list of things each with a name, which is what a settings
    page is. */
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 13px 0; border-top: 1px solid var(--border); }
+
+/* Usage table, in the shape of the reference: the model, a segmented spend
+   bar against the daily cap, the raw numbers, the list price. The segments
+   echo the reference's dotted meter; everything is a token so the contrast
+   gate stays satisfied. */
+.usage-table {
+  display: grid;
+  gap: 3px;
+  margin: -2px 0 8px;
+  padding: 10px 12px;
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.usage-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.5fr) minmax(90px, 1fr) auto 92px;
+  align-items: center;
+  gap: 12px;
+  min-height: 30px;
+}
+.usage-model {
+  overflow: hidden;
+  color: var(--text-1);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  background: repeating-linear-gradient(90deg, var(--hover) 0 7px, transparent 7px 10px);
+  border-radius: 999px;
+}
+.usage-bar i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 7px, transparent 7px 10px);
+}
+.usage-bar i[data-level='high'] {
+  background: repeating-linear-gradient(90deg, var(--danger) 0 7px, transparent 7px 10px);
+}
+.usage-tokens {
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.usage-tokens em { color: var(--text-3); font-style: normal; }
+.usage-price {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-align: right;
+}
 .settings-row-copy { min-width: 0; }
 .settings-row-label { display: block; color: var(--text-1); font-size: 12.5px; font-weight: 600; }
 .settings-row-label small { display: inline; margin-left: 5px; color: var(--text-3); font-size: 10px; font-weight: 400; }

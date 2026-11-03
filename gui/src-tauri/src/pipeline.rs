@@ -149,6 +149,28 @@ pub async fn pipeline_status(state: State<'_, Supervisor>) -> AppResult<Pipeline
     }
 }
 
+/// Today's token usage per model, straight from the sidecar's `/usage`.
+///
+/// The Settings usage table needs the sidecar's own count -- it records what
+/// every call reported or was estimated at -- and the webview must never talk
+/// to the sidecar without going through this process.
+#[tauri::command]
+pub async fn usage_stats() -> AppResult<serde_json::Value> {
+    let url = format!("{}/usage", base_url());
+    let response = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|error| AppError::Other(format!("could not build the usage request: {error}")))?
+        .get(&url)
+        .send()
+        .await
+        .map_err(|error| AppError::Other(format!("could not reach {url}: {error}")))?;
+    response
+        .json()
+        .await
+        .map_err(|error| AppError::Other(format!("{url} did not return JSON: {error}")))
+}
+
 /// Start the sidecar, or adopt the one already running.
 ///
 /// Idempotent by contract: the webview calls this on mount and again after a

@@ -682,6 +682,17 @@ export async function pipelineStatus() {
   }
 }
 
+/** Today's token usage per model, as the sidecar counted it. */
+export async function usageStats() {
+  if (!isTauri) return { date: '', limit: 0, models: {} }
+  try {
+    return await (await tauriInvoke())('usage_stats')
+  } catch (error) {
+    console.error('Failed to read usage', error)
+    return { date: '', limit: 0, models: {} }
+  }
+}
+
 /** Asks Rust to bring the sidecar up. Resolves with the state it settled in. */
 export async function pipelineStart() {
   if (!isTauri) return { ...UNAVAILABLE }

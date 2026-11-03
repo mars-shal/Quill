@@ -16,7 +16,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon.jsx";
 import { ModalLayer } from "../ModalLayer.jsx";
-import { isLocalEndpoint, listProviderModels, slugify } from "../platform/store.js";
+import { isLocalEndpoint, listProviderModels, slugify, usageStats } from "../platform/store.js";
 import BackgroundPicker from "./BackgroundPicker.jsx";
 import ThemePicker from "./ThemePicker.jsx";
 import { Button } from './ui/button.jsx'
@@ -612,6 +612,16 @@ const PROVIDER_PRESETS = [
   { key: "mistral", label: "Mistral", baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" },
 ];
 
+// Provider list price, USD per million tokens (input / output). The on_demand
+// tier this app's Groq account runs on bills $0 -- the figure is what the
+// model costs off the free tier, so a reader can compare before leaving it.
+// A model without an entry shows an em dash rather than a guessed number.
+const MODEL_PRICING = {
+  "openai/gpt-oss-120b": "$0.15 / $0.60",
+  "openai/gpt-oss-20b": "$0.10 / $0.50",
+};
+const modelPrice = (model) => MODEL_PRICING[model] ?? "—";
+
 function AssistantPanel({
   draft,
   update,
@@ -658,6 +668,25 @@ function AssistantPanel({
     const updated = await onSaveProvider?.({ baseUrl: next });
     if (updated) setEndpointDraft(updated.baseUrl ?? next);
   };
+
+  // Today's spend, from the sidecar's own count (it records what every call
+  // reported or was estimated at). One read per panel open.
+  const [usage, setUsage] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    usageStats()
+      .then((data) => {
+        if (!cancelled && data && typeof data === "object") setUsage(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const usageRows =
+    usage && usage.models
+      ? Object.entries(usage.models).sort((a, b) => Number(b[1]) - Number(a[1]))
+      : [];
 
   useEffect(() => {
     if (!providerId) {
@@ -917,6 +946,47 @@ function AssistantPanel({
         The key is written to your operating system's credential store and used
         for requests to the provider above. It is not kept in this window.
       </p>
+      {/* Usage, in the shape of the reference table: the model, a segmented
+          spend bar against the daily cap, the raw numbers, and the provider's
+          list price. The bar is the number a reader can act on; the rest is
+          context for it. Price is the list rate per million (input/output) --
+          the on_demand tier bills $0. */}
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <span className="settings-row-label">Usage</span>
+          <small>
+            {usage
+              ? `Tokens used today (${usage.date}), per model, against ${Number(usage.limit).toLocaleString()}.`
+              : "Tokens used today against the daily limit."}
+          </small>
+        </div>
+        <div className="settings-row-control">
+          <span className={`settings-status${usageRows.length ? " connected" : ""}`}>
+            {usageRows.length ? "Today" : "None yet"}
+          </span>
+        </div>
+      </div>
+      {usageRows.length > 0 && (
+        <div className="usage-table" aria-label="Token usage today">
+          {usageRows.map(([model, tokens]) => {
+            const used = Number(tokens) || 0;
+            const limit = Math.max(1, Number(usage?.limit) || 1);
+            const pct = Math.min(100, Math.round((used / limit) * 100));
+            return (
+              <div className="usage-row" key={model}>
+                <span className="usage-model" title={model}>{model}</span>
+                <span className="usage-bar" aria-hidden="true">
+                  <i data-level={pct > 75 ? "high" : "low"} style={{ width: `${Math.max(pct, 2)}%` }} />
+                </span>
+                <span className="usage-tokens">
+                  {used.toLocaleString()} <em>/ {limit.toLocaleString()}</em>
+                </span>
+                <span className="usage-price">{modelPrice(model)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {/* Detection is a choice, not a fixture: off stops the probe entirely
           (the same setting gates the scan in the shell) and hides the rows
           below, so a reader who never wants local agents pays for none of it. */}
