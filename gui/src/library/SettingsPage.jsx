@@ -652,21 +652,12 @@ function AssistantPanel({
   onSaveProvider,
   onCreateProvider,
 }) {
-  // The provider's live model list, read here for the same reason the assistant
-  // panel reads it: the stored list drifts the moment a vendor ships a model,
-  // and a reader who cannot pick one from here would have to open the chat to
-  // do it. Failure is not fatal -- the stored list still offers a choice and the
-  // row says what went wrong.
   const [liveModels, setLiveModels] = useState([]);
   const [modelsState, setModelsState] = useState("idle");
   const [modelsError, setModelsError] = useState("");
   const [modelsRevision, setModelsRevision] = useState(0);
   const providerId = activeProvider?.id;
 
-  // The endpoint as the reader is editing it: committed on blur and alongside
-  // Connect rather than per keystroke (a URL is typed a character at a time).
-  // Re-syncs whenever the underlying row changes its endpoint, so switching
-  // providers or saving shows what the row actually holds.
   const [endpointDraft, setEndpointDraft] = useState(activeProvider?.baseUrl ?? "");
   useEffect(() => {
     setEndpointDraft(activeProvider?.baseUrl ?? "");
@@ -679,8 +670,6 @@ function AssistantPanel({
     if (updated) setEndpointDraft(updated.baseUrl ?? next);
   };
 
-  // Today's spend, from the sidecar's own count (it records what every call
-  // reported or was estimated at). One read per panel open.
   const [usage, setUsage] = useState(null);
   useEffect(() => {
     let cancelled = false;
@@ -726,11 +715,6 @@ function AssistantPanel({
     };
   }, [providerId, modelsRevision]);
 
-  // Selection first, then the live list, then the stored one: the current model
-  // has to be in the menu it is shown in, and the stored list is the fallback
-  // when the endpoint cannot be reached.
-  // Same non-chat filter as the chat picker: Groq's live list carries whisper,
-  // the orpheus voices and the prompt guards, none of which a run can call.
   const NON_CHAT_MODEL = /whisper|orpheus|prompt-guard/i
   const modelOptions = Array.from(
     new Set(
@@ -742,231 +726,197 @@ function AssistantPanel({
   );
   const local = isLocalEndpoint(activeProvider?.baseUrl);
 
+  const providerMonogram = (provider) => {
+    const label = provider?.label || provider?.id || "P";
+    return label.slice(0, 1).toUpperCase();
+  };
+
   return (
     <>
-      {/* The trust statement the reference leads with: where the keys live.
-          It is the one reassurance a BYOK page owes its reader before any field. */}
-      <div className="settings-banner" role="note">
-        <span className="settings-banner-mark" aria-hidden="true">
-          <Icon name="check" size={14} />
+      <div className="settings-banner assistant-keys-banner" role="note">
+        <span className="settings-banner-mark assistant-keys-mark" aria-hidden="true">
+          <Icon name="check" size={16} />
         </span>
-        <span>
+        <div>
           <strong>Your keys are encrypted at rest.</strong>
-          Stored in your operating system's credential store and never shown in logs.
+          <div className="settings-banner-sub">Stored in your operating system's credential store and never shown in logs.</div>
+        </div>
+      </div>
+
+      <div className="assistant-keys-header">
+        <div>
+          <h2 className="assistant-keys-title">API keys</h2>
+          <p className="assistant-keys-sub">Bring your own keys and keep them in one place.</p>
+        </div>
+        <span className={`assistant-keys-status ${connectionState === "ready" ? "is-connected" : ""}`}>
+          {connectionState === "ready" ? "Key ready" : connectionState === "error" ? "Add a key" : "Not connected"}
         </span>
       </div>
-      {/* The connection state was a pill in the section head, which is where the
-          old layout had room to put one. As a row it says the same thing and sits
-          with the thing it is reporting on. */}
-      <div className="settings-row">
-        <div className="settings-row-copy">
-          <span className="settings-row-label">Connection</span>
-          <small>Whether a key has been handed to the credential store.</small>
-        </div>
-        <div className="settings-row-control">
-          <span
-            className={`settings-status ${connectionState === "ready" ? "connected" : ""} ${connectionState === "error" ? "error" : ""}`}
-          >
-            {connectionState === "ready"
-              ? "Key ready"
-              : connectionState === "error"
-                ? "Add a key"
-                : "Not connected"}
-          </span>
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-copy">
-          <label className="settings-row-label" htmlFor="provider">
-            Provider
-          </label>
-          <small>Which service answers assistant actions.</small>
-        </div>
-        <div className="settings-row-control">
-          {/* The list is the registry, and the value is a provider *id*. The four
-              fixed names this used to offer -- OpenAI, Anthropic, Google, Custom
-              -- were a menu of slots nothing read: the core resolves a run's
-              credential from the provider row it will actually use, so choosing
-              "Anthropic" filed the key under a name no request ever asked for.
-              Selecting here switches which registry row is active. */}
-          <Select
-            value={activeProvider?.id ?? ""}
-            onValueChange={async (value) => {
-              // A preset creates (or reuses) a real row for its endpoint, so
-              // the key that follows files under the row a run will use.
-              if (value.startsWith("preset:")) {
-                const preset = PROVIDER_PRESETS.find((p) => p.key === value.slice(7));
-                if (!preset) return;
-                const sameEndpoint = (p) =>
-                  String(p.baseUrl || "").replace(/\/+$/, "") === preset.baseUrl.replace(/\/+$/, "");
-                const existing = providers.find(sameEndpoint);
-                const row =
-                  existing ??
-                  (await onCreateProvider?.({
-                    id: slugify(preset.label),
-                    label: preset.label,
-                    vendor: "compatible",
-                    protocol: "openai_chat",
-                    baseUrl: preset.baseUrl,
-                    defaultModel: preset.model,
-                    models: [],
-                  }));
-                if (!row) return;
-                update("provider", row.id);
-                setEndpointDraft(preset.baseUrl);
-                setApiKey("");
-                setConnectionState("idle");
-                const ready = await onSelectProvider(row.id);
-                setConnectionState(ready ? "ready" : "idle");
-                return;
-              }
-              update("provider", value);
-              setApiKey("");
-              setConnectionState("idle");
-              const ready = await onSelectProvider(value);
-              setConnectionState(ready ? "ready" : "idle");
-            }}
-          >
-            <SelectTrigger id="provider" className="dialog-select">
-              <SelectValue placeholder="No provider" />
-            </SelectTrigger>
-            <SelectContent>
-              {providers.map((provider) => (
-                <SelectItem key={provider.id} value={provider.id}>
-                  {provider.label || provider.id}
-                </SelectItem>
-              ))}
-              {PROVIDER_PRESETS.map((preset) => (
-                <SelectItem key={preset.key} value={`preset:${preset.key}`}>
-                  {preset.label}…
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      {/* Read-only until now, which made the one field a reader most wants to
-          change the one thing on the page they could not touch: they had to go
-          back to the chat, open the picker there, and choose from a menu the
-          same provider was filling. The list is the provider's own, so picking
-          here and picking in the chat write the same field. */}
-      <div className="settings-row">
-        <div className="settings-row-copy">
-          <label className="settings-row-label" htmlFor="model">
-            Model
-          </label>
-          <small>
-            {modelsState === "loading"
-              ? "Reading models from the provider…"
-              : modelsState === "error"
-                ? modelsError
-                : "Sent with every request."}
-          </small>
-        </div>
-        <div className="settings-row-control">
-          <Select
-            value={activeProvider?.defaultModel ?? ""}
-            disabled={!providerId || !modelOptions.length}
-            onValueChange={(value) => onSelectModel?.(value)}
-          >
-            <SelectTrigger id="model" className="dialog-select">
-              <SelectValue
-                placeholder={modelsState === "loading" ? "Reading…" : "No models"}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {modelOptions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {modelsState === "error" && (
+
+      <div className="assistant-keys-grid">
+        <article className="assistant-key-card">
+          <div className="assistant-key-card-head">
+            <div className="assistant-key-avatar" aria-hidden="true">{providerMonogram(activeProvider)}</div>
+            <div className="assistant-key-meta">
+              <div className="assistant-key-name">{activeProvider?.label || activeProvider?.id || "Provider"}</div>
+              <div className="assistant-key-sub">{activeProvider?.baseUrl || "No endpoint configured"}</div>
+            </div>
+          </div>
+          <div className="assistant-key-tags">
+            <span className={`assistant-key-pill ${connectionState === "ready" ? "is-active" : ""}`}>
+              {connectionState === "ready" ? "Active" : "Inactive"}
+            </span>
+          </div>
+          <div className="assistant-key-secret">
+            <span className="assistant-key-secret-text">{apiKey && connectionState === "ready" ? "••••••••••••••" : apiKey ? "••••••••••••••" : "sk-••••••••••••"}</span>
+            <button type="button" className="assistant-key-iconbtn" aria-label="Copy key">
+              <Icon name="copy" size={18} />
+            </button>
+          </div>
+          <div className="assistant-key-actions">
+            <Button className="assistant-key-btn" type="button" onClick={connect} disabled={!activeProvider}>
+              Connect provider
+            </Button>
             <Button
               className="soft-button"
               type="button"
-              onClick={() => setModelsRevision((value) => value + 1)}
+              onClick={onDisconnect}
+              disabled={!activeProvider || connectionState !== "ready"}
             >
-              Retry
+              Remove key
             </Button>
-          )}
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-copy">
-          <label className="settings-row-label" htmlFor="endpoint">
-            Endpoint
-          </label>
-          <small>Where requests are sent.</small>
-        </div>
-        <div className="settings-row-control">
-          <input
-            id="endpoint"
-            type="url"
-            value={endpointDraft}
-            placeholder="https://api.example.com/v1"
-            onChange={(event) => setEndpointDraft(event.target.value)}
-            onBlur={saveEndpoint}
-          />
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-copy">
-          <label className="settings-row-label" htmlFor="api-key">
-            API key
-          </label>
-          <small>Written to the credential store when you connect.</small>
-        </div>
-        {/* The one row whose control is wider than a select: an input, a reveal
-            and the button that actually does something do not fit in 236px, and
-            the alternative -- dropping Connect onto its own line -- would put the
-            only non-autosaved action on this page somewhere it reads as a footer. */}
-        <div className="settings-row-control grow">
-          <div className="secret-field">
-            <input
-              id="api-key"
-              type={keyVisible ? "text" : "password"}
-              placeholder="Paste a key"
-              value={apiKey}
-              onChange={(event) => {
-                setApiKey(event.target.value);
-                setConnectionState("idle");
-              }}
-            />
-            <button
+            <Button
+              className="assistant-key-iconbtn assistant-key-remove"
               type="button"
-              onClick={() => setKeyVisible((value) => !value)}
+              onClick={onDisconnect}
+              disabled={!activeProvider || connectionState !== "ready"}
+              aria-label="Remove key"
             >
-              {keyVisible ? "Hide" : "Show"}
-            </button>
+              <Icon name="trash" size={18} />
+            </Button>
           </div>
-          <Button
-            className="soft-button"
-            type="button"
-            onClick={connect}
-            disabled={!activeProvider}
-          >
-            Connect provider
-          </Button>
-          {/* Deleting is the only way back to the environment's key: the core
-              clears the "you own this" mark when the credential goes, so the
-              `.env` value can take the provider over again on the next launch.
-              Offered only once there is something to remove. */}
-          <Button
-            className="soft-button"
-            type="button"
-            onClick={onDisconnect}
-            disabled={!activeProvider || connectionState !== "ready"}
-          >
-            Remove key
-          </Button>
-        </div>
+        </article>
+
+        <article className="assistant-key-card assistant-key-card-form">
+          <div className="assistant-key-card-head">
+            <div>
+              <div className="assistant-key-card-title">Add or update key</div>
+              <div className="assistant-key-card-sub">Configure provider, model, endpoint and key.</div>
+            </div>
+          </div>
+          <div className="assistant-key-field">
+            <label className="assistant-key-label" htmlFor="provider">Provider</label>
+            <Select
+              value={activeProvider?.id ?? ""}
+              onValueChange={async (value) => {
+                if (value.startsWith("preset:")) {
+                  const preset = PROVIDER_PRESETS.find((p) => p.key === value.slice(7));
+                  if (!preset) return;
+                  const sameEndpoint = (p) =>
+                    String(p.baseUrl || "").replace(/\/+$/, "") === preset.baseUrl.replace(/\/+$/, "");
+                  const existing = providers.find(sameEndpoint);
+                  const row =
+                    existing ??
+                    (await onCreateProvider?.({
+                      id: slugify(preset.label),
+                      label: preset.label,
+                      vendor: "compatible",
+                      protocol: "openai_chat",
+                      baseUrl: preset.baseUrl,
+                      defaultModel: preset.model,
+                      models: [],
+                    }));
+                  if (!row) return;
+                  update("provider", row.id);
+                  setEndpointDraft(preset.baseUrl);
+                  setApiKey("");
+                  setConnectionState("idle");
+                  const ready = await onSelectProvider(row.id);
+                  setConnectionState(ready ? "ready" : "idle");
+                  return;
+                }
+                update("provider", value);
+                setApiKey("");
+                setConnectionState("idle");
+                const ready = await onSelectProvider(value);
+                setConnectionState(ready ? "ready" : "idle");
+              }}
+            >
+              <SelectTrigger id="provider" className="assistant-key-select">
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((provider) => (
+                  <SelectItem key={provider.id} value={provider.id}>
+                    {provider.label || provider.id}
+                  </SelectItem>
+                ))}
+                {PROVIDER_PRESETS.map((preset) => (
+                  <SelectItem key={preset.key} value={`preset:${preset.key}`}>
+                    {preset.label}…
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="assistant-key-field">
+            <label className="assistant-key-label" htmlFor="model">Model</label>
+            <Select
+              value={activeProvider?.defaultModel ?? ""}
+              disabled={!providerId || !modelOptions.length}
+              onValueChange={(value) => onSelectModel?.(value)}
+            >
+              <SelectTrigger id="model" className="assistant-key-select">
+                <SelectValue placeholder={modelsState === "loading" ? "Reading…" : "Select model"} />
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {modelsState === "error" && (
+              <button className="assistant-key-link" type="button" onClick={() => setModelsRevision((value) => value + 1)}>
+                Retry
+              </button>
+            )}
+          </div>
+          <div className="assistant-key-field">
+            <label className="assistant-key-label" htmlFor="endpoint">Endpoint</label>
+            <input
+              id="endpoint"
+              className="assistant-key-input"
+              type="url"
+              value={endpointDraft}
+              placeholder="https://api.example.com/v1"
+              onChange={(event) => setEndpointDraft(event.target.value)}
+              onBlur={saveEndpoint}
+            />
+          </div>
+          <div className="assistant-key-field">
+            <label className="assistant-key-label" htmlFor="api-key">API key</label>
+            <div className="assistant-key-secret-row">
+              <input
+                id="api-key"
+                className="assistant-key-input assistant-key-input-secret"
+                type={keyVisible ? "text" : "password"}
+                placeholder="Paste a key"
+                value={apiKey}
+                onChange={(event) => {
+                  setApiKey(event.target.value);
+                  setConnectionState("idle");
+                }}
+              />
+              <button type="button" className="assistant-key-iconbtn" onClick={() => setKeyVisible((value) => !value)} aria-label={keyVisible ? "Hide key" : "Show key"}>
+                <Icon name={keyVisible ? "eye-off" : "eye"} size={18} />
+              </button>
+            </div>
+          </div>
+          <p className="assistant-key-note">The key is written to your operating system's credential store and used for requests to the provider above.</p>
+        </article>
       </div>
-      <p className="dialog-note settings-note">
-        The key is written to your operating system's credential store and used
-        for requests to the provider above. It is not kept in this window.
-      </p>
       {/* Usage, in the shape of the reference table: the model, a segmented
           spend bar against the daily cap, the raw numbers, and the provider's
           list price. The bar is the number a reader can act on; the rest is
