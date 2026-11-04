@@ -67,6 +67,17 @@ const MESSAGE_WINDOW = 40
 /** The conversation, so a refresh opens the thread the reader was in. */
 const TRANSCRIPT_KEY = 'quill:chat-transcript:v1'
 
+/**
+ * The conversation belongs to the document it is about, not to the window.
+ *
+ * One global transcript meant a question about one draft was still on screen
+ * when a different draft was opened, and the assistant looked as though it had
+ * read the new book. The document id in the key gives each draft its own
+ * conversation; switching documents mounts its panel fresh, so the transcript
+ * and the run state start where that document left them.
+ */
+const transcriptKey = (documentId) => `${TRANSCRIPT_KEY}:${documentId}`
+
 const SUGGESTIONS = ['Summarize draft', 'Tighten intro', 'Suggest three titles']
 
 /**
@@ -799,14 +810,27 @@ function describeTransport(transport, task) {
   return `${article} ${task.toLowerCase()} turn, answered by the writing service`
 }
 
-function ChatPanel({ assistantReducedMotion, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, rightOpen, effectsActive, getDraft, onWriteToDocument }) {
+function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, rightOpen, effectsActive, getDraft, onWriteToDocument }) {
   const [messages, setMessages] = useState(() => {
     // Restored on mount so a refresh does not empty the conversation. Vite
     // defines `import.meta.env`; the test loader does not, and tests must not
     // leak transcripts between mounts, so persistence only exists in the app.
     if (import.meta.env) {
       try {
-        const saved = JSON.parse(localStorage.getItem(TRANSCRIPT_KEY) || 'null')
+        const key = documentId ? transcriptKey(documentId) : TRANSCRIPT_KEY
+        let saved = JSON.parse(localStorage.getItem(key) || 'null')
+        // The first version kept one window-wide transcript. Preserve it by
+        // handing it to the first document opened after the upgrade, rather
+        // than leaving that conversation stranded under a key nothing reads.
+        if (!saved?.messages && documentId) {
+          const legacy = localStorage.getItem(TRANSCRIPT_KEY)
+          if (legacy) {
+            const previous = JSON.parse(legacy)
+            localStorage.setItem(key, legacy)
+            localStorage.removeItem(TRANSCRIPT_KEY)
+            saved = previous
+          }
+        }
         if (Array.isArray(saved?.messages) && saved.messages.length) return saved.messages
       } catch (error) {
         console.warn('Could not restore the conversation', error)
@@ -822,11 +846,12 @@ function ChatPanel({ assistantReducedMotion, settings, theme, onSettingsChange, 
   useEffect(() => {
     if (!import.meta.env) return
     try {
-      localStorage.setItem(TRANSCRIPT_KEY, JSON.stringify({ messages }))
+      const key = documentId ? transcriptKey(documentId) : TRANSCRIPT_KEY
+      localStorage.setItem(key, JSON.stringify({ messages }))
     } catch (error) {
       console.warn('Could not save the conversation', error)
     }
-  }, [messages])
+  }, [messages, documentId])
 
   // Declared before the effect below reads them: the dependency array
   // evaluates during render, so a state born further down is a TDZ crash.

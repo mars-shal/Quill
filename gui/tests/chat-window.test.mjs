@@ -100,6 +100,21 @@ assert.equal(
 )
 const MESSAGE_WINDOW = PINNED_WINDOW
 
+test('the transcript is keyed by document', () => {
+  // One window-wide transcript meant a conversation about one draft was still
+  // on screen when another was opened. Persistence now names the document.
+  assert.match(source, /const transcriptKey = \(documentId\) =>/, 'ChatPanel derives a key from the document')
+  assert.match(source, /localStorage\.getItem\(key\)/, 'the restore reads that key')
+  assert.match(source, /localStorage\.setItem\(key,/, 'and the save writes it')
+  assert.match(source, /function ChatPanel\(\{ documentId,/, 'the panel takes the document it belongs to')
+
+  const editor = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'library', 'Editor.jsx'),
+    'utf8',
+  )
+  assert.match(editor, /<ChatPanel key=\{doc\.id\} documentId=\{doc\.id\}/, 'the editor passes and pins the document')
+})
+
 const SENDS = 200
 const EXPECTED_MESSAGES = 1 + SENDS * 2
 
@@ -534,4 +549,34 @@ test('a non-writing turn leaves the document untouched', async () => {
   } finally {
     handlers.api_chat = working
   }
+})
+
+test('a conversation belongs to one document, not the window', async () => {
+  // The reader may keep several drafts open over a day. A question about one
+  // must not follow them into another, which is what the single global
+  // transcript did.
+  const title = root.querySelector('.breadcrumb strong')?.textContent
+  assert.ok(title, 'a document is open before switching')
+  assert.ok(composer(), 'the assistant is mounted in the editor')
+
+  await send('what is missing from this draft?')
+  await tick(400)
+  assert.match(
+    root.querySelector('.chat-scroll').textContent,
+    /what is missing from this draft\?/,
+    'the question lands in the transcript of the open document',
+  )
+
+  await click(root.querySelector('[aria-label="Back to library"]'))
+  await tick(400)
+
+  const tiles = [...root.querySelectorAll('.document-tile:not(.new-document-tile)')]
+  const other = tiles.find((tile) => tile.querySelector('.tile-copy strong')?.textContent !== title)
+  assert.ok(other, 'the library offers a second document to switch to')
+  await click(other)
+  await tick(500)
+
+  const transcript = root.querySelector('.chat-scroll')?.textContent || ''
+  assert.doesNotMatch(transcript, /what is missing from this draft\?/, 'another document has its own conversation')
+  assert.match(transcript, /second pair of eyes/, 'and opens on its own welcome message')
 })
