@@ -13,11 +13,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { calls, clickAndSettle, root, settle, tick, typeAndSettle } from './support/dom-harness.mjs'
+import { awaitBoot, calls, clickAndSettle, root, settle, tick, typeAndSettle } from './support/dom-harness.mjs'
 
 // main.jsx mounts itself into #root on import.
 await import('../src/main.jsx')
-await tick(300)
+await awaitBoot()
 
 const openSettings = async () => {
   const button = root.querySelector('.library-sidebar .sidebar-settings')

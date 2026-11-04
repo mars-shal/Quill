@@ -19,6 +19,7 @@ import assert from 'node:assert/strict'
 // used to be copied into this file, which is how the two render suites drifted:
 // the harness grew a `localStorage` stub and this suite kept the old copy.
 import {
+  awaitBoot,
   calls,
   captureConsoleErrors,
   clickNav,
@@ -55,13 +56,7 @@ const restoreConsole = captureConsoleErrors()
 // boot failure keeps the overlay up and the assertions below fail with the
 // real message after the timeout.
 await import('../src/main.jsx')
-for (let i = 0; i < 80 && !root.querySelector('.app-shell') && !root.querySelector('.boot-layer'); i += 1) {
-  await tick(25)
-}
-for (let i = 0; i < 240 && root.querySelector('.boot-layer'); i += 1) {
-  await tick(25)
-}
-await tick(50)
+await awaitBoot()
 restoreConsole()
 
 
@@ -307,6 +302,47 @@ test('the title is a button, not a contentEditable heading', () => {
 // title component remounts on click and discards the edit — a divergence the
 // mock introduces, not something the app does. Since the app ships real
 // framer-motion, the faithful test is the one that uses it.
+
+// --- toolbar font and size pickers -----------------------------------------
+// The pickers used to show a hardcoded "Inter"/"16" whenever the caret carried
+// no textStyle mark, which read as though the document had been set to Inter at
+// 16. They now read the caret itself and show a placeholder when nothing is
+// applied. The list is the assistant's listbox, with each font row set in the
+// face it names.
+
+const fontTrigger = () => root.querySelector('[aria-label="Font family"]')
+const sizeTrigger = () => root.querySelector('[aria-label="Text size"]')
+
+test('an untouched paragraph is not reported as Inter at 16', () => {
+  assert.ok(fontTrigger(), 'the font picker is in the toolbar')
+  assert.ok(sizeTrigger(), 'the size picker is in the toolbar')
+  assert.equal(fontTrigger().textContent, 'Font', 'no family applied is shown as a prompt')
+  assert.equal(sizeTrigger().textContent, 'Size', 'no size applied is shown as a prompt')
+  assert.ok(fontTrigger().classList.contains('is-placeholder'), 'the placeholder is styled as one')
+  assert.equal(fontTrigger().getAttribute('aria-haspopup'), 'listbox', 'it announces a listbox')
+})
+
+test('the font picker opens a listbox with every face in its own typeface', async () => {
+  fontTrigger().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+  await tick(20)
+
+  const listbox = dom.window.document.body.querySelector('.tool-listbox-popover')
+  assert.ok(listbox, 'the click should open the listbox')
+  assert.equal(listbox.getAttribute('role'), 'listbox', 'the popover is a real listbox')
+
+  const options = [...listbox.querySelectorAll('[role="option"]')]
+  assert.ok(options.length >= 21, `the list should offer the full family set, found ${options.length}`)
+  assert.equal(options[0].textContent.trim(), 'Funnel Display', 'the app face leads the list')
+
+  const georgia = options.find((option) => option.textContent.trim() === 'Georgia')
+  assert.ok(georgia, 'Georgia is one of the offered families')
+  assert.match(georgia.getAttribute('style') || '', /Georgia/, 'each row is set in the face it names')
+
+  // Dismiss again so the next test starts from a closed toolbar.
+  listbox.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await tick(20)
+  assert.equal(dom.window.document.body.querySelector('.tool-listbox-popover'), null, 'Escape closes it')
+})
 
 // --- active-section tracking -------------------------------------------------
 // The scroll handler that tracked the active section read a bounding rect for

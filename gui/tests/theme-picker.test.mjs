@@ -32,10 +32,10 @@ import { dirname, join } from 'node:path'
 
 import {
   assertGone,
+  awaitBoot,
   dom,
   root,
   settle,
-  tick,
   calls,
   handlers,
   themeFixtures,
@@ -51,7 +51,7 @@ themeFixtures.reset([
 ])
 
 await import('../src/main.jsx')
-await tick(250)
+await awaitBoot()
 
 const { window } = dom
 const html = window.document.documentElement

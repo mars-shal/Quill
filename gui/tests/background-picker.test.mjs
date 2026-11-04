@@ -23,6 +23,7 @@ import assert from 'node:assert/strict'
 
 import {
   assertGone,
+  awaitBoot,
   calls,
   dialogFixtures,
   dom,
@@ -68,7 +69,7 @@ window.HTMLCanvasElement.prototype.getContext = () => ({
 })
 
 await import('../src/main.jsx')
-await tick(250)
+await awaitBoot()
 
 const html = window.document.documentElement
 

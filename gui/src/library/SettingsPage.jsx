@@ -657,6 +657,15 @@ function AssistantPanel({
   const [modelsError, setModelsError] = useState("");
   const [modelsRevision, setModelsRevision] = useState(0);
   const providerId = activeProvider?.id;
+  // The page's one primary action scrolls to the key field rather than opening
+  // a dialog: the form is already here, and a modal would hide the provider it
+  // is about to write against.
+  const keyFieldRef = useRef(null);
+  const localToolsRef = useRef(null);
+  const focusKeyField = () => {
+    keyFieldRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    keyFieldRef.current?.focus({ preventScroll: true });
+  };
 
   const [endpointDraft, setEndpointDraft] = useState(activeProvider?.baseUrl ?? "");
   useEffect(() => {
@@ -733,79 +742,113 @@ function AssistantPanel({
 
   return (
     <>
-      <div className="settings-banner assistant-keys-banner" role="note">
-        <span className="settings-banner-mark assistant-keys-mark" aria-hidden="true">
-          <Icon name="check" size={16} />
-        </span>
-        <div>
-          <strong>Your keys are encrypted at rest.</strong>
-          <div className="settings-banner-sub">Stored in your operating system's credential store and never shown in logs.</div>
+      <div className="keys-head">
+        <div className="keys-head-copy">
+          <h2 className="keys-title">API keys</h2>
+          <p className="keys-sub">Manage your BYOK (Bring Your Own Key) vault securely.</p>
         </div>
+        <button type="button" className="keys-primary" onClick={focusKeyField}>
+          <Icon name="plus" size={15} />
+          <span>Add API key</span>
+        </button>
       </div>
 
-      <div className="assistant-keys-header">
-        <div>
-          <h2 className="assistant-keys-title">API keys</h2>
-          <p className="assistant-keys-sub">Bring your own keys and keep them in one place.</p>
+      <div className="keys-banners">
+        <div className="settings-banner keys-banner" role="note">
+          <span className="settings-banner-mark" aria-hidden="true">
+            <Icon name="check" size={16} />
+          </span>
+          <div>
+            <strong>Your keys are encrypted at rest</strong>
+            <div className="settings-banner-sub">API keys are stored in a secure vault and never exposed in logs.</div>
+          </div>
         </div>
-        <span className={`assistant-keys-status ${connectionState === "ready" ? "is-connected" : ""}`}>
-          {connectionState === "ready" ? "Key ready" : connectionState === "error" ? "Add a key" : "Not connected"}
-        </span>
+        <div className="settings-banner keys-banner is-violet" role="note">
+          <span className="settings-banner-mark" aria-hidden="true">
+            <Icon name="sparkle" size={16} />
+          </span>
+          <div className="keys-banner-copy">
+            <strong>Local models need no key</strong>
+            <div className="settings-banner-sub">Ollama and CLI tools answer from this machine, with nothing to paste.</div>
+          </div>
+          <button
+            type="button"
+            className="keys-banner-action"
+            onClick={() => localToolsRef.current?.scrollIntoView({ block: "center", behavior: "smooth" })}
+          >
+            Local tools
+          </button>
+        </div>
       </div>
 
       <div className="assistant-keys-grid">
-        <article className="assistant-key-card">
-          <div className="assistant-key-card-head">
-            <div className="assistant-key-avatar" aria-hidden="true">{providerMonogram(activeProvider)}</div>
-            <div className="assistant-key-meta">
-              <div className="assistant-key-name">{activeProvider?.label || activeProvider?.id || "Provider"}</div>
-              <div className="assistant-key-sub">{activeProvider?.baseUrl || "No endpoint configured"}</div>
+        <article className="keys-card keys-provider-card">
+          <div className="keys-provider-head">
+            <div className="keys-provider-avatar" aria-hidden="true">{providerMonogram(activeProvider)}</div>
+            <div className="keys-provider-meta">
+              <div className="keys-provider-name">{activeProvider?.label || activeProvider?.id || "Provider"}</div>
+              <div className="keys-provider-endpoint">{activeProvider?.baseUrl || "No endpoint configured"}</div>
             </div>
           </div>
-          <div className="assistant-key-tags">
-            <span className={`assistant-key-pill ${connectionState === "ready" ? "is-active" : ""}`}>
+          <div className="keys-provider-status">
+            <span className={`keys-pill ${connectionState === "ready" ? "is-active" : ""}`}>
+              {connectionState === "ready" && <Icon name="check" size={12} />}
               {connectionState === "ready" ? "Active" : "Inactive"}
             </span>
+            <span className="keys-meta-text">
+              {connectionState === "ready" ? "Key ready" : connectionState === "error" ? "Add a key" : "Not connected"}
+            </span>
           </div>
-          <div className="assistant-key-secret">
-            <span className="assistant-key-secret-text">{apiKey && connectionState === "ready" ? "••••••••••••••" : apiKey ? "••••••••••••••" : "sk-••••••••••••"}</span>
-            <button type="button" className="assistant-key-iconbtn" aria-label="Copy key">
-              <Icon name="copy" size={18} />
+          <div className="keys-secret">
+            <span className="keys-secret-text">
+              {apiKey
+                ? keyVisible
+                  ? apiKey
+                  : "•".repeat(12)
+                : "sk-••••••••••••"}
+            </span>
+            <button
+              type="button"
+              className="keys-iconbtn"
+              onClick={() => setKeyVisible((value) => !value)}
+              aria-label={keyVisible ? "Hide key" : "Show key"}
+            >
+              <Icon name={keyVisible ? "eye-off" : "eye"} size={17} />
+            </button>
+            <button
+              type="button"
+              className="keys-iconbtn"
+              onClick={() => {
+                if (apiKey) navigator.clipboard?.writeText(apiKey);
+              }}
+              disabled={!apiKey}
+              aria-label="Copy key"
+            >
+              <Icon name="copy" size={17} />
             </button>
           </div>
-          <div className="assistant-key-actions">
-            <Button className="assistant-key-btn" type="button" onClick={connect} disabled={!activeProvider}>
+          <div className="keys-actions">
+            <Button className="keys-btn keys-btn-solid" type="button" onClick={connect} disabled={!activeProvider}>
               Connect provider
             </Button>
             <Button
-              className="soft-button"
+              className="keys-btn"
               type="button"
               onClick={onDisconnect}
               disabled={!activeProvider || connectionState !== "ready"}
             >
               Remove key
             </Button>
-            <Button
-              className="assistant-key-iconbtn assistant-key-remove"
-              type="button"
-              onClick={onDisconnect}
-              disabled={!activeProvider || connectionState !== "ready"}
-              aria-label="Remove key"
-            >
-              <Icon name="trash" size={18} />
-            </Button>
           </div>
         </article>
 
-        <article className="assistant-key-card assistant-key-card-form">
-          <div className="assistant-key-card-head">
-            <div>
-              <div className="assistant-key-card-title">Add or update key</div>
-              <div className="assistant-key-card-sub">Configure provider, model, endpoint and key.</div>
-            </div>
+        <article className="keys-card keys-form-card">
+          <div className="keys-card-head">
+            <h3 className="keys-card-title">Add or update key</h3>
+            <p className="keys-card-sub">Configure the provider, model, endpoint and key.</p>
           </div>
-          <div className="assistant-key-field">
-            <label className="assistant-key-label" htmlFor="provider">Provider</label>
+          <div className="keys-field">
+            <label className="keys-label" htmlFor="provider">Provider</label>
             <Select
               value={activeProvider?.id ?? ""}
               onValueChange={async (value) => {
@@ -842,7 +885,7 @@ function AssistantPanel({
                 setConnectionState(ready ? "ready" : "idle");
               }}
             >
-              <SelectTrigger id="provider" className="assistant-key-select">
+              <SelectTrigger id="provider" className="keys-select">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent>
@@ -859,14 +902,14 @@ function AssistantPanel({
               </SelectContent>
             </Select>
           </div>
-          <div className="assistant-key-field">
-            <label className="assistant-key-label" htmlFor="model">Model</label>
+          <div className="keys-field">
+            <label className="keys-label" htmlFor="model">Model</label>
             <Select
               value={activeProvider?.defaultModel ?? ""}
               disabled={!providerId || !modelOptions.length}
               onValueChange={(value) => onSelectModel?.(value)}
             >
-              <SelectTrigger id="model" className="assistant-key-select">
+              <SelectTrigger id="model" className="keys-select">
                 <SelectValue placeholder={modelsState === "loading" ? "Reading…" : "Select model"} />
               </SelectTrigger>
               <SelectContent>
@@ -878,16 +921,16 @@ function AssistantPanel({
               </SelectContent>
             </Select>
             {modelsState === "error" && (
-              <button className="assistant-key-link" type="button" onClick={() => setModelsRevision((value) => value + 1)}>
+              <button className="keys-link" type="button" onClick={() => setModelsRevision((value) => value + 1)}>
                 Retry
               </button>
             )}
           </div>
-          <div className="assistant-key-field">
-            <label className="assistant-key-label" htmlFor="endpoint">Endpoint</label>
+          <div className="keys-field">
+            <label className="keys-label" htmlFor="endpoint">Endpoint</label>
             <input
               id="endpoint"
-              className="assistant-key-input"
+              className="keys-input"
               type="url"
               value={endpointDraft}
               placeholder="https://api.example.com/v1"
@@ -895,12 +938,13 @@ function AssistantPanel({
               onBlur={saveEndpoint}
             />
           </div>
-          <div className="assistant-key-field">
-            <label className="assistant-key-label" htmlFor="api-key">API key</label>
-            <div className="assistant-key-secret-row">
+          <div className="keys-field">
+            <label className="keys-label" htmlFor="api-key">API key</label>
+            <div className="keys-secret-row">
               <input
                 id="api-key"
-                className="assistant-key-input assistant-key-input-secret"
+                ref={keyFieldRef}
+                className="keys-input keys-input-secret"
                 type={keyVisible ? "text" : "password"}
                 placeholder="Paste a key"
                 value={apiKey}
@@ -909,14 +953,21 @@ function AssistantPanel({
                   setConnectionState("idle");
                 }}
               />
-              <button type="button" className="assistant-key-iconbtn" onClick={() => setKeyVisible((value) => !value)} aria-label={keyVisible ? "Hide key" : "Show key"}>
-                <Icon name={keyVisible ? "eye-off" : "eye"} size={18} />
+              <button type="button" className="keys-iconbtn" onClick={() => setKeyVisible((value) => !value)} aria-label={keyVisible ? "Hide key" : "Show key"}>
+                <Icon name={keyVisible ? "eye-off" : "eye"} size={17} />
               </button>
             </div>
           </div>
-          <p className="assistant-key-note">The key is written to your operating system's credential store and used for requests to the provider above.</p>
+          <p className="keys-note">The key is written to your operating system's credential store and used for requests to the provider above.</p>
         </article>
       </div>
+      {/* One card for the behaviour rows, the way the reference closes its keys
+          page: a titled panel whose rows are divided rather than spaced. */}
+      <div className="keys-card keys-rows-card" ref={localToolsRef}>
+        <div className="keys-card-head">
+          <h3 className="keys-card-title">How keys are used</h3>
+          <p className="keys-card-sub">Usage, local tools and anything already installed on this machine.</p>
+        </div>
       {/* Usage, in the shape of the reference table: the model, a segmented
           spend bar against the daily cap, the raw numbers, and the provider's
           list price. The bar is the number a reader can act on; the rest is
@@ -926,7 +977,7 @@ function AssistantPanel({
         <div className="settings-row-copy">
           <span className="settings-row-label">Usage</span>
           <small>
-            {usage
+            {usage?.date && Number(usage.limit) > 0
               ? `Tokens used today (${usage.date}), per model, against ${Number(usage.limit).toLocaleString()}.`
               : "Tokens used today against the daily limit."}
           </small>
@@ -1043,6 +1094,7 @@ function AssistantPanel({
         );
       })}
       </>)}
+      </div>
     </>
   );
 }

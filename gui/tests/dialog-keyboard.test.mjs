@@ -21,6 +21,7 @@ import test from 'node:test'
 import {
   activeElementLabel,
   assertGone,
+  awaitBoot,
   dom,
   root,
   settle,
@@ -29,7 +30,7 @@ import {
 
 // main.jsx mounts itself into #root on import.
 await import('../src/main.jsx')
-await tick(250)
+await awaitBoot()
 
 const { window } = dom
 

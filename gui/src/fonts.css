@@ -73,3 +73,289 @@
   font-display: swap;
   src: url('/fonts/FunnelDisplay.woff2') format('woff2');
 }
+
+/* --- Font-picker faces ------------------------------------------------------
+ *
+ * The editor's font list keeps the familiar Word names, because that is what
+ * the picker is for: a writer looking for "Georgia" should find "Georgia".
+ * On Linux, though, most of those names resolve through fontconfig to the same
+ * DejaVu face -- and "Impact", "Calibri" and "Verdana" all rendered alike, so
+ * picking one looked like a no-op. Defining a web font under the same family
+ * name makes the name mean the same thing on every machine.
+ *
+ * The right-hand names below are the metric-compatible or closest open
+ * equivalents, bundled from Google Fonts (SIL Open Font License). Each file is
+ * the Latin subset only, matching the faces above; other scripts fall back to
+ * the system stack per glyph.
+ *
+ *   Arial            -> Arimo
+ *   Arial Black      -> Archivo Black
+ *   Calibri          -> Carlito
+ *   Calibri Light    -> Lato
+ *   Cambria          -> Caladea
+ *   Comic Sans MS    -> Comic Neue
+ *   Consolas         -> Inconsolata
+ *   Courier New      -> Cousine
+ *   Franklin Gothic  -> Libre Franklin
+ *   Garamond         -> EB Garamond
+ *   Georgia          -> Gelasio
+ *   Impact           -> Anton
+ *   Lucida Sans      -> Source Sans 3
+ *   Palatino Linotype-> Alegreya
+ *   Segoe UI         -> Open Sans
+ *   Tahoma           -> PT Sans
+ *   Times New Roman  -> Tinos
+ *   Trebuchet MS     -> Fira Sans
+ *   Verdana          -> Atkinson Hyperlegible
+ */
+@font-face {
+  /* Arimo — stands in for Arial. */
+  font-family: 'Arial';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/arial-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Archivo Black — stands in for Arial Black. */
+  font-family: 'Arial Black';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/arial-black-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Carlito — stands in for Calibri. */
+  font-family: 'Calibri';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/calibri-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Carlito — stands in for Calibri. */
+  font-family: 'Calibri';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/calibri-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Lato — stands in for Calibri Light. */
+  font-family: 'Calibri Light';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/calibri-light-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Lato — stands in for Calibri Light. */
+  font-family: 'Calibri Light';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/calibri-light-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Caladea — stands in for Cambria. */
+  font-family: 'Cambria';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/cambria-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Caladea — stands in for Cambria. */
+  font-family: 'Cambria';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/cambria-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Comic Neue — stands in for Comic Sans MS. */
+  font-family: 'Comic Sans MS';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/comic-sans-ms-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Comic Neue — stands in for Comic Sans MS. */
+  font-family: 'Comic Sans MS';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/comic-sans-ms-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Inconsolata — stands in for Consolas. */
+  font-family: 'Consolas';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/consolas-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Cousine — stands in for Courier New. */
+  font-family: 'Courier New';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/courier-new-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Cousine — stands in for Courier New. */
+  font-family: 'Courier New';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/courier-new-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Libre Franklin — stands in for Franklin Gothic. */
+  font-family: 'Franklin Gothic';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/franklin-gothic-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* EB Garamond — stands in for Garamond. */
+  font-family: 'Garamond';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/garamond-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Gelasio — stands in for Georgia. */
+  font-family: 'Georgia';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/georgia-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Anton — stands in for Impact. */
+  font-family: 'Impact';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/impact-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Source Sans 3 — stands in for Lucida Sans. */
+  font-family: 'Lucida Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/lucida-sans-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Alegreya — stands in for Palatino Linotype. */
+  font-family: 'Palatino Linotype';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/palatino-linotype-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Open Sans — stands in for Segoe UI. */
+  font-family: 'Segoe UI';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/segoe-ui-400-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* PT Sans — stands in for Tahoma. */
+  font-family: 'Tahoma';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/tahoma-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* PT Sans — stands in for Tahoma. */
+  font-family: 'Tahoma';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/tahoma-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Tinos — stands in for Times New Roman. */
+  font-family: 'Times New Roman';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/times-new-roman-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Tinos — stands in for Times New Roman. */
+  font-family: 'Times New Roman';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/times-new-roman-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Fira Sans — stands in for Trebuchet MS. */
+  font-family: 'Trebuchet MS';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/trebuchet-ms-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Fira Sans — stands in for Trebuchet MS. */
+  font-family: 'Trebuchet MS';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/trebuchet-ms-700.woff2') format('woff2');
+}
+
+@font-face {
+  /* Atkinson Hyperlegible — stands in for Verdana. */
+  font-family: 'Verdana';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/verdana-400.woff2') format('woff2');
+}
+
+@font-face {
+  /* Atkinson Hyperlegible — stands in for Verdana. */
+  font-family: 'Verdana';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/verdana-700.woff2') format('woff2');
+}

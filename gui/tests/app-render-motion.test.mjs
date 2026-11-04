@@ -25,6 +25,7 @@ import {
   dom,
   root,
   tick,
+  awaitBoot,
   calls,
   consoleErrors,
   captureConsoleErrors,
@@ -39,9 +40,10 @@ import {
 
 const restoreConsole = captureConsoleErrors()
 
-// main.jsx mounts itself into #root on import.
+// main.jsx mounts itself into #root on import. Boot is async, so wait for the
+// shell and for the boot overlay to clear rather than guessing a tick count.
 await import('../src/main.jsx')
-await tick(250)
+await awaitBoot()
 restoreConsole()
 
 // --- assertions -------------------------------------------------------------

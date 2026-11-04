@@ -298,6 +298,13 @@ const FIXED_COLORS = {
   '.presence': 'semantic status dots, fixed in every theme',
   ':root': 'the token declarations themselves',
   '@import': 'the font import',
+  // The violet note panel is the reference artboard's managed-credits offer, not
+  // a surface any theme recolours: it is one fixed promotional block shown the
+  // same in every theme, so its tint, its tile and its button are literal. The
+  // green panel beside it does take tokens, because that one is about the vault
+  // this app owns.
+  '#settings-assistant .keys-banner.is-violet': 'fixed promotional tint, identical in every theme',
+  '#settings-assistant .keys-banner-action': 'the button inside that fixed tint',
   // The `#000` in `--accent-hover` is not a palette colour but the "mix toward
   // black" end of a color-mix, which is how the token darkens itself. The accent
   // it derives from is themed; the black it mixes with is arithmetic. It moved

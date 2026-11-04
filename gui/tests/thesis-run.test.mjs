@@ -29,6 +29,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  awaitBoot,
   captureConsoleErrors,
   clickAndSettle,
   emit,
@@ -61,7 +62,7 @@ const mentions = (re) => runLines().filter((line) => re.test(line)).length
 
 const restoreConsole = captureConsoleErrors()
 await import('../src/main.jsx')
-await settle()
+await awaitBoot()
 restoreConsole()
 
 /**

@@ -16,10 +16,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { assertGone, dom, root, settle, tick } from './support/dom-harness.mjs'
+import { assertGone, awaitBoot, dom, root, settle } from './support/dom-harness.mjs'
 
 await import('../src/main.jsx')
-await tick(250)
+await awaitBoot()
 
 const { window } = dom
 

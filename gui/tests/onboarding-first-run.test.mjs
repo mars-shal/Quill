@@ -16,14 +16,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  awaitBoot,
   clickAndSettle,
   handlers,
   mockFramerMotion,
   onboardingFixtures,
   providerFixtures,
   root,
-  settle,
-  tick,
 } from './support/dom-harness.mjs'
 
 mockFramerMotion()
@@ -46,8 +45,7 @@ const workingSettings = handlers.set_settings
 handlers.set_settings = (args) => { settingsCalls.push(args); return workingSettings(args) }
 
 await import('../src/main.jsx')
-await settle()
-await tick(120)
+await awaitBoot()
 
 const card = () => root.querySelector('.onboarding-layer')
 const next = () => root.querySelector('.onboarding-next')

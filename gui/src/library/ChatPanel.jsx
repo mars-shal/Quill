@@ -20,6 +20,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Icon } from '../Icon.jsx'
 import { hasWebGL2 } from '../platform/capabilities.js'
@@ -97,9 +98,10 @@ const HIGHLIGHT_TAGS = [
   { color: '#fecaca', name: 'Cut later', key: '4' },
 ]
 
-// The Word defaults, requested wholesale, plus the app's own faces. These are
-// applied as inline `font-family`, so whatever the system (or fontconfig's
-// metric substitutes) provides renders -- the picker offers names, not files.
+// The Word defaults, requested wholesale, plus the app's own faces. Each name
+// has a bundled face of its own (see `fonts.css`), so a family renders the same
+// way on every machine instead of collapsing into whatever fontconfig picks for
+// an unavailable Windows font.
 const READING_FONTS = [
   'Funnel Display',
   'Arial', 'Arial Black', 'Calibri', 'Calibri Light', 'Cambria', 'Comic Sans MS',
@@ -315,6 +317,155 @@ function useSelectionTick(editor) {
 }
 
 /**
+ * A listbox shaped like the assistant's model picker.
+ *
+ * The editor toolbar's font and size controls used to be Radix selects. The
+ * reference designs want the same card, rows and selection dot as the model
+ * picker, and a font list is only useful if each row is set in its own face, so
+ * this is hand-built: a content-fit trigger plus a portalled popover.
+ *
+ * It is portalled rather than absolutely positioned because the toolbar's inner
+ * row scrolls horizontally (`overflow-x: auto`), and a scrolling box clips a
+ * child that reaches below it. Fixed coordinates from the trigger's rect keep
+ * the popover above the page no matter how far the toolbar is scrolled.
+ *
+ * The contract the native control used to provide lives here: `role="listbox"`
+ * and `role="option"` with `aria-selected`, `aria-haspopup`/`aria-expanded`, the
+ * first (or selected) row focused on open, Arrow/Home/End movement, Escape to
+ * close back to the trigger, and a press outside to dismiss.
+ */
+function ToolbarSelect({
+  label,
+  value,
+  placeholder,
+  options,
+  onChange,
+  optionStyle,
+}) {
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const place = () => {
+      const box = triggerRef.current?.getBoundingClientRect()
+      if (!box) return
+      // Keep the card on screen when the toolbar is scrolled and the control sits
+      // near the right edge; the popover is wider than its trigger on purpose.
+      const width = Math.max(box.width, 168)
+      const left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8))
+      setRect({ left, top: box.bottom + 6, width: box.width })
+    }
+    place()
+
+    const frame = requestAnimationFrame(() => {
+      const list = popoverRef.current
+      const selected = list?.querySelector('[role="option"][aria-selected="true"]')
+      ;(selected || list?.querySelector('[role="option"]'))?.focus()
+    })
+
+    const onPointerDown = (event) => {
+      if (popoverRef.current?.contains(event.target)) return
+      if (triggerRef.current?.contains(event.target)) return
+      setOpen(false)
+    }
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  /** Arrow keys walk the rows, Home/End jump, wrapping at both ends. */
+  const moveFocus = (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+    const rows = [...(popoverRef.current?.querySelectorAll('[role="option"]') || [])]
+    if (!rows.length) return
+    event.preventDefault()
+    const current = rows.indexOf(document.activeElement)
+    let next
+    if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = rows.length - 1
+    else if (event.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % rows.length
+    else next = current <= 0 ? rows.length - 1 : current - 1
+    rows[next]?.focus()
+  }
+
+  const choose = (next) => {
+    setOpen(false)
+    onChange(next)
+  }
+
+  const shown = value || placeholder
+
+  return (
+    <div className="tool-listbox" data-open={open ? '' : undefined}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={`tool-listbox-trigger${value ? '' : ' is-placeholder'}`}
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={value ? undefined : `${placeholder} — document default`}
+        onMouseDown={(event) => event.preventDefault()}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={() => setOpen((isOpen) => !isOpen)}
+      >
+        <span className="tool-listbox-name">{shown}</span>
+      </button>
+      <Icon name="down" size={11} />
+      {open && rect && createPortal(
+        <div
+          className="tool-listbox-popover"
+          role="listbox"
+          aria-label={label}
+          ref={popoverRef}
+          style={{ left: rect.left, top: rect.top, minWidth: Math.max(rect.width, 168) }}
+          onKeyDown={moveFocus}
+        >
+          {options.map((option) => {
+            const selected = option.value === value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`tool-listbox-option${selected ? ' is-selected' : ''}`}
+                style={optionStyle ? optionStyle(option.value) : undefined}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => choose(option.value)}
+              >
+                <span className="tool-listbox-option-name">{option.label}</span>
+                {selected && <i className="tool-listbox-dot" aria-hidden="true" />}
+              </button>
+            )
+          })}
+        </div>,
+        document.body,
+      )}
+    </div>
+  )
+}
+
+/**
  * The editor formatting bar.
  *
  * Modelled on a declarative tool list rather than hand-written buttons: each
@@ -323,7 +474,7 @@ function useSelectionTick(editor) {
  * plus TextStyle and Highlight. Alignment and tables would need extra
  * extensions and are deliberately not stubbed in.
  */
-function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpen, onToggleTags, applyTag, onInsertImage, onInsertMath }) {
+function FormatToolbar({ editor, runCommand, onFont, onSize, tagsOpen, onToggleTags, applyTag, onInsertImage, onInsertMath }) {
   useSelectionTick(editor)
   // Before the early return: hooks must run unconditionally.
   const [insertChoice, setInsertChoice] = useState('')
@@ -348,13 +499,27 @@ function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpe
       ? `ls-${currentLetterSpacing}`
       : ''
 
-  // A family or size applied elsewhere can be absent from the fixed lists;
-  // Radix renders a value with no matching item as blank, so the applied
-  // value joins its own list instead of vanishing from the trigger.
+  // Read the family and size straight off the caret, the same way alignment
+  // and spacing are read. Keeping them in local state meant the picker showed
+  // whatever was last applied (and "Inter"/"16" before anything was), so it
+  // looked pre-selected even in an untouched paragraph. An empty value is the
+  // honest answer: no explicit family or size is applied, and the trigger
+  // shows its placeholder rather than inventing one.
+  const textStyle = editor.getAttributes('textStyle')
+  const currentFont = String(textStyle.fontFamily || '')
+    .replace(/["']/g, '')
+    .split(',')[0]
+    .trim()
+  // Stored without units so it matches the fixed list; the unit is added back
+  // when the command runs.
+  const currentSize = String(textStyle.fontSize || '').replace('px', '').trim()
+
+  // A family or size applied elsewhere can be absent from the fixed lists; the
+  // applied value joins its own list instead of being blank in the trigger.
   const fontOptions = [...READING_FONTS]
-  if (font && !fontOptions.includes(font)) fontOptions.unshift(font)
+  if (currentFont && !fontOptions.includes(currentFont)) fontOptions.unshift(currentFont)
   const sizeOptions = [...READING_SIZES]
-  if (size && !sizeOptions.includes(size)) sizeOptions.unshift(size)
+  if (currentSize && !sizeOptions.includes(currentSize)) sizeOptions.unshift(currentSize)
 
   const tools = [
     { kind: 'group', label: 'Heading', items: [1, 2, 3].map((level) => ({
@@ -402,34 +567,23 @@ function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpe
   return (
     <div className="format-toolbar-inner" role="toolbar" aria-label="Formatting">
       <div className="tool-selects">
-        <Select value={font} onValueChange={onFont}>
-          <SelectTrigger
-            className="tool-select"
-            aria-label="Font family"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {fontOptions.map((name) => (
-              <SelectItem key={name} value={name}>{name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={size} onValueChange={onSize}>
-          <SelectTrigger
-            className="tool-select"
-            aria-label="Text size"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {sizeOptions.map((value) => (
-              <SelectItem key={value} value={value}>{value}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ToolbarSelect
+          label="Font family"
+          value={currentFont}
+          placeholder="Font"
+          options={fontOptions.map((name) => ({ value: name, label: name }))}
+          onChange={onFont}
+          // Each row is set in its own face, so the list is a specimen rather
+          // than a column of names that all look alike.
+          optionStyle={(name) => ({ fontFamily: `'${name}', sans-serif` })}
+        />
+        <ToolbarSelect
+          label="Text size"
+          value={currentSize}
+          placeholder="Size"
+          options={sizeOptions.map((value) => ({ value, label: value }))}
+          onChange={onSize}
+        />
         <Select value={currentAlign} onValueChange={(value) => runCommand('setTextAlign', value)}>
           <SelectTrigger
             className="tool-select"

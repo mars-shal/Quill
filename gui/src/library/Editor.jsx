@@ -23,8 +23,6 @@ import { DocumentEditor } from '../editor/DocumentEditor.jsx'
 import { useCollaborativeDocument } from '../editor/useCollaborativeDocument.js'
 import {
   collectHeadings,
-  getParentId,
-  hasChildren,
   pickActiveHeading,
   SECTION_LEVEL,
   sectionNumber,
@@ -124,7 +122,6 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
   const scrollRef = useRef(null)
   const lastRange = useRef(null)
   const [activeHeading, setActiveHeading] = useState(null)
-  const [folded, setFolded] = useState({})
   const [bubble, setBubble] = useState(null)
   const [tagsOpen, setTagsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -132,9 +129,6 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
   // the same dialog the Export button opens. Keyed on the request counter so a
   // second download of the same document opens it again after a close.
   useEffect(() => { if (exportRequest) setExportOpen(true) }, [exportRequest])
-  const [toolbarFont, setToolbarFont] = useState('Inter')
-  const [toolbarSize, setToolbarSize] = useState('16')
-
   // The document body lives in a Yjs document, so the editor is collaborative
   // capable even though only local persistence is wired up so far.
   const {
@@ -170,7 +164,6 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
 
   useEffect(() => {
     setActiveHeading(null)
-    setFolded({})
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }, [doc.id])
 
@@ -282,13 +275,11 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
     const editor = tiptap
     if (!editor) return
     editor.chain().focus()[command](value).run()
-    updateToolbar()
   }, [tiptap])
 
-  // The font and size pickers used to write local state and nothing else --
-  // the value never reached the document, which is why size "did not work".
-  // Both dispatch through runCommand, which reads the state back from the
-  // editor afterwards, so the toolbar always shows what the document has.
+  // Both dispatch through runCommand; the toolbar reads the family and size
+  // back off the document itself (see FormatToolbar), so the picker reflects
+  // the caret rather than the last value clicked here.
   const applyFontFamily = (value) => runCommand('setFontFamily', value)
   const applyFontSize = (value) => runCommand('setFontSize', `${value}px`)
 
@@ -316,25 +307,6 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
     const latex = window.prompt('LaTeX formula', 'E = mc^2')
     if (latex?.trim()) runCommand('insertInlineMath', { latex: latex.trim() })
   }, [runCommand])
-
-  const updateToolbar = useCallback(() => {
-    if (!tiptap) return
-    try {
-      // Read the family back exactly as it was applied. The old regex matched
-      // only four names, so every other font displayed as "Inter" while
-      // applying correctly -- quotes and font stacks are stripped, nothing
-      // else is rewritten.
-      const applied = String(tiptap.getAttributes('textStyle').fontFamily || '')
-      const raw = applied.replace(/["']/g, '').split(',')[0].trim()
-      setToolbarFont(raw || 'Inter')
-      // Stored without units so it matches the <option value> list; the unit is
-      // added back when the command runs.
-      setToolbarSize(String(tiptap.getAttributes('textStyle').fontSize || '16').replace('px', ''))
-    } catch (_) {
-      setToolbarFont('Inter')
-      setToolbarSize('16')
-    }
-  }, [])
 
   const goToHeading = useCallback((id) => {
     const heading = headings.find((item) => item.id === id)
@@ -511,7 +483,7 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
       '--shell-left': leftOpen ? '282px' : '0px',
       '--shell-right': rightOpen ? '348px' : '0px',
     }}
-  ><aside className="editor-panel left-panel" inert={leftOpen ? undefined : ''} aria-label="Sections"><div className="panel-inner"><div className="panel-head"><span className="panel-mark"><img src="/quill-mark.png" width="185" height="194" alt="" /></span></div><div className="panel-section outline-section"><div className="group-label">Sections</div><nav className="outline" aria-label="Document sections">{headings.length ? headings.map((heading, index) => { const parentId = getParentId(headings, index); const hidden = parentId && folded[parentId]; const number = heading.level === SECTION_LEVEL ? sectionNumber(headings, index) : null; return <div key={heading.id} className={`outline-item depth-${heading.level}`} style={{ pointerEvents: hidden ? 'none' : 'auto' }}><button className={`outline-row ${activeHeading === heading.id ? 'active' : ''}`} type="button" onClick={() => goToHeading(heading.id)}>{hasChildren(headings, index) ? <span className={`fold ${folded[heading.id] ? 'is-folded' : ''}`} onClick={(event) => { event.stopPropagation(); setFolded((current) => ({ ...current, [heading.id]: !current[heading.id] })) }}><Icon name="down" size={12} /></span> : heading.level === 'h3' ? <span className="child-dot" /> : <span className="fold-spacer" />}<span>{number ? `${number}. ` : ''}{heading.text}</span></button></div> }) : <div className="empty-outline">Add a heading to build your outline.</div>}</nav><button className="add-section" type="button" onClick={addSection}><Icon name="plus" size={14} /><span>Add section</span></button></div><div className="panel-section collaborators" hidden><div className="group-label">Collaborators</div><div className="collaborator"><span className="avatar orange">AM</span><span><strong>Ava Morgan</strong><small>Editor</small></span><i className="presence online" /></div><div className="collaborator"><span className="avatar green">JR</span><span><strong>Jon Reyes</strong><small>Writer</small></span><i className="presence away" /></div><div className="collaborator"><span className="avatar purple">SK</span><span><strong>Sora Kim</strong><small>Review</small></span><i className="presence online" /></div><button className="invite" type="button"><span><Icon name="plus" size={13} /></span>Invite people</button></div></div></aside><div className="editor-center"><header className="editor-topbar"><div className="topbar-left"><button className="icon-button" type="button" aria-label="Back to library" onClick={onBack}><Icon name="back" size={16} /></button><button className={`panel-toggle ${leftOpen ? 'on' : ''}`} type="button" aria-label="Toggle Sections panel" aria-pressed={leftOpen} onClick={() => onPanel('left', !leftOpen)}><Icon name="panel" size={15} /></button><div className="breadcrumb"><button type="button" onClick={onBack}>Library</button><span>›</span><button type="button" onClick={onBack}>{doc.cat}</button><span>›</span><strong>{doc.title}</strong><button className="details-button" type="button" aria-label="Edit document details" onClick={() => onDetails(doc.id)}><Icon name="details" size={14} /><span>Details</span></button></div></div><div className="topbar-right"><button className={`panel-toggle ${zen ? 'on' : ''}`} type="button" aria-label="Toggle Zen mode" aria-pressed={zen} onClick={onZen}><Icon name="expand" size={15} /></button><button className={`panel-toggle ${rightOpen ? 'on' : ''}`} type="button" aria-label="Toggle Conclave panel" aria-pressed={rightOpen} onClick={() => onPanel('right', !rightOpen)}><Icon name="sparkle" size={15} /></button><span className="topbar-divider" /><span className={`save-state ${settings.autosave ? '' : 'paused'}`}><Icon name="cloud" size={14} />{settings.autosave ? 'Saved' : 'Paused'}</span><button className="publish-button" type="button" onClick={() => setExportOpen(true)}><Icon name="draft" size={13} /><span>Export</span></button></div></header><div className="editor-scroll" ref={scrollRef}><div className="format-toolbar"><FormatToolbar editor={tiptap} runCommand={runCommand} font={toolbarFont} onFont={applyFontFamily} size={toolbarSize} onSize={applyFontSize} tagsOpen={tagsOpen} onToggleTags={() => setTagsOpen((value) => !value)} applyTag={applyTag} onInsertImage={insertImage} onInsertMath={insertMath} /></div><article className="editor-page" ref={editorRef} onMouseUp={captureSelection} onKeyUp={captureSelection}><EditableTitle title={doc.title} onRename={onTitleChange} /><div className="document-meta">{doc.cat} · {stats.words.toLocaleString()} words · Edited {doc.edited}</div><DocumentEditor editor={tiptap} ready={editorReady} /></article></div><footer className="editor-status"><div>{settings.wordCount && <><span>{stats.words.toLocaleString()} words</span><span>·</span><span>{stats.chars.toLocaleString()} characters</span><span>·</span><span>{stats.paragraphs} paragraphs</span><span>·</span><span>{stats.read} min read</span><span>·</span></>}<span>{settings.autosave ? 'Saved' : 'Paused'}</span></div><div className="status-hints"><button type="button" onClick={() => onPanel('left', !leftOpen)}><kbd>⌘\</kbd> Sections</button><button type="button" onClick={() => onPanel('right', !rightOpen)}><kbd>⌘J</kbd> Assistant</button></div></footer></div><aside className="editor-panel right-panel" inert={rightOpen ? undefined : ''}><ChatPanel assistantReducedMotion={assistantReducedMotion} settings={settings} theme={theme} onSettingsChange={onSettingsChange} activeProvider={activeProvider} onSelectModel={onSelectModel} onOpenSettings={onOpenSettings} rightOpen={rightOpen} effectsActive={view === 'editor'} getDraft={getDraft} onWriteToDocument={appendToDocument} /></aside>{bubble && <div className="selection-bubble" role="toolbar" aria-label="Selected text formatting" style={{ left: bubble.left, top: bubble.top }} onMouseDown={(event) => event.preventDefault()}><button type="button" onClick={() => runCommand('toggleBold')}><strong>B</strong></button><button type="button" onClick={() => runCommand('toggleItalic')}><em>I</em></button><button type="button" onClick={() => runCommand('toggleHighlight', { color: '#fff3a3' })}><Icon name="tag" size={14} /></button><span /><button type="button" onClick={() => runCommand('undo')}><Icon name="undo" size={14} /></button></div>}{tagsOpen && <div className="tag-popover" role="menu"><div className="tag-popover-head">Highlight a thought</div>{HIGHLIGHT_TAGS.map((tag) => <button key={tag.name} type="button" role="menuitem" onClick={() => applyTag(tag.color)}><span className="tag-swatch" style={{ background: tag.color }} />{tag.name}<kbd>⌘{tag.key}</kbd></button>)}</div>}{exportOpen && <ExportDialog key="export-dialog" document={doc} getPayload={getExportPayload} author={author} onClose={() => setExportOpen(false)} reducedMotion={reducedMotion} />}</main>
+  ><aside className="editor-panel left-panel" inert={leftOpen ? undefined : ''} aria-label="Sections"><div className="panel-inner"><div className="panel-head"><span className="panel-mark"><img src="/quill-mark.png" width="185" height="194" alt="" /></span></div><div className="panel-section outline-section"><div className="group-label">Sections</div><nav className="outline" aria-label="Document sections">{headings.length ? headings.map((heading, index) => { const number = heading.level === SECTION_LEVEL ? sectionNumber(headings, index) : null; return <div key={heading.id} className={`outline-item depth-${heading.level}`}><button className={`outline-row ${activeHeading === heading.id ? 'active' : ''}`} type="button" onClick={() => goToHeading(heading.id)}>{heading.level === 'h3' ? <span className="child-dot" /> : <span className="fold-spacer" />}<span>{number ? `${number}. ` : ''}{heading.text}</span></button></div> }) : <div className="empty-outline">Add a heading to build your outline.</div>}</nav><button className="add-section" type="button" onClick={addSection}><Icon name="plus" size={14} /><span>Add section</span></button></div><div className="panel-section collaborators" hidden><div className="group-label">Collaborators</div><div className="collaborator"><span className="avatar orange">AM</span><span><strong>Ava Morgan</strong><small>Editor</small></span><i className="presence online" /></div><div className="collaborator"><span className="avatar green">JR</span><span><strong>Jon Reyes</strong><small>Writer</small></span><i className="presence away" /></div><div className="collaborator"><span className="avatar purple">SK</span><span><strong>Sora Kim</strong><small>Review</small></span><i className="presence online" /></div><button className="invite" type="button"><span><Icon name="plus" size={13} /></span>Invite people</button></div></div></aside><div className="editor-center"><header className="editor-topbar"><div className="topbar-left"><button className="icon-button" type="button" aria-label="Back to library" onClick={onBack}><Icon name="back" size={16} /></button><button className={`panel-toggle ${leftOpen ? 'on' : ''}`} type="button" aria-label="Toggle Sections panel" aria-pressed={leftOpen} onClick={() => onPanel('left', !leftOpen)}><Icon name="panel" size={15} /></button><div className="breadcrumb"><button type="button" onClick={onBack}>Library</button><span>›</span><button type="button" onClick={onBack}>{doc.cat}</button><span>›</span><strong>{doc.title}</strong><button className="details-button" type="button" aria-label="Edit document details" onClick={() => onDetails(doc.id)}><Icon name="details" size={14} /><span>Details</span></button></div></div><div className="topbar-right"><button className={`panel-toggle ${zen ? 'on' : ''}`} type="button" aria-label="Toggle Zen mode" aria-pressed={zen} onClick={onZen}><Icon name="expand" size={15} /></button><button className={`panel-toggle ${rightOpen ? 'on' : ''}`} type="button" aria-label="Toggle Conclave panel" aria-pressed={rightOpen} onClick={() => onPanel('right', !rightOpen)}><Icon name="sparkle" size={15} /></button><span className="topbar-divider" /><span className={`save-state ${settings.autosave ? '' : 'paused'}`}><Icon name="cloud" size={14} />{settings.autosave ? 'Saved' : 'Paused'}</span><button className="publish-button" type="button" onClick={() => setExportOpen(true)}><Icon name="draft" size={13} /><span>Export</span></button></div></header><div className="editor-scroll" ref={scrollRef}><div className="format-toolbar"><FormatToolbar editor={tiptap} runCommand={runCommand} onFont={applyFontFamily} onSize={applyFontSize} tagsOpen={tagsOpen} onToggleTags={() => setTagsOpen((value) => !value)} applyTag={applyTag} onInsertImage={insertImage} onInsertMath={insertMath} /></div><article className="editor-page" ref={editorRef} onMouseUp={captureSelection} onKeyUp={captureSelection}><EditableTitle title={doc.title} onRename={onTitleChange} /><div className="document-meta">{doc.cat} · {stats.words.toLocaleString()} words · Edited {doc.edited}</div><DocumentEditor editor={tiptap} ready={editorReady} /></article></div><footer className="editor-status"><div>{settings.wordCount && <><span>{stats.words.toLocaleString()} words</span><span>·</span><span>{stats.chars.toLocaleString()} characters</span><span>·</span><span>{stats.paragraphs} paragraphs</span><span>·</span><span>{stats.read} min read</span><span>·</span></>}<span>{settings.autosave ? 'Saved' : 'Paused'}</span></div><div className="status-hints"><button type="button" onClick={() => onPanel('left', !leftOpen)}><kbd>⌘\</kbd> Sections</button><button type="button" onClick={() => onPanel('right', !rightOpen)}><kbd>⌘J</kbd> Assistant</button></div></footer></div><aside className="editor-panel right-panel" inert={rightOpen ? undefined : ''}><ChatPanel assistantReducedMotion={assistantReducedMotion} settings={settings} theme={theme} onSettingsChange={onSettingsChange} activeProvider={activeProvider} onSelectModel={onSelectModel} onOpenSettings={onOpenSettings} rightOpen={rightOpen} effectsActive={view === 'editor'} getDraft={getDraft} onWriteToDocument={appendToDocument} /></aside>{bubble && <div className="selection-bubble" role="toolbar" aria-label="Selected text formatting" style={{ left: bubble.left, top: bubble.top }} onMouseDown={(event) => event.preventDefault()}><button type="button" onClick={() => runCommand('toggleBold')}><strong>B</strong></button><button type="button" onClick={() => runCommand('toggleItalic')}><em>I</em></button><button type="button" onClick={() => runCommand('toggleHighlight', { color: '#fff3a3' })}><Icon name="tag" size={14} /></button><span /><button type="button" onClick={() => runCommand('undo')}><Icon name="undo" size={14} /></button></div>}{tagsOpen && <div className="tag-popover" role="menu"><div className="tag-popover-head">Highlight a thought</div>{HIGHLIGHT_TAGS.map((tag) => <button key={tag.name} type="button" role="menuitem" onClick={() => applyTag(tag.color)}><span className="tag-swatch" style={{ background: tag.color }} />{tag.name}<kbd>⌘{tag.key}</kbd></button>)}</div>}{exportOpen && <ExportDialog key="export-dialog" document={doc} getPayload={getExportPayload} author={author} onClose={() => setExportOpen(false)} reducedMotion={reducedMotion} />}</main>
 }
 
 export { Editor }

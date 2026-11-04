@@ -669,6 +669,20 @@ export const assertGone = (selector, message) => {
 /** Waits for timers and any queued microtasks to settle. */
 export const tick = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * Waits for the application to finish booting.
+ *
+ * Boot is a run of async IPC round trips, so a fixed delay is a guess that
+ * eventually loses on a cold or loaded machine: the shell arrives, but the
+ * editor layer behind it does not. Wait for the shell, then for the boot
+ * overlay to clear, before the suite starts touching either.
+ */
+export async function awaitBoot() {
+  for (let i = 0; i < 400 && !root.querySelector('.app-shell'); i += 1) await tick(25)
+  for (let i = 0; i < 400 && root.querySelector('.boot-layer'); i += 1) await tick(25)
+  await tick(50)
+}
+
 /** Titles of the real document tiles, excluding the "New document" tile. */
 export const tileTitles = () =>
   [...root.querySelectorAll('.document-tile:not(.new-document-tile) .tile-copy strong')]

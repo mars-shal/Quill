@@ -19,11 +19,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { clickAndSettle, root, settle, tick } from './support/dom-harness.mjs'
+import { awaitBoot, clickAndSettle, root, settle, tick } from './support/dom-harness.mjs'
 
 // main.jsx mounts itself into #root on import.
 await import('../src/main.jsx')
-await tick(300)
+await awaitBoot()
 
 const openSettings = async () => {
   // The sidebar slot, not the tools row: the entry point moved there with the
@@ -141,11 +141,11 @@ test('a migrated control shows the value the setting already holds', async () =>
   assert.match(font.textContent, /Inter/, 'font shows its stored value')
 })
 
-test('the model picker is a hand-built listbox, and the shadcn primitive covers the rest', async () => {
-  // No native `<select>` is left anywhere in the app. The editor toolbar's two
-  // were the last, and they needed `pointerdown` rather than `mousedown` for
-  // the stopPropagation that keeps the toolbar from opening the editor's
-  // selection bubble.
+test('the assistant and toolbar pickers are hand-built listboxes', async () => {
+  // No native `<select>` is left anywhere in the app. The editor toolbar's font
+  // and size controls are now the same hand-built listbox as the assistant's
+  // model picker: a font list is only useful when each row is set in the face it
+  // names, which the OS popup of a native select cannot be given.
   //
   // The model picker used to be the documented exception (a native select for
   // type-ahead and the OS's own list). It is now the hand-built listbox the
@@ -165,13 +165,16 @@ test('the model picker is a hand-built listbox, and the shadcn primitive covers 
   assert.match(source, /aria-haspopup="listbox"/, 'the trigger announces the popup')
   assert.match(source, /role="listbox"/, 'the popover is a real listbox')
   assert.match(source, /role="option"/, 'its rows are options')
-  assert.match(source, /aria-selected=\{selected\}/, 'the chosen model is reported')
-  assert.match(source, /ui\/select\.jsx/, 'it uses the shadcn primitive')
-  assert.match(source, /aria-label="Font family"/, 'the font control keeps its name')
-  assert.match(source, /aria-label="Text size"/, 'and so does the size control')
+  assert.match(source, /aria-selected=\{selected\}/, 'the chosen row is reported')
+  assert.match(source, /ui\/select\.jsx/, 'alignment/spacing still use the shadcn primitive')
+  assert.match(source, /function ToolbarSelect\(/, 'the toolbar has its own listbox')
+  assert.match(source, /label="Font family"/, 'the font control keeps its name')
+  assert.match(source, /label="Text size"/, 'and so does the size control')
+  assert.match(source, /placeholder="Font"/, 'an unset family reads as a prompt, not "Inter"')
+  assert.match(source, /placeholder="Size"/, 'and an unset size is not reported as 16')
   assert.match(
     source,
     /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/,
-    'the trigger still stops propagation, on the event Radix actually opens on',
+    'the trigger still stops propagation, so the selection bubble stays shut',
   )
 })

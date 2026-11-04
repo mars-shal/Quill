@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   assertGone,
+  awaitBoot,
   captureConsoleErrors,
   consoleErrors,
   dom,
@@ -71,7 +72,7 @@ handlers.api_chat = (args) => {
 handlers.api_chat_stream = (args) => handlers.api_chat(args)
 
 await import('../src/main.jsx')
-await tick(250)
+await awaitBoot()
 restoreConsole()
 
 /**

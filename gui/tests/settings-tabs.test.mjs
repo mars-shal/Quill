@@ -45,10 +45,10 @@ import assert from 'node:assert/strict'
 
 import {
   assertGone,
+  awaitBoot,
   dom,
   root,
   settle,
-  tick,
   themeFixtures,
   mockFramerMotion,
 } from './support/dom-harness.mjs'
@@ -64,7 +64,7 @@ themeFixtures.reset([
 ])
 
 await import('../src/main.jsx')
-await tick(250)
+await awaitBoot()
 
 const { window } = dom
 
