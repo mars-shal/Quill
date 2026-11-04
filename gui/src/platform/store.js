@@ -228,6 +228,10 @@ export async function restoreDocument(id) {
 
 export const defaultSettings = {
   theme: 'light',
+  // null: the mode follows the chosen theme. 'system' follows the OS light/dark
+  // preference; 'light' and 'dark' are explicit choices made in the Appearance
+  // mode cards (or implied by picking a theme of that mode).
+  colorMode: null,
   font: 'Inter',
   density: 'comfortable',
   autosave: true,

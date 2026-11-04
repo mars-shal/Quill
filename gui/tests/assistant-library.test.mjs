@@ -291,6 +291,7 @@ test('darkness rules key on data-mode, not on the night theme id', () => {
 const FIXED_COLORS = {
   '.document-cover': 'white monogram ink, and a contrast requirement of its own',
   '.cover-ribbon': 'a physical bookmark ribbon; fixed cloth in every theme, like the ink it sits beside',
+  '.mode-card.is-dark': 'the dark-mode specimen card is a fixed picture of the dark theme, shown the same in every theme so the choice reads at a glance',
   '.tile-menu': 'sits over an arbitrary per-document cover colour, not a theme surface',
   '.avatar': 'identity colours, not theme colours',
   '.user-avatar': 'identity colours, not theme colours',

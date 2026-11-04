@@ -290,6 +290,23 @@ function App() {
     [settings.theme, customThemes],
   )
 
+  // "System" follows the operating system's light/dark preference. The switch
+  // happens in memory only: the saved choice stays "system", so the next launch
+  // reads the OS again instead of freezing whatever it said today.
+  const [systemDark, setSystemDark] = useState(() => Boolean(window.matchMedia?.('(prefers-color-scheme: dark)')?.matches))
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!query) return undefined
+    const onChange = (event) => setSystemDark(event.matches)
+    query.addEventListener?.('change', onChange)
+    return () => query.removeEventListener?.('change', onChange)
+  }, [])
+  useEffect(() => {
+    if (settings.colorMode !== 'system') return
+    if ((theme.mode === 'dark') === systemDark) return
+    setSettingsState((current) => ({ ...current, theme: systemDark ? 'night' : 'light' }))
+  }, [settings.colorMode, systemDark, theme.mode])
+
   // Load settings + documents from the platform store on mount. In the Tauri
   // runtime this reads SQLite; in the browser it reads the localStorage
   // fallback. On a fresh database the seed documents are written once so the

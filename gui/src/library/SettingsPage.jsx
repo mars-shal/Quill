@@ -17,6 +17,16 @@ import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon.jsx";
 import { ModalLayer } from "../ModalLayer.jsx";
 import { isLocalEndpoint, listProviderModels, slugify, usageStats } from "../platform/store.js";
+import { resolveTheme } from "./themes.js";
+
+// The three appearance choices from the Paper reference. "System" is the OS
+// preference; the other two are explicit. Each note is one short line, the way
+// the reference writes them.
+const COLOR_MODES = [
+  { id: "system", label: "System preference", note: "Use your system's settings." },
+  { id: "light", label: "Light mode", note: "Light and bright for readability." },
+  { id: "dark", label: "Dark mode", note: "Reduced glare and blue light." },
+];
 import BackgroundPicker from "./BackgroundPicker.jsx";
 import ThemePicker from "./ThemePicker.jsx";
 import { Button } from './ui/button.jsx'
@@ -734,6 +744,17 @@ function AssistantPanel({
 
   return (
     <>
+      {/* The trust statement the reference leads with: where the keys live.
+          It is the one reassurance a BYOK page owes its reader before any field. */}
+      <div className="settings-banner" role="note">
+        <span className="settings-banner-mark" aria-hidden="true">
+          <Icon name="check" size={14} />
+        </span>
+        <span>
+          <strong>Your keys are encrypted at rest.</strong>
+          Stored in your operating system's credential store and never shown in logs.
+        </span>
+      </div>
       {/* The connection state was a pill in the section head, which is where the
           old layout had room to put one. As a row it says the same thing and sits
           with the thing it is reporting on. */}
@@ -1101,8 +1122,65 @@ function AppearancePanel({
   onApplyTheme,
   onCustomThemesChange,
 }) {
+  // `null` means the mode follows the theme, so the card for the theme's own
+  // mode is the one that reads as selected.
+  const pickedMode = draft.colorMode ?? theme.mode;
+  const chooseMode = (id) => {
+    update("colorMode", id);
+    if (id === "system") {
+      onApplyTheme({ colorMode: id });
+      return;
+    }
+    const wantDark = id === "dark";
+    if ((theme.mode === "dark") !== wantDark) {
+      const target = wantDark ? "night" : "light";
+      update("theme", target);
+      onApplyTheme({ colorMode: id, theme: target });
+      return;
+    }
+    onApplyTheme({ colorMode: id });
+  };
+
   return (
     <>
+      <div className="settings-block">
+        <span className="field-label" id="mode-label">
+          Appearance
+        </span>
+        <div className="mode-cards" role="radiogroup" aria-labelledby="mode-label">
+          {COLOR_MODES.map((choice) => {
+            const selected =
+              choice.id === "system"
+                ? draft.colorMode === "system"
+                : draft.colorMode !== "system" && pickedMode === choice.id;
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`mode-card${selected ? " is-selected" : ""}${choice.id === "dark" ? " is-dark" : ""}`}
+                onClick={() => chooseMode(choice.id)}
+              >
+                <span className="mode-card-head">
+                  <span className="mode-card-name">{choice.label}</span>
+                  <span className="mode-card-state">
+                    {selected ? (
+                      <>
+                        <Icon name="check" size={12} />
+                        Selected
+                      </>
+                    ) : (
+                      "Select"
+                    )}
+                  </span>
+                </span>
+                <span className="mode-card-note">{choice.note}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       {/* Full width and first: it is the one control here that cannot be judged
           from a list of words. */}
       <div className="settings-block">
@@ -1117,8 +1195,12 @@ function AppearancePanel({
           theme={theme}
           customThemes={customThemes}
           onApply={(id) => {
+            // Picking a theme is an explicit choice of its mode too, so the
+            // mode cards and the theme never disagree about what is showing.
+            const mode = resolveTheme(id, customThemes).mode;
             update("theme", id);
-            onApplyTheme({ theme: id });
+            update("colorMode", mode);
+            onApplyTheme({ theme: id, colorMode: mode });
           }}
           onCustomThemesChange={onCustomThemesChange}
         />
