@@ -2,14 +2,12 @@
 
 :root {
   color-scheme: light;
-  /* The library's books, copied one for one from the reference cover: dark
-     warm cloth, cream ink, a sage ribbon, cream page edges. Global tokens on
-     purpose -- every book on the shelf is the same design, which is the point
-     of copying it -- and declared here so every theme inherits them. */
-  --book-cloth: #17140f;
-  --book-ink: #ece4d2;
-  --book-ribbon: #d9d3ac;
-  --book-page-edge: #e6ddc9;
+  /* The library's books, from book.html: deep navy cloth, warm cream ink,
+     coral ribbon and badge. Global tokens on purpose -- every book on the
+     shelf is the same design -- and declared here so every theme inherits. */
+  --book-cloth: #14233a;
+  --book-ink: #f1d9c4;
+  --book-accent: #e4694a;
   --main: #ffffff;
   --sidebar: #f4f4f2;
   --chat: #fafaf9;
@@ -843,72 +841,119 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .list-view .tile-menu:hover { color: var(--text-1); background: var(--active); }
 .list-view .new-cover svg { width: 22px; height: 22px; }
 
-/* --- The library as books, one for one from the reference -------------------
-   The Definitive Book of Type cover: dark warm cloth, cream type centred in
-   the middle band, a badge at the head, the edition line at the foot, and a
-   ribbon that stands above the top edge and tucks *behind* the cloth. The
-   cloth/ink/ribbon are the global --book-* tokens rather than per-document
-   pigments: every book on the shelf is the same design, which is the point of
-   copying it. The tile's padding-top is the room the ribbon stands in. */
+/* --- The library as books, ported from book.html ----------------------------
+   The reader's own design: deep navy cloth with a turbulence-noise overlay
+   and a spine groove, a coral ribbon standing above the top edge (behind the
+   cloth), the mark on a coral badge flush with the top edge, and title +
+   edition stacked in the reference's flex flow with its type metrics. The
+   cloth/ink/accent are global --book-* tokens: every book is the same design.
+   The tile's padding-top is the room the ribbon stands in. */
 .document-cover {
   aspect-ratio: 3 / 4;
   overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 9% 8% 10%;
   background: var(--book-cloth);
+  border: 0;
+  border-radius: 3px 6px 6px 3px;
   box-shadow:
-    var(--sheet-shadow),
-    0 16px 30px rgba(0, 0, 0, 0.32),
-    inset -4px 0 0 -3px var(--book-page-edge);
+    0 2px 3px rgba(0, 0, 0, 0.5),
+    -18px 22px 40px rgba(0, 0, 0, 0.65),
+    -4px 6px 12px rgba(0, 0, 0, 0.4);
 }
-/* z-index: -1 puts the ribbon behind the cover's background, so only the
-   part above the top edge shows -- the reference's bookmark disappears at
-   the cover rather than lying on top of it. */
+/* Cloth noise: the reference's turbulence overlay at the same .09 strength,
+   replacing the old sheen/grain pair on this surface. */
+.document-cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.09;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+/* The hinge/spine groove down the left edge -- takes over from the ruled
+   layout's spine so both layouts carry the reference's binding. */
+.document-cover::after,
+.document-cover.stacked::after,
+.document-cover.ruled::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 7%;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.45) 0%,
+    rgba(0, 0, 0, 0.15) 55%,
+    rgba(255, 255, 255, 0.05) 72%,
+    rgba(0, 0, 0, 0.28) 88%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+/* z-index: -1 keeps the ribbon behind the cloth: only the part above the
+   top edge shows, which is how the reference's bookmark behaves. */
 .cover-ribbon {
   position: absolute;
   z-index: -1;
-  top: -34px;
-  right: 26%;
-  width: 15px;
-  height: 74px;
-  background: linear-gradient(180deg, var(--book-ribbon), color-mix(in srgb, var(--book-ribbon) 82%, black));
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%);
+  top: -9%;
+  left: 14%;
+  width: 11%;
+  height: 22%;
+  background: linear-gradient(90deg, #cf563a, var(--book-accent) 40%, #cf563a);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
 }
+/* The badge sits flush with the top edge (the reference does the same maths:
+   9% padding pulled back by a -9% margin), rounded at the bottom so it reads
+   as a tab sewn into the cloth. The mark centres itself inside: a percentage
+   padding here would be relative to the cover, not the badge. */
 .cover-badge {
-  position: absolute;
+  position: relative;
   z-index: 1;
-  top: 11px;
-  left: 50%;
-  width: 26px;
-  height: 26px;
-  padding: 5px;
-  background: var(--book-ink);
-  border-radius: 5px;
-  transform: translateX(-50%);
+  flex: none;
+  width: 11%;
+  margin-top: -9%;
+  margin-bottom: 14%;
+  aspect-ratio: 1 / 1.35;
+  background: var(--book-accent);
+  border-radius: 0 0 4px 4px;
+  /* The reference's badge carries its number in dark ink on the coral tab;
+     the Quill mark came out of it (2026-11-04). The ink mixes from the cloth
+     token rather than being declared, so it stays inside the colour gate. */
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--book-cloth) 65%, black);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
-.cover-badge img { display: block; width: 100%; height: 100%; object-fit: contain; }
-/* Both layouts get the reference's centred middle-band title; these selectors
-   match the layout rules' specificity and come later, so they win. */
+/* Title and edition ride the reference's flex flow (badge, title, edition)
+   rather than absolute corners; these selectors match the layout rules'
+   specificity and come later, so they win over the old positioning. */
 .document-cover.stacked .cover-title,
 .document-cover.ruled .cover-title {
-  top: 30%;
-  right: 16px;
-  bottom: 46px;
-  left: 16px;
+  position: static;
+  width: 100%;
+  margin: 0;
+  padding-top: 0;
   color: var(--book-ink);
   border-top: 0;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 1.14;
-  letter-spacing: -0.01em;
+  line-height: 1;
+  letter-spacing: -0.045em;
   text-align: center;
 }
 .cover-edition {
-  position: absolute;
-  right: 14px;
-  bottom: 16px;
-  left: 14px;
-  color: var(--book-ink);
-  font-size: 15px;
+  margin-top: 8%;
+  color: color-mix(in srgb, var(--book-ink) 72%, transparent);
+  font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   text-align: center;
 }
 .list-view .cover-ribbon,

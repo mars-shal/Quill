@@ -180,7 +180,13 @@ test('the library cover carries no text', () => {
   // the cover entirely, so there is nothing left to clip.
   assert.ok(!jsx.includes('cover-copy'), 'the cover must not render a title')
   assert.ok(!css.includes('cover-copy'), 'cover-copy rules must be gone')
-  assert.equal(valueOf('.document-cover', 'padding'), '0', 'the cover needs no text padding')
+  // The cover stacks badge/title/edition in flow now (book.html), so its
+  // padding is the reference's structural spacing, not a text inset.
+  assert.match(
+    valueOf('.document-cover', 'padding') || '',
+    /\d+%/,
+    'the cover keeps the reference flow padding',
+  )
 
   // The title moved to the label under the cover, where it can use two lines.
   const clamp = valueOf('.tile-copy strong', '-webkit-line-clamp')

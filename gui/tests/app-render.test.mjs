@@ -46,9 +46,22 @@ mockFramerMotion()
 
 const restoreConsole = captureConsoleErrors()
 
-// main.jsx mounts itself into #root on import.
+// main.jsx mounts itself into #root on import. Boot is async (a run of IPC
+// round trips), so wait for it rather than guessing a tick count: under load
+// 250ms was not enough and the suite reported a stuck boot screen that was
+// merely slow. Two phases, because the first check can run before React has
+// painted anything at all -- wait for the shell to exist, then for the boot
+// overlay (which only exists while boot is in flight) to clear. A genuine
+// boot failure keeps the overlay up and the assertions below fail with the
+// real message after the timeout.
 await import('../src/main.jsx')
-await tick(250)
+for (let i = 0; i < 80 && !root.querySelector('.app-shell') && !root.querySelector('.boot-layer'); i += 1) {
+  await tick(25)
+}
+for (let i = 0; i < 240 && root.querySelector('.boot-layer'); i += 1) {
+  await tick(25)
+}
+await tick(50)
 restoreConsole()
 
 
