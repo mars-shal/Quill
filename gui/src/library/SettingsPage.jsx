@@ -1162,20 +1162,14 @@ function AppearancePanel({
                 className={`mode-card${selected ? " is-selected" : ""}${choice.id === "dark" ? " is-dark" : ""}`}
                 onClick={() => chooseMode(choice.id)}
               >
-                <span className="mode-card-head">
+                <span className="mode-card-text">
                   <span className="mode-card-name">{choice.label}</span>
-                  <span className="mode-card-state">
-                    {selected ? (
-                      <>
-                        <Icon name="check" size={12} />
-                        Selected
-                      </>
-                    ) : (
-                      "Select"
-                    )}
-                  </span>
+                  <span className="mode-card-note">{choice.note}</span>
                 </span>
-                <span className="mode-card-note">{choice.note}</span>
+                <span className="mode-card-state">
+                  {selected && <Icon name="check" size={12} />}
+                  {selected ? "Selected" : "Select"}
+                </span>
               </button>
             );
           })}

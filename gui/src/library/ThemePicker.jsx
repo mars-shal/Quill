@@ -23,6 +23,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../Icon.jsx'
+
+/** The reference's Select/Selected pill, with the badge doing the announcing. */
+function SelectPill({ selected }) {
+  return (
+    <span className="select-pill" aria-hidden="true">
+      {selected && <Icon name="check" size={12} />}
+      {selected ? 'Selected' : 'Select'}
+    </span>
+  )
+}
 import { BUILT_IN_THEMES, THEME_IDS, resolveTheme, missingTokens, REQUIRED_TOKENS } from './themes.js'
 import { checkTokens, describeFailure, parseColor } from './contrast.js'
 import * as store from '../platform/store.js'
@@ -244,6 +254,17 @@ export default function ThemePicker({ theme, customThemes, onApply, onCustomThem
           radio inside it, because a radiogroup may only contain radios: it opens
           the editor rather than selecting anything, and giving it a value would put
           a theme id in the settings row that resolves to no palette. */}
+      <div className="theme-presets-head">
+        <div>
+          <h3 className="theme-presets-title">Theme presets</h3>
+          <p className="theme-presets-note">
+            Choose a preset theme from our theme library or set up your own theme.
+          </p>
+        </div>
+        <Button type="button" className="soft-button" onClick={() => editFrom(theme.id)}>
+          Set new theme
+        </Button>
+      </div>
       <div className="theme-cards">
         <RadioGroup
           className="theme-cards-list"
@@ -259,8 +280,11 @@ export default function ThemePicker({ theme, customThemes, onApply, onCustomThem
               className="choice-card theme-card"
             >
               <ThemePreview tokens={option.tokens} mode={option.mode} compact />
-              <span className="choice-card-name">{option.name}</span>
-              <span className="choice-card-note">{noteFor(option)}</span>
+              <span className="choice-card-text">
+                <span className="choice-card-name">{option.name}</span>
+                <span className="choice-card-note">{noteFor(option)}</span>
+              </span>
+              <SelectPill selected={option.id === theme.id} />
               <ThemeBadge />
             </RadioGroupItem>
           ))}

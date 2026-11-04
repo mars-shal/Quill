@@ -2779,17 +2779,68 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
   padding: 8px 12px 8px 8px;
   border-radius: 12px;
 }
+/* The swatch is the theme's own colours as a small tile, the way the reference
+   shows each preset as a piece of its palette rather than a page in miniature.
+   The miniature preview still renders beneath it (opacity: 0) because it is
+   what carries the resolved tokens the theme picker tests read. */
 .theme-card .theme-preview {
+  position: relative;
+  z-index: 1;
   width: 52px;
   height: 52px;
   aspect-ratio: auto;
   padding: 0;
   overflow: hidden;
   border-radius: 9px;
+  opacity: 0;
+  grid-column: 1;
+  grid-row: 1;
+}
+.theme-card::before {
+  grid-column: 1;
+  grid-row: 1;
+  content: "";
+  width: 52px;
+  height: 52px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent), var(--text-1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-1) 8%, transparent);
 }
 /* The row is a swatch now, not a miniature page: the page blocks come out of
    the layout (they stay in the DOM for the accessible name and the tests). */
 .theme-card .theme-preview > * { display: none; }
+.choice-card-text { display: grid; gap: 3px; min-width: 0; }
+.select-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 11px;
+  color: var(--text-1);
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.choice-card[data-state="checked"] .select-pill {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* The presets header: the section title and the one action on it, the way the
+   reference sets a row of cards apart from the pages above it. */
+.theme-presets-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 22px 0 12px;
+}
+.theme-presets-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.theme-presets-note { margin: 3px 0 0; color: var(--text-3); font-size: 11.5px; line-height: 1.45; }
 
 /* Navigation. The active item is a solid inverse pill with a count chip, not an
    accent bar on a tint. */
@@ -2859,22 +2910,33 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .mode-card.is-dark { color: #f5f6f8; background: #1d2026; border-color: #2a2e36; }
 .mode-card.is-selected { box-shadow: 0 0 0 1px var(--accent) inset; border-color: var(--accent); }
 .mode-card:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.mode-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* The reference's mode card: name and one line of explanation on the left, a
+   Select/Selected pill on the right, and the dark card a specimen of the dark
+   theme rather than a description of one. */
+.mode-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mode-card-text { display: grid; gap: 4px; min-width: 0; }
 .mode-card-name { font-size: 12.5px; font-weight: 600; }
 .mode-card-state {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 24px;
-  padding: 0 9px;
-  color: var(--text-2);
-  background: var(--hover);
+  gap: 5px;
+  flex: none;
+  min-height: 28px;
+  padding: 0 11px;
+  color: var(--text-1);
+  background: var(--main);
+  border: 1px solid var(--border);
   border-radius: 7px;
   font-size: 11px;
   font-weight: 600;
 }
-.mode-card.is-selected .mode-card-state { color: var(--on-accent); background: var(--accent); }
-.mode-card.is-dark .mode-card-state { color: #1d2026; background: #f5f6f8; }
+.mode-card.is-selected .mode-card-state {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.mode-card.is-dark .mode-card-state { color: #1d2026; background: #f5f6f8; border-color: #f5f6f8; }
+.mode-card.is-dark.is-selected .mode-card-state { color: #1d2026; background: var(--accent); border-color: var(--accent); }
 .mode-card-note { color: var(--text-3); font-size: 11.5px; line-height: 1.45; }
 .mode-card.is-dark .mode-card-note { color: #9aa0ab; }
 
