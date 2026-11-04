@@ -384,6 +384,21 @@ function FormatToolbar({ editor, runCommand, font, onFont, size, onSize, tagsOpe
     ] },
   ]
 
+  // Table editing, only while the cursor is inside one. A grid is inserted at a
+  // fixed 3x3, and without these the reader had no way to shrink it to 3x2, 2x2
+  // or 1x1 or remove it again -- the shape had to be right on the first try.
+  // Rows and columns are separate actions because they are separate dimensions:
+  // "delete row" cannot answer "make it two columns".
+  if (editor.isActive('table')) {
+    tools.push({ kind: 'group', label: 'Table', items: [
+      { key: 'row-after', label: 'Add row below', title: 'Add row below', icon: 'plus', run: () => runCommand('addRowAfter') },
+      { key: 'col-after', label: 'Add column right', title: 'Add column right', icon: 'plus', run: () => runCommand('addColumnAfter') },
+      { key: 'row-del', label: 'Delete row', title: 'Delete row', icon: 'minus', run: () => runCommand('deleteRow') },
+      { key: 'col-del', label: 'Delete column', title: 'Delete column', icon: 'minus', run: () => runCommand('deleteColumn') },
+      { key: 'table-del', label: 'Delete table', title: 'Delete table', icon: 'trash', run: () => runCommand('deleteTable') },
+    ] })
+  }
+
   return (
     <div className="format-toolbar-inner" role="toolbar" aria-label="Formatting">
       <div className="tool-selects">

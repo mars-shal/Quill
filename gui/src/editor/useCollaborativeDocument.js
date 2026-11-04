@@ -16,6 +16,12 @@ import { Mathematics } from '@tiptap/extension-mathematics'
 import { Image } from '@tiptap/extension-image'
 import { TextAlign } from '@tiptap/extension-text-align'
 import { TableKit } from '@tiptap/extension-table'
+// `FontFamily` and `FontSize` are separate extensions, not part of the base
+// `TextStyle` mark: the mark only carries `toggleTextStyle`/`removeEmptyTextStyle`,
+// while the two commands the toolbar dispatches (`setFontFamily`/`setFontSize`)
+// live here. Registering only the mark left `chain().setFontFamily(...)` undefined,
+// so the font and size pickers silently did nothing.
+import { FontFamily, FontSize } from '@tiptap/extension-text-style'
 import { TextStyleWithTracking, LineHeight } from './typography.js'
 import { LocalYDoc } from '../platform/ydoc.js'
 
@@ -25,7 +31,7 @@ import { LocalYDoc } from '../platform/ydoc.js'
  */
 export const FRAGMENT = 'quill-body'
 
-function baseExtensions() {
+export function baseExtensions() {
   return [
     StarterKit.configure({
       // The Collaboration extension supplies its own history; leaving
@@ -35,11 +41,14 @@ function baseExtensions() {
     }),
     // StarterKit v3 already provides Underline, Strike and Link, so only what
     // it does not cover is added: Highlight (the Idea/Research/Quote/Cut tags),
-    // TextStyle (setColor, setFontFamily, setFontSize) extended with
-    // letter-spacing, Markdown so export never round-trips through HTML,
-    // Mathematics for LaTeX support, Image, TextAlign for the alignment menu,
-    // TableKit for tables, and LineHeight for the spacing menu.
+    // TextStyle extended with letter-spacing, FontFamily and FontSize (the
+    // commands the font and size pickers dispatch), Markdown so export never
+    // round-trips through HTML, Mathematics for LaTeX support, Image,
+    // TextAlign for the alignment menu, TableKit for tables, and LineHeight
+    // for the spacing menu.
     TextStyleWithTracking,
+    FontFamily,
+    FontSize,
     Highlight,
     Markdown,
     Mathematics,

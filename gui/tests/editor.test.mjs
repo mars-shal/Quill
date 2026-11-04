@@ -203,3 +203,39 @@ test('statistics reflect the document text', () => {
   assert.equal(editor.state.doc.childCount, 1)
   editor.destroy()
 })
+
+// --- font family / size -----------------------------------------------------
+//
+// Regression: the toolbar dispatches `setFontFamily`/`setFontSize`, but those
+// commands are provided by the `FontFamily` and `FontSize` extensions -- not by
+// the base `TextStyle` mark. Registering only the mark left the commands off the
+// chain, so the pickers silently did nothing. The editor below is built from the
+// app's own extension list, so this fails if those two are ever dropped again.
+
+test('the app extension set registers the font family and size commands', async () => {
+  const { baseExtensions } = await import('../src/editor/useCollaborativeDocument.js')
+  const doc = new Y.Doc()
+  const editor = new Editor({
+    extensions: [
+      ...baseExtensions(),
+      Collaboration.configure({ document: doc, field: FRAGMENT }),
+    ],
+    content: null,
+  })
+
+  assert.equal(typeof editor.commands.setFontFamily, 'function', 'setFontFamily must be registered')
+  assert.equal(typeof editor.commands.setFontSize, 'function', 'setFontSize must be registered')
+
+  // And they have to actually reach the document, not just exist: select the
+  // text, apply both, and read the rendered style back out of the HTML.
+  editor.commands.setContent('<p>some words</p>')
+  editor.commands.setTextSelection({ from: 1, to: 11 })
+  assert.equal(editor.commands.setFontFamily('Georgia'), true, 'setFontFamily applies')
+  assert.equal(editor.commands.setFontSize('24px'), true, 'setFontSize applies')
+
+  const html = editor.getHTML()
+  assert.match(html, /font-family:\s*Georgia/, 'the family reaches the rendered span')
+  assert.match(html, /font-size:\s*24px/, 'the size reaches the rendered span')
+
+  editor.destroy()
+})
