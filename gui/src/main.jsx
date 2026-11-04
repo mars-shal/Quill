@@ -32,6 +32,18 @@ const ONBOARDING_THEMES = THEME_IDS.map((id) => ({
 const SEED_KEY = 'quill:seeded:v1'
 
 /**
+ * The reading font as a stack. Funnel Display is the app face; Inter is the
+ * fallback a document set in it falls back to, and a named face falls back to
+ * the reader's own system face.
+ */
+function readingFontStack(font) {
+  if (font === 'Georgia') return 'Georgia, "Times New Roman", serif'
+  if (font === 'DM Mono') return '"DM Mono", "JetBrains Mono", ui-monospace, monospace'
+  if (font === 'Inter') return 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+  return `"Funnel Display", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+}
+
+/**
  * Whether this is a development build.
  *
  * The seed documents below are here so a dev server has something to look at,
@@ -412,7 +424,7 @@ function App() {
     // scrollbar and select popup light.
     root.style.setProperty('color-scheme', theme.mode)
     document.body.classList.toggle('reduce-motion', Boolean(settings.reduceMotion))
-    root.style.setProperty('--reading-font', settings.font === 'Georgia' ? 'Georgia, "Times New Roman", serif' : settings.font === 'DM Mono' ? '"DM Mono", "JetBrains Mono", ui-monospace, monospace' : 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif')
+    root.style.setProperty('--reading-font', readingFontStack(settings.font))
 
     // P4-2, P4-3, P4-4. The reader's own backgrounds, as custom properties.
     // `backgroundProperties` returns null when nothing is set, so the common

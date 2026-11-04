@@ -101,6 +101,7 @@ const HIGHLIGHT_TAGS = [
 // applied as inline `font-family`, so whatever the system (or fontconfig's
 // metric substitutes) provides renders -- the picker offers names, not files.
 const READING_FONTS = [
+  'Funnel Display',
   'Arial', 'Arial Black', 'Calibri', 'Calibri Light', 'Cambria', 'Comic Sans MS',
   'Consolas', 'Courier New', 'Franklin Gothic', 'Garamond', 'Georgia', 'Impact',
   'Lucida Sans', 'Palatino Linotype', 'Segoe UI', 'Tahoma', 'Times New Roman',

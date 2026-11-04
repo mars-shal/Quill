@@ -64,3 +64,12 @@
   font-display: swap;
   src: url('/fonts/DMMono-500.woff2') format('woff2');
 }
+
+@font-face {
+  /* The app face: a variable weight axis (300-800), bundled as one woff2. */
+  font-family: 'Funnel Display';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('/fonts/FunnelDisplay.woff2') format('woff2');
+}
