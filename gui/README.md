@@ -196,3 +196,7 @@ Not yet implemented, and known issues, are tracked in
 that close it. The short version: Phase 0 is foundations that block the rest,
 then custom themes, image backgrounds and onboarding, with the older backlog
 carried into Phase 4.
+
+## License
+
+[MIT](../LICENSE) © 2026 Quill contributors.

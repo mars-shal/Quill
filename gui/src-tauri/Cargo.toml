@@ -3,6 +3,7 @@ name = "quill"
 version = "0.1.0"
 description = "Quill — a desktop editor for long-form writing"
 authors = ["Quill"]
+license = "MIT"
 edition = "2021"
 # Export dependencies (printpdf, zip via docx-rs) require 1.88. Tauri v2 has no
 # requirement to stay on the 1.77 baseline.
