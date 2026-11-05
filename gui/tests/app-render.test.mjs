@@ -69,7 +69,7 @@ test('the app shell rendered', () => {
 })
 
 test('it is not stuck on the boot screen', () => {
-  assert.doesNotMatch(html, /Opening your workspace/, `stuck booting:\n${html.slice(0, 400)}`)
+  assert.doesNotMatch(html, /Opening your workshop/, `stuck booting:\n${html.slice(0, 400)}`)
 })
 
 test('React did not throw during render', () => {
@@ -304,21 +304,20 @@ test('the title is a button, not a contentEditable heading', () => {
 // framer-motion, the faithful test is the one that uses it.
 
 // --- toolbar font and size pickers -----------------------------------------
-// The pickers used to show a hardcoded "Inter"/"16" whenever the caret carried
-// no textStyle mark, which read as though the document had been set to Inter at
-// 16. They now read the caret itself and show a placeholder when nothing is
-// applied. The list is the assistant's listbox, with each font row set in the
-// face it names.
+// A paragraph with no textStyle mark is set in Arial at 12pt by the document
+// defaults, so the pickers report those values instead of looking undecided.
+// The list is the assistant's listbox, with each font row set in the face it
+// names.
 
 const fontTrigger = () => root.querySelector('[aria-label="Font family"]')
 const sizeTrigger = () => root.querySelector('[aria-label="Text size"]')
 
-test('an untouched paragraph is not reported as Inter at 16', () => {
+test('an untouched paragraph reports the document defaults', () => {
   assert.ok(fontTrigger(), 'the font picker is in the toolbar')
   assert.ok(sizeTrigger(), 'the size picker is in the toolbar')
-  assert.equal(fontTrigger().textContent, 'Font', 'no family applied is shown as a prompt')
-  assert.equal(sizeTrigger().textContent, 'Size', 'no size applied is shown as a prompt')
-  assert.ok(fontTrigger().classList.contains('is-placeholder'), 'the placeholder is styled as one')
+  assert.equal(fontTrigger().textContent, 'Arial', 'the default family is Arial')
+  assert.equal(sizeTrigger().textContent, '12', 'the default size is 12pt')
+  assert.equal(fontTrigger().classList.contains('is-placeholder'), false, 'the default is a value, not a prompt')
   assert.equal(fontTrigger().getAttribute('aria-haspopup'), 'listbox', 'it announces a listbox')
 })
 

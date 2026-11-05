@@ -42,8 +42,9 @@ const BUILT_IN_THEMES = ['light', 'paper', 'night']
  * both in the same test. Parsed rather than counted, so a preset that stopped
  * being parseable is a failure here instead of an empty list that passes.
  */
-const presetsFromMigration = () => {
-  const migration = readFileSync(join(root, 'src-tauri', 'migrations', '0004_curated_themes.sql'), 'utf8')
+const PRESET_FILES = ['0004_curated_themes.sql', '0006_more_curated_themes.sql']
+const presetsFromMigration = () => PRESET_FILES.flatMap((file) => {
+  const migration = readFileSync(join(root, 'src-tauri', 'migrations', file), 'utf8')
   const body = migration.slice(migration.indexOf('INSERT INTO custom_themes'))
   const rows = []
   const pattern = /\(\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'(light|dark)'\s*\)/g
@@ -52,7 +53,7 @@ const presetsFromMigration = () => {
     rows.push({ theme_id: match[1], name: match[2], tokens: JSON.parse(match[3]), mode: match[4] })
   }
   return rows
-}
+})
 
 /** Matches a rule set for `selector`, ignoring whitespace and comments. */
 const rulesFor = (selector) => {
@@ -120,9 +121,11 @@ test('body text size and leading are defined once and stay in a readable range',
   assert.ok(size, '--prose-size must be declared on .editor-page')
   assert.ok(leading, '--prose-leading must be declared on .editor-page')
 
-  const px = Number.parseFloat(size)
+  // The document default is 12pt; the guard is written in CSS pixels, so a
+  // point value is converted at the 96dpi reference (12pt = 16px).
+  const px = size.endsWith('pt') ? Number.parseFloat(size) * (96 / 72) : Number.parseFloat(size)
   const ratio = Number.parseFloat(leading)
-  assert.ok(px >= 16 && px <= 18, `body size ${px}px should be 16-18px`)
+  assert.ok(px >= 16 && px <= 18, `body size ${size} (${px}px) should be 16-18px`)
   assert.ok(ratio >= 1.5 && ratio <= 1.8, `leading ${ratio} should be 1.5-1.8`)
 
   // A comfortable long-form measure. The band was 58-78 characters at a 700px

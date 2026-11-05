@@ -117,7 +117,7 @@ pub async fn normalize_theme(pool: &SqlitePool, theme: &str) -> String {
 }
 
 fn default_font() -> String {
-    "Inter".into()
+    "Arial".into()
 }
 
 fn default_density() -> String {
@@ -620,7 +620,20 @@ mod tests {
         .expect("list themes");
 
         let ids: Vec<&str> = rows.iter().map(|(id, ..)| id.as_str()).collect();
-        for expected in ["midnight", "nord", "dracula", "rose-pine", "sepia", "solar"] {
+        for expected in [
+            "midnight",
+            "nord",
+            "dracula",
+            "rose-pine",
+            "sepia",
+            "solar",
+            "catppuccin-latte",
+            "catppuccin-mocha",
+            "tokyo-night",
+            "gruvbox-dark",
+            "rose-pine-dawn",
+            "everforest-light",
+        ] {
             assert!(
                 ids.contains(&expected),
                 "the {expected} preset is missing: {ids:?}"
@@ -1306,7 +1319,7 @@ mod tests {
         assert_eq!(loaded.theme, "paper");
         assert_eq!(loaded.editor_texture, "paper-grain");
         // Untouched fields keep their defaults through the JSON round trip.
-        assert_eq!(loaded.font, "Inter");
+        assert_eq!(loaded.font, "Arial");
         assert!(loaded.autosave);
     }
 
@@ -1383,7 +1396,7 @@ mod tests {
             .expect("patch should succeed");
 
         assert_eq!(updated.theme, "night");
-        assert_eq!(updated.font, "Inter");
+        assert_eq!(updated.font, "Arial");
         assert!(updated.autosave);
     }
 }

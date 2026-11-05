@@ -57,7 +57,7 @@ export function baseExtensions() {
       types: ['heading', 'paragraph'],
       alignments: ['left', 'center', 'right', 'justify'],
     }),
-    TableKit.configure({ table: { resizable: false } }),
+    TableKit.configure({ table: { resizable: true } }),
     LineHeight,
   ]
 }

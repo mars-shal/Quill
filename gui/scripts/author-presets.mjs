@@ -7,6 +7,11 @@
  * to do that. Run it, read the output, and only commit a migration whose presets
  * all pass.
  *
+ * The shelf grew in 0006, and that file is frozen too: `tests/themes.test.mjs`
+ * now reads every preset migration, which is the gate a new palette has to pass.
+ * Running this generator with `--write` would rewrite 0004 and must not be used
+ * for new themes.
+ *
  * Usage: node scripts/author-presets.mjs [--write]
  */
 import { writeFileSync } from 'node:fs'

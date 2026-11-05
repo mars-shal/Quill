@@ -361,22 +361,31 @@ function block(selector) {
 // ---------------------------------------------------------------------------
 
 test('every seeded preset passes the check the picker enforces on a save', () => {
-  // Read out of the migration rather than a fixture, because the two drifting
+  // Read out of the migrations rather than a fixture, because the two drifting
   // apart is the failure: a preset row that the picker would refuse to save, or
   // a palette the app can never actually select. `scripts/author-presets.mjs`
-  // writes the migration and is where the palettes are authored.
-  const migration = readFileSync(join(root, 'src-tauri', 'migrations', '0004_curated_themes.sql'), 'utf8')
-  const presets = parsePresetRows(migration)
+  // writes the first set and is where its palettes are authored.
+  const presets = seededPresetRows()
 
-  assert.equal(presets.length, 6, `expected six curated themes, found ${presets.map((p) => p.theme_id).join(', ')}`)
+  assert.equal(presets.length, 12, `expected twelve curated themes, found ${presets.map((p) => p.theme_id).join(', ')}`)
   assert.deepEqual(
     presets.map((p) => p.theme_id).sort(),
-    ['dracula', 'midnight', 'nord', 'rose-pine', 'sepia', 'solar'],
+    [
+      'catppuccin-latte', 'catppuccin-mocha', 'dracula', 'everforest-light',
+      'gruvbox-dark', 'midnight', 'nord', 'rose-pine', 'rose-pine-dawn',
+      'sepia', 'solar', 'tokyo-night',
+    ],
   )
-  // Four dark, two light: the two sides of the pair table, and the side decides
-  // which base a custom theme inherits and which ink the effects are given.
-  assert.deepEqual(presets.filter((p) => p.mode === 'dark').map((p) => p.theme_id).sort(), ['dracula', 'midnight', 'nord', 'rose-pine'])
-  assert.deepEqual(presets.filter((p) => p.mode === 'light').map((p) => p.theme_id).sort(), ['sepia', 'solar'])
+  // Seven dark, five light: the two sides of the pair table, and the side
+  // decides which base a custom theme inherits and which ink the effects use.
+  assert.deepEqual(
+    presets.filter((p) => p.mode === 'dark').map((p) => p.theme_id).sort(),
+    ['catppuccin-mocha', 'dracula', 'gruvbox-dark', 'midnight', 'nord', 'rose-pine', 'tokyo-night'],
+  )
+  assert.deepEqual(
+    presets.filter((p) => p.mode === 'light').map((p) => p.theme_id).sort(),
+    ['catppuccin-latte', 'everforest-light', 'rose-pine-dawn', 'sepia', 'solar'],
+  )
 
   for (const preset of presets) {
     const stored = { theme_id: preset.theme_id, name: preset.name, mode: preset.mode, tokens: preset.tokens }
@@ -397,8 +406,7 @@ test('a seeded preset sets no token the app does not know', () => {
   // A typo in a token name in the migration is invisible at runtime: the
   // stylesheet falls back to the base and the preset quietly looks like a
   // recolour of light or night with one stubborn surface.
-  const migration = readFileSync(join(root, 'src-tauri', 'migrations', '0004_curated_themes.sql'), 'utf8')
-  for (const preset of parsePresetRows(migration)) {
+  for (const preset of seededPresetRows()) {
     for (const name of Object.keys(preset.tokens)) {
       assert.ok(
         REQUIRED_TOKENS.includes(name),
@@ -418,8 +426,7 @@ test('no seeded token value would break a CSS declaration', () => {
   // A value with a semicolon or a brace would end the declaration early, and the
   // rest of the string would be parsed as a property name. This is the class of
   // thing that only shows up as a mysterious unstyled surface.
-  const migration = readFileSync(join(root, 'src-tauri', 'migrations', '0004_curated_themes.sql'), 'utf8')
-  for (const preset of parsePresetRows(migration)) {
+  for (const preset of seededPresetRows()) {
     for (const [name, value] of Object.entries(preset.tokens)) {
       assert.equal(typeof value, 'string', `${preset.theme_id} ${name} is not a string`)
       assert.ok(!/[;{}]/.test(value), `${preset.theme_id} ${name} contains a CSS delimiter: ${value}`)
@@ -427,6 +434,18 @@ test('no seeded token value would break a CSS declaration', () => {
     }
   }
 })
+
+/**
+ * The preset rows out of every migration that seeds one.
+ *
+ * Read in version order so the picker's built-ins-then-custom order stays
+ * predictable in tests. A later migration adds rows; it does not replace the
+ * earlier file, because an applied migration is frozen.
+ */
+const PRESET_MIGRATIONS = ['0004_curated_themes.sql', '0006_more_curated_themes.sql']
+const seededPresetRows = () => PRESET_MIGRATIONS.flatMap((file) =>
+  parsePresetRows(readFileSync(join(root, 'src-tauri', 'migrations', file), 'utf8')),
+)
 
 /**
  * The preset rows out of the migration.

@@ -1,7 +1,7 @@
 [package]
 name = "quill"
 version = "0.1.0"
-description = "Quill — a quiet, local-first writing workspace"
+description = "Quill — a desktop editor for long-form writing"
 authors = ["Quill"]
 edition = "2021"
 # Export dependencies (printpdf, zip via docx-rs) require 1.88. Tauri v2 has no

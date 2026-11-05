@@ -71,16 +71,14 @@ export function OnboardingFlow({
             <div className="onboarding-mark" aria-hidden="true">
               <img src="/quill-mark.png" alt="" />
             </div>
-            <h1>Quill</h1>
+            <h1>Welcome to Quill</h1>
             <p className="onboarding-lede">
-              A quiet place to write, with an assistant that can read your draft.
-              Everything lives on this machine.
+              A desktop editor for long-form writing, with an assistant that
+              reads the draft and stays out of the way until you ask.
             </p>
-            <ul className="onboarding-points">
-              <li>Write in a library that stays local and offline.</li>
-              <li>Ask the assistant about the draft you have open.</li>
-              <li>Hand it a subject and it writes, word by word, to a file you keep.</li>
-            </ul>
+            <p className="onboarding-fineprint">
+              Local-first by default. Your writing stays on this machine.
+            </p>
           </>
         )}
 
@@ -166,11 +164,16 @@ export function OnboardingFlow({
               Start writing
             </button>
           ) : (
-            <button type="button" className="onboarding-next" onClick={() => setStep(step + 1)}>
-              Continue
+            <button type="button" className={`onboarding-next${step === 0 ? ' wide' : ''}`} onClick={() => setStep(step + 1)}>
+              {step === 0 ? 'Get started' : 'Continue'}
             </button>
           )}
         </div>
+        {step === 0 && (
+          <p className="onboarding-terms">
+            Nothing leaves this machine unless you connect a model and ask it to.
+          </p>
+        )}
       </div>
     </div>
   )

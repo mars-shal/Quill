@@ -61,7 +61,7 @@ node --test --test-force-exit --test-concurrency=1 \
   --import ./tests/setup.mjs \
   --test tests/app-render.test.mjs \
   --test tests/chat-window.test.mjs \
-  --test tests/thesis-run.test.mjs \
+  --test tests/onboarding-first-run.test.mjs \
   --test tests/effect-stack.test.mjs \
   --test tests/theme-picker.test.mjs \
   --test tests/background-picker.test.mjs \

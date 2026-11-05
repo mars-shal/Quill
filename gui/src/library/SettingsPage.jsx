@@ -1217,6 +1217,7 @@ function AppearancePanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="Arial">Arial</SelectItem>
               <SelectItem value="Funnel Display">Funnel Display</SelectItem>
               <SelectItem value="Inter">Inter</SelectItem>
               <SelectItem value="Georgia">Georgia</SelectItem>

@@ -60,7 +60,7 @@ export const DOCS = [
 
 export const SETTINGS = {
   theme: 'light',
-  font: 'Inter',
+  font: 'Arial',
   density: 'comfortable',
   autosave: true,
   spellcheck: true,
@@ -679,7 +679,10 @@ export const tick = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms
  */
 export async function awaitBoot() {
   for (let i = 0; i < 400 && !root.querySelector('.app-shell'); i += 1) await tick(25)
-  for (let i = 0; i < 400 && root.querySelector('.boot-layer'); i += 1) await tick(25)
+  // The library owns the loading state now, so the boot overlay is gone while
+  // the shelf is still a skeleton. Wait for the real grid before any test
+  // reads a tile.
+  for (let i = 0; i < 400 && root.querySelector('.library-loading'); i += 1) await tick(25)
   await tick(50)
 }
 

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Quill — a quiet, local-first writing workspace with an AI companion.",
+  "description": "Quill — a desktop editor for long-form writing with built-in AI.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -58,6 +58,7 @@
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "@tiptap/y-tiptap": "^3.0.9",
+    "ascii-reveal": "https://github.com/mars-shal/ascii-reveal.git",
     "border-beam": "^1.4.1",
     "bot-avatars": "^0.1.1",
     "class-variance-authority": "^0.7.1",

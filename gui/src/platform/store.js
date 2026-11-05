@@ -232,7 +232,7 @@ export const defaultSettings = {
   // preference; 'light' and 'dark' are explicit choices made in the Appearance
   // mode cards (or implied by picking a theme of that mode).
   colorMode: null,
-  font: 'Funnel Display',
+  font: 'Arial',
   density: 'comfortable',
   autosave: true,
   spellcheck: true,

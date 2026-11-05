@@ -156,6 +156,26 @@ const inlineTokens = () => new Set(
 // the picker
 // ---------------------------------------------------------------------------
 
+test('the picker separates light and dark themes', async () => {
+  await openSettings()
+  const list = root.querySelector('.theme-cards-list')
+  const children = [...list.children]
+  const headings = children.filter((node) => node.classList.contains('theme-group-heading'))
+  assert.deepEqual(
+    headings.map((node) => node.firstElementChild.textContent.trim()),
+    ['Light', 'Dark'],
+    'the shelf reads as a light group and a dark group',
+  )
+
+  const split = children.indexOf(headings[1])
+  const modeOf = (card) => card.querySelector('.theme-preview').dataset.mode
+  for (const [index, node] of children.entries()) {
+    if (node.getAttribute('role') !== 'radio') continue
+    assert.equal(modeOf(node), index < split ? 'light' : 'dark', `${cardLabel(node)} sits on the wrong side of the rule`)
+  }
+  await closeSettings()
+})
+
 test('the picker offers the three built-ins and every saved theme', async () => {
   await openSettings()
   const names = themeCards().map(cardLabel)

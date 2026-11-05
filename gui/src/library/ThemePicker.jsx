@@ -21,7 +21,7 @@
  * a per-knob check would clear the knob that caused it.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../Icon.jsx'
 
 /** The reference's Select/Selected pill, with the badge doing the announcing. */
@@ -51,6 +51,18 @@ const THEME_NOTES = {
   light: 'Cool white page, plain and bright.',
   paper: 'Warm greys, so the page feels like stock.',
   night: 'Four dark greys, which keeps the panels apart.',
+  midnight: 'Deep blue-black with a cool ink.',
+  nord: 'Arctic greys and a frost-blue accent.',
+  dracula: 'Purple night, high-contrast ink.',
+  'rose-pine': 'Muted plum and rose, soft on the eyes.',
+  sepia: 'Warm paper with brown ink.',
+  solar: 'Sunlit cream and burnt orange.',
+  'catppuccin-latte': 'Soft pastels on a cool light base.',
+  'catppuccin-mocha': 'Aubergine dark with pastel ink.',
+  'tokyo-night': 'City-night blues and neon accents.',
+  'gruvbox-dark': 'Retro warm dark with amber ink.',
+  'rose-pine-dawn': 'Rose-pine light, gentle and warm.',
+  'everforest-light': 'Forest greens on warm cream.',
 }
 
 /** A saved theme gets a sentence about where it came from instead of a review. */
@@ -168,6 +180,16 @@ export default function ThemePicker({ theme, customThemes, onApply, onCustomThem
     })),
   ], [customThemes])
 
+  // The shelf reads as two sides, because the side is the first decision:
+  // a reader scanning for something easy on the eyes at night does not want
+  // the light palettes between the dark ones. Built-in order is preserved
+  // inside each group, then saved themes follow.
+  const groups = useMemo(() => [
+    { mode: 'light', label: 'Light' },
+    { mode: 'dark', label: 'Dark' },
+  ].map((group) => ({ ...group, options: options.filter((option) => option.mode === group.mode) }))
+    .filter((group) => group.options.length > 0), [options])
+
   const reload = useCallback(async () => {
     const rows = await store.listCustomThemes()
     onCustomThemesChange(rows)
@@ -272,21 +294,29 @@ export default function ThemePicker({ theme, customThemes, onApply, onCustomThem
           value={theme.id}
           onValueChange={onApply}
         >
-          {options.map((option) => (
-            <RadioGroupItem
-              key={option.id}
-              value={option.id}
-              indicator={false}
-              className="choice-card theme-card"
-            >
-              <ThemePreview tokens={option.tokens} mode={option.mode} compact />
-              <span className="choice-card-text">
-                <span className="choice-card-name">{option.name}</span>
-                <span className="choice-card-note">{noteFor(option)}</span>
-              </span>
-              <SelectPill selected={option.id === theme.id} />
-              <ThemeBadge />
-            </RadioGroupItem>
+          {groups.map((group) => (
+            <Fragment key={group.mode}>
+              <div className="theme-group-heading">
+                <span>{group.label}</span>
+                <span className="theme-group-count">{group.options.length}</span>
+              </div>
+              {group.options.map((option) => (
+                <RadioGroupItem
+                  key={option.id}
+                  value={option.id}
+                  indicator={false}
+                  className="choice-card theme-card"
+                >
+                  <ThemePreview tokens={option.tokens} mode={option.mode} compact />
+                  <span className="choice-card-text">
+                    <span className="choice-card-name">{option.name}</span>
+                    <span className="choice-card-note">{noteFor(option)}</span>
+                  </span>
+                  <SelectPill selected={option.id === theme.id} />
+                  <ThemeBadge />
+                </RadioGroupItem>
+              ))}
+            </Fragment>
           ))}
         </RadioGroup>
 

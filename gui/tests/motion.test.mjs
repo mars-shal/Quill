@@ -431,13 +431,16 @@ const libraryPresets = () => {
 
 test('every effect preset is one the library defines', () => {
   const known = libraryPresets()
-  for (const [, name] of jsx.matchAll(/preset="([\w-]+)"/g)) {
+  // Scoped to `MetalFx`: `preset` is not a metal-fx-only prop, and the boot
+  // screen's ascii-reveal preset is a different vocabulary. The guard is about
+  // the props the component actually forwards to the library.
+  for (const [, name] of jsx.matchAll(/<MetalFx\b[^>]*\bpreset="([\w-]+)"/g)) {
     assert.ok(
       known.preset.includes(name),
       `preset "${name}" is not a metal-fx preset; it defines ${known.preset.join(', ')}`,
     )
   }
-  for (const [, name] of jsx.matchAll(/variant="([\w-]+)"/g)) {
+  for (const [, name] of jsx.matchAll(/<MetalFx\b[^>]*\bvariant="([\w-]+)"/g)) {
     assert.ok(
       known.variant.includes(name),
       `variant "${name}" is not a metal-fx variant; it defines ${known.variant.join(', ')}`,

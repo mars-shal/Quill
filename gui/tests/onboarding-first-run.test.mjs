@@ -73,7 +73,7 @@ test('the second step is the theme, and picking one persists it', async () => {
   assert.ok(dark, 'a dark theme should be on offer')
   await clickAndSettle(dark)
 
-  const written = settingsCalls.slice(before).filter((call) => call && call.theme)
+  const written = settingsCalls.slice(before).filter((call) => call?.value?.theme)
   assert.equal(written.length, 1, 'choosing a look should be saved, not held as a draft')
   assert.equal(dark.getAttribute('aria-checked'), 'true', 'the chosen theme should read as chosen')
 })

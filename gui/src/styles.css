@@ -2,37 +2,35 @@
 
 :root {
   color-scheme: light;
-  /* The library's books, from book.html: deep navy cloth, warm cream ink,
-     coral ribbon and badge. Global tokens on purpose -- every book on the
-     shelf is the same design -- and declared here so every theme inherits. */
-  --book-cloth: #14233a;
-  --book-ink: #f1d9c4;
-  --book-accent: #e4694a;
-  --main: #ffffff;
-  --sidebar: #f4f4f2;
-  --chat: #fafaf9;
-  --backdrop: #e9ebee;
-  --text-1: #1d1d1f;
-  --text-2: #6e6e73;
-  --text-3: #747478;
-  --prose: #333336;
-  --accent: #3d7dff;
-  --accent-soft: rgba(61, 125, 255, 0.12);
-  --border: rgba(0, 0, 0, 0.08);
+  /* The library's bound books. Their cloth, ribbon and ink come from the
+     active theme in the `.document-cover` rules below: `cover.js` chooses a
+     per-document pigment, and the colour is resolved at paint time so changing
+     the theme re-binds every book without React re-rendering the shelf. */
+  --main: #F9F9F9;
+  --sidebar: #F1F1F1;
+  --chat: #FCFCFC;
+  --backdrop: #E9E9E9;
+  --text-1: #0F0F0F;
+  --text-2: #4B5563;
+  --text-3: #5F6672;
+  --prose: #0F0F0F;
+  --accent: #1A1A1A;
+  --accent-soft: rgba(26, 26, 26, 0.10);
+  --border: rgba(26, 26, 26, 0.10);
   /* Was declared only inside the three theme blocks, so a `data-theme` value
      outside that set left --border-strong undefined for .panel-mark, .new-cover
      and .tag-swatch. Declared here so it resolves in every theme. */
-  --border-strong: rgba(0, 0, 0, 0.22);
-  --hover: rgba(0, 0, 0, 0.045);
-  --active: rgba(0, 0, 0, 0.07);
-  --selection: rgba(61, 125, 255, 0.18);
+  --border-strong: rgba(26, 26, 26, 0.24);
+  --hover: rgba(26, 26, 26, 0.05);
+  --active: rgba(26, 26, 26, 0.09);
+  --selection: rgba(26, 26, 26, 0.18);
   --publish: #2b7d4f;
   --publish-hover: #266e46;
   /* Surfaces that were hardcoded per rule. --scrollbar-thumb and
      --backdrop-gradient are re-tuned per theme; --scrim sits over any theme;
      --brand-filter inverts the greyscale wordmark and panel marks. */
   --scrollbar-thumb: rgba(0, 0, 0, 0.16);
-  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0) 72%), linear-gradient(180deg, #eceff2, #e8eaee 53%, #e2e5e9);
+  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 72%), linear-gradient(180deg, #efefef, #e9e9e9 53%, #e2e2e2);
   --scrim: rgba(16, 22, 38, 0.46);
   /* P4-4. How opaque the three panel surfaces are, as a 0-1 alpha the applier
      multiplies into --main, --sidebar and --chat.
@@ -98,11 +96,13 @@
   --screen-control-hover: rgba(255, 255, 255, 0.1);
   --screen-control-edge: rgba(255, 255, 255, 0.15);
   --screen-rule: rgba(255, 255, 255, 0.09);
-  --screen-accent: #7aa2ff;
-  --screen-accent-wash: rgba(122, 162, 255, 0.42);
+  --screen-accent: #F9F9F9;
+  --screen-accent-wash: rgba(249, 249, 249, 0.36);
   --screen-danger: #ffb4ab;
   --screen-danger-wash: rgba(255, 138, 128, 0.13);
   --screen-primary-ink: #10131a;
+  --screen-paper: #F9F9F9;
+  --screen-paper-hover: #E5E5E5;
   /* P4-2. The editor's own paper texture, and how far a veil of --main is laid
      over it. `none` by default, so .editor-page paints nothing extra.
 
@@ -125,10 +125,10 @@
      background-color, which outranks any stylesheet rule, so a highlight is
      always a light swatch and the ink is always dark. See .document-prose mark. */
   --highlight-bg: #f6e9a8;
-  --highlight-ink: #1d1d1f;
-  --focus-ring: rgba(61, 125, 255, 0.45);
+  --highlight-ink: #0F0F0F;
+  --focus-ring: rgba(26, 26, 26, 0.62);
   --danger: #b3261e;
-  --on-accent: #ffffff;
+  --on-accent: #F9F9F9;
   --on-publish: #ffffff;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 3px 8px -3px rgba(0, 0, 0, 0.08);
   --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
@@ -195,7 +195,7 @@
   --cover-spine-edge: rgba(255, 255, 255, 0.11);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --mono: "DM Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --reading-font: "Funnel Display", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --reading-font: Arial, Helvetica, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -264,43 +264,34 @@ body {
    rendered a black wordmark on a black background. */
 body[data-theme="light"] {
   color-scheme: light;
-  --highlight-bg: #f6e9a8;
-  --highlight-ink: #1d1d1f;
-  --focus-ring: rgba(43, 95, 212, 0.45);
-  --main: #ffffff;
-  --sidebar: #f7f7f8;
-  --chat: #fbfbfc;
-  --backdrop: #ececed;
-  --text-1: #1d1d1f;
-  /* Two darkenings, for two different surfaces. First from #747478, which sat
-     at 4.35:1 on this theme's own --sidebar. Then again from #6e6e73, because
-     --backdrop is the one plane text sits on directly: `.boot-screen` sets
-     `color: var(--text-2); background: var(--backdrop)`, and --backdrop is
-     darker than --sidebar, so 4.30:1 there. `check-contrast.mjs` tests
-     --backdrop now; it did not, which is how a real failure sat behind a green
-     gate. --main/--sidebar/--chat all pass with room to spare, so the fix was
-     ink rather than a darker --backdrop: darkening the backdrop would have
-     bought the ratio by flattening page against rail, which is the trade the
-     night theme's own comment refuses. */
-  --text-2: #69696e;
-  --text-3: #69696d;
-  --prose: #333336;
-  --border: rgba(0, 0, 0, 0.1);
-  --border-strong: rgba(0, 0, 0, 0.22);
-  --hover: rgba(0, 0, 0, 0.04);
-  --active: rgba(0, 0, 0, 0.07);
-  --accent: #2b5fd4;
-  --accent-soft: rgba(43, 95, 212, 0.14);
-  --selection: rgba(43, 95, 212, 0.22);
-  --publish: #2b7d4f;
-  --publish-hover: #266e46;
-  --danger: #b3261e;
-  --on-accent: #ffffff;
-  --on-publish: #ffffff;
-  /* At 0.45 the composited ring reached only 2.00:1 against white, below the
-     3:1 a non-text indicator needs. */
-  --focus-ring: rgba(43, 95, 212, 0.75);
-  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 72%), linear-gradient(180deg, #ece9e2, #e5e1d9 53%, #dfdbd2);
+  --highlight-bg: #E5E7EB;
+  --highlight-ink: #0F0F0F;
+  --focus-ring: rgba(26, 26, 26, 0.62);
+  --main: #F9F9F9;
+  --sidebar: #F1F1F1;
+  --chat: #FCFCFC;
+  --backdrop: #E9E9E9;
+  --text-1: #0F0F0F;
+  /* Brand ink on the brand paper. The logo black is #1A1A1A; body text uses
+     the book's #0F0F0F ink, and the three text weights are grey steps rather
+     than a second hue. */
+  --text-2: #4B5563;
+  --text-3: #5F6672;
+  --prose: #0F0F0F;
+  --border: rgba(26, 26, 26, 0.10);
+  --border-strong: rgba(26, 26, 26, 0.24);
+  --hover: rgba(26, 26, 26, 0.05);
+  --active: rgba(26, 26, 26, 0.09);
+  --accent: #1A1A1A;
+  --accent-soft: rgba(26, 26, 26, 0.10);
+  --selection: rgba(26, 26, 26, 0.18);
+  --publish: #2B7D4F;
+  --publish-hover: #266E46;
+  --danger: #B3261E;
+  --on-accent: #F9F9F9;
+  --on-publish: #FFFFFF;
+  --focus-ring: rgba(26, 26, 26, 0.62);
+  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 72%), linear-gradient(180deg, #efefef, #e9e9e9 53%, #e2e2e2);
 }
 body[data-theme="paper"] {
   color-scheme: light;
@@ -375,39 +366,39 @@ body[data-theme="night"] {
      Every one stays under the 0.012 ceiling that keeps a dark theme genuinely
      dark, which is why the ladder is three deep rather than four. */
 
-  --main: #121212;
-  --sidebar: #101215;
-  --chat: #191b20;
-  --backdrop: #08090a;
-  --text-1: #ffffff;
-  --text-2: #b8bbc3;
+  --main: #1A1A1A;
+  --sidebar: #0F0F0F;
+  --chat: #181818;
+  --backdrop: #0A0A0A;
+  --text-1: #F9F9F9;
+  --text-2: #D1D5DB;
   /* The previous #777b85 sat at ~4.1:1 on --main, below the 4.5:1 needed for
      body-size text; lifted so small metadata stays legible. */
-  --text-3: #8f939d;
-  --prose: #dfe0e4;
+  --text-3: #9CA3AF;
+  --prose: #F1F1F1;
   /* Muted relative to the light-theme swatch, but still light: the ink stays
      dark in every theme because tag colours are stored inline. */
-  --highlight-bg: #e3c765;
-  --highlight-ink: #1d1d1f;
-  --focus-ring: rgba(121, 165, 255, 0.62);
-  --danger: #ff8a80;
-  --on-accent: #0d1117;
-  --publish: #52b788;
-  --publish-hover: #63c496;
+  --highlight-bg: #E5E7EB;
+  --highlight-ink: #0F0F0F;
+  --focus-ring: rgba(249, 249, 249, 0.62);
+  --danger: #FF8A80;
+  --on-accent: #1A1A1A;
+  --publish: #52B788;
+  --publish-hover: #63C496;
   /* The night publish green is light, so its label must be dark. */
-  --on-publish: #0d1117;
-  --border: rgba(255, 255, 255, 0.13);
-  --border-strong: rgba(255, 255, 255, 0.3);
-  --hover: rgba(255, 255, 255, 0.07);
-  --active: rgba(255, 255, 255, 0.12);
-  --accent: #79a5ff;
-  --accent-soft: rgba(121, 165, 255, 0.16);
-  --selection: rgba(121, 165, 255, 0.24);
+  --on-publish: #0D1117;
+  --border: rgba(249, 249, 249, 0.14);
+  --border-strong: rgba(249, 249, 249, 0.32);
+  --hover: rgba(249, 249, 249, 0.07);
+  --active: rgba(249, 249, 249, 0.12);
+  --accent: #F9F9F9;
+  --accent-soft: rgba(249, 249, 249, 0.12);
+  --selection: rgba(249, 249, 249, 0.22);
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
   --shadow-3: 0 40px 90px -25px rgba(0, 0, 0, 0.7);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
-  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(38, 41, 49, 0.6), rgba(8, 9, 10, 0) 72%), linear-gradient(180deg, #101215, #08090a 56%, #060708);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.18);
+  --backdrop-gradient: radial-gradient(ellipse 55% 34% at 50% 8%, rgba(48, 48, 48, 0.6), rgba(10, 10, 10, 0) 72%), linear-gradient(180deg, #151515, #0A0A0A 56%, #060606);
   /* The brand assets are 100% greyscale, so a dark theme inverts them instead
      of sitting them on a white plate. */
   --brand-filter: invert(1);
@@ -597,11 +588,18 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   border-radius: 7px;
   box-shadow: var(--shadow-1);
 }
-.panel-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.panel-mark img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 22%; }
+/* The icon is a reversed tile: its cloth is #1A1A1A, which is the same value as
+   the night page. A one-pixel light edge keeps the tile readable as an object
+   on dark surfaces; the wordmark itself is already light. */
+[data-mode="dark"] .panel-mark img,
+[data-mode="dark"] .boot-screen .boot-mark img,
+[data-mode="dark"] .onboarding-mark img { box-shadow: 0 0 0 1px var(--border-strong); }
 /* In a dark theme the mark sits directly on the sidebar rather than on a light
    plate. Keyed on data-mode so a custom dark theme gets it too. */
 [data-mode="dark"] .panel-mark { background: transparent; border-color: var(--border-strong); }
-[data-mode="dark"] .panel-mark img,
+/* The wordmark is ink on transparent and inverts; the app icon already carries
+   its own reversed cloth, so inverting it would turn the brand inside out. */
 [data-mode="dark"] .workspace-logo img { filter: var(--brand-filter); }
 .library-nav { display: grid; gap: 22px; margin-top: 42px; }
 .nav-group { min-width: 0; }
@@ -623,17 +621,17 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .library-main h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
 .library-main-head p { margin: 8px 0 0; color: var(--text-2); font-size: 12.5px; }
 .library-main-tools { display: flex; align-items: center; gap: 8px; }
-.soft-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 12px; color: var(--text-2); background: var(--main); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.025); font-size: 12px; font-weight: 600; transition: color 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease); }
-.soft-button:hover { color: var(--text-1); background: var(--hover); border-color: rgba(0, 0, 0, 0.13); }
+.soft-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 12px; color: var(--text-1); background: var(--main); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 1px 1px rgba(0, 0, 0, 0.025); font-size: 12px; font-weight: 600; transition: color 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease); }
+.soft-button:hover { color: var(--text-1); background: var(--hover); border-color: var(--border-strong); }
 .soft-button.primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
 .soft-button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 26px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .library-count { color: var(--text-2); font-size: 12px; }
 .library-controls, .view-toggle, .density-toggle { display: flex; align-items: center; gap: 8px; }
 .view-toggle, .density-toggle { gap: 3px; padding: 3px; background: var(--sidebar); border-radius: 8px; }
-.view-toggle button { display: grid; place-items: center; width: 27px; height: 25px; color: var(--text-3); background: transparent; border-radius: 5px; }
+.view-toggle button { display: grid; place-items: center; width: 27px; height: 25px; color: var(--text-2); background: transparent; border-radius: 5px; }
 .view-toggle button.active, .density-toggle button.active { color: var(--text-1); background: var(--main); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
-.density-toggle button { min-height: 25px; padding: 0 8px; color: var(--text-3); background: transparent; border-radius: 5px; font-size: 10.5px; font-weight: 600; }
+.density-toggle button { min-height: 25px; padding: 0 8px; color: var(--text-2); background: transparent; border-radius: 5px; font-size: 10.5px; font-weight: 600; }
 /* A tile is a book: the cover carries the title, so the label underneath only
    needs the category and length. Wider minimum than before, because a 150px
    cover forced long titles to wrap and then clip against the cover edge. */
@@ -668,9 +666,23 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 /* The empty filter state. `grid-column: 1 / -1` spans the auto-fill columns the
    grid computes, so the note sits across the shelf rather than in one cell of
    it. It replaces two skeleton tiles that claimed to be loading forever. */
-.library-empty { grid-column: 1 / -1; display: grid; gap: 5px; padding: 26px 2px; }
-.library-empty p { margin: 0; color: var(--text-1); font-size: 13.5px; font-weight: 600; }
-.library-empty small { color: var(--text-3); font-size: 12px; }
+/* Empty states are designed, not a sentence in a blank panel. The line art
+   takes the theme's ink, so it works on every palette without a second asset. */
+.empty-state { display: grid; justify-items: center; gap: 8px; max-width: 380px; margin: 0 auto; padding: 38px 18px 46px; text-align: center; }
+.empty-state-art { width: 170px; color: var(--text-3); }
+.empty-state-art svg { display: block; width: 100%; height: auto; }
+.empty-state-art .empty-state-accent { color: var(--accent); stroke: currentColor; }
+.empty-state-title { margin: 4px 0 0; color: var(--text-1); font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.empty-state-copy { max-width: 34ch; color: var(--text-2); font-size: 12px; line-height: 1.55; }
+.empty-state-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.library-empty { grid-column: 1 / -1; }
+/* The loading shelf. The ASCII skeleton is the real loading state; these rules
+   only give it a book-shaped frame and a label line to land in. */
+.library-loading { pointer-events: none; }
+.loading-tile { cursor: default; }
+.book-skeleton { position: relative; aspect-ratio: 3 / 4; overflow: hidden; background: var(--sidebar); border: 1px solid var(--border); border-radius: 3px 6px 6px 3px; }
+.book-skeleton > * { display: block; width: 100%; height: 100%; }
+.skeleton-line { display: block; width: 68%; height: 9px; margin-top: 10px; background: var(--hover); border-radius: 4px; }
 .document-tile { position: relative; min-width: 0; cursor: pointer; outline: none; }
 /* A cover is a bound book: dark cloth, dyed per document, with the title
    printed on it in light ink.
@@ -842,11 +854,17 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .list-view .new-cover svg { width: 22px; height: 22px; }
 
 /* --- The library as books, ported from book.html ----------------------------
-   The reader's own design: deep navy cloth with a turbulence-noise overlay
-   and a spine groove, a coral ribbon standing above the top edge (behind the
-   cloth), the mark on a coral badge flush with the top edge, and title +
-   edition stacked in the reference's flex flow with its type metrics. The
-   cloth/ink/accent are global --book-* tokens: every book is the same design.
+   The reader's own design: cloth with a turbulence-noise overlay and a spine
+   groove, a ribbon standing above the top edge (behind the cloth), the mark on
+   a badge flush with the top edge, and title + edition stacked in the
+   reference's flex flow with its type metrics.
+
+   The cloth is mixed from the theme's own surfaces: the sidebar is the cloth,
+   `cover.js` dyes a per-document pigment into it, and the tone lifts it toward
+   `--main`. Ribbon and badge use `--accent`, and the printed title uses
+   `--text-1`, so a custom theme such as Catppuccin re-binds the whole shelf --
+   background, ribbon and ink -- instead of only recolouring the page around a
+   fixed navy book.
    The tile's padding-top is the room the ribbon stands in. */
 .document-cover {
   aspect-ratio: 3 / 4;
@@ -854,8 +872,9 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 9% 8% 10%;
-  background: var(--book-cloth);
+  background: color-mix(in srgb, var(--main) var(--cover-lighten, 0%), color-mix(in srgb, var(--cover-pigment, var(--accent)) var(--cover-tint, 0%), var(--sidebar)));
   border: 0;
   border-radius: 3px 6px 6px 3px;
   box-shadow:
@@ -904,43 +923,19 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   left: 14%;
   width: 11%;
   height: 22%;
-  background: linear-gradient(90deg, #cf563a, var(--book-accent) 40%, #cf563a);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 82%, black), var(--accent) 40%, color-mix(in srgb, var(--accent) 82%, black));
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
 }
-/* The badge sits flush with the top edge (the reference does the same maths:
-   9% padding pulled back by a -9% margin), rounded at the bottom so it reads
-   as a tab sewn into the cloth. The mark centres itself inside: a percentage
-   padding here would be relative to the cover, not the badge. */
-.cover-badge {
-  position: relative;
-  z-index: 1;
-  flex: none;
-  width: 11%;
-  margin-top: -9%;
-  margin-bottom: 14%;
-  aspect-ratio: 1 / 1.35;
-  background: var(--book-accent);
-  border-radius: 0 0 4px 4px;
-  /* The reference's badge carries its number in dark ink on the coral tab;
-     the Quill mark came out of it (2026-11-04). The ink mixes from the cloth
-     token rather than being declared, so it stays inside the colour gate. */
-  display: grid;
-  place-items: center;
-  color: color-mix(in srgb, var(--book-cloth) 65%, black);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-/* Title and edition ride the reference's flex flow (badge, title, edition)
-   rather than absolute corners; these selectors match the layout rules'
-   specificity and come later, so they win over the old positioning. */
+/* Title and edition ride the reference's flex flow rather than absolute
+   corners; these selectors match the layout rules' specificity and come later,
+   so they win over the old positioning. */
 .document-cover.stacked .cover-title,
 .document-cover.ruled .cover-title {
   position: static;
   width: 100%;
   margin: 0;
   padding-top: 0;
-  color: var(--book-ink);
+  color: var(--text-1);
   border-top: 0;
   font-size: 20px;
   font-weight: 600;
@@ -950,14 +945,13 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 }
 .cover-edition {
   margin-top: 8%;
-  color: color-mix(in srgb, var(--book-ink) 72%, transparent);
+  color: color-mix(in srgb, var(--text-2) 82%, transparent);
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-align: center;
 }
 .list-view .cover-ribbon,
-.list-view .cover-badge,
 .list-view .cover-edition { display: none; }
 .document-tile { padding-top: 34px; }
 
@@ -1080,7 +1074,14 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .workspace-switch small { margin-top: 2px; color: var(--text-3); font-size: 10.5px; }
 .workspace-switch > svg { color: var(--text-3); }
 .panel-section { min-width: 0; }
-.outline-section { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; padding: 0 1px; }
+.outline-section > .group-label {
+  margin-bottom: 10px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+}
+.outline-section { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow: hidden; padding: 18px 1px 0; }
 .outline { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; padding: 0 0 12px; scrollbar-width: thin; }
 .outline-row { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; min-height: 31px; padding: 6px 8px; color: var(--text-2); background: transparent; border-radius: 7px; font-size: 13px; text-align: left; transition: color 0.2s var(--ease), background 0.2s var(--ease); }
 .outline-row:hover { color: var(--text-1); background: var(--hover); }
@@ -1093,7 +1094,10 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .outline-item.depth-h3 .outline-row { font-size: 12px; }
 .fold-spacer, .child-dot { display: grid; place-items: center; width: 16px; height: 18px; flex: none; color: var(--text-3); }
 .child-dot { width: 4px; height: 4px; margin-left: 6px; background: var(--text-3); border-radius: 50%; }
-.empty-outline { padding: 12px 8px; color: var(--text-3); font-size: 12px; line-height: 1.5; }
+.empty-outline { display: grid; justify-items: start; gap: 4px; padding: 16px 8px; color: var(--text-3); }
+.empty-outline svg { color: var(--text-3); }
+.empty-outline p { margin: 2px 0 0; color: var(--text-2); font-size: 12.5px; font-weight: 600; }
+.empty-outline small { color: var(--text-3); font-size: 11px; line-height: 1.5; }
 .add-section { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; color: var(--text-2); background: transparent; border-radius: 7px; font-size: 12.5px; text-align: left; }
 .add-section:hover { color: var(--text-1); background: var(--hover); }
 .collaborators { flex: none; margin-top: 16px; }
@@ -1216,6 +1220,13 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .tool-listbox-dot { flex: none; width: 6px; height: 6px; margin-left: auto; background: var(--accent); border-radius: 50%; }
 .tool-group { padding-left: 6px; margin-left: 2px; border-left: 1px solid var(--border); }
 .tool-group:first-of-type { border-left: 0; padding-left: 0; margin-left: 0; }
+/* Table size reads as a pair of labelled pickers, not two loose menus: the
+   reader is answering "how many rows, how many columns" at once. The triggers
+   share the toolbar's hand-built listbox, so a size list is styled like the
+   font and spacing lists instead of opening the OS popup. */
+.table-size { gap: 4px; }
+.table-size-label { color: var(--text-3); font-size: 10px; }
+.table-size .tool-listbox-trigger { min-width: 34px; height: 26px; padding: 0 5px; font-size: 11px; }
 .format-toolbar select { min-width: 88px; height: 30px; padding: 0 7px; color: var(--text-2); background: var(--main); border: 0; border-radius: 6px; font-size: 12px; font-weight: 500; }
 .format-toolbar select:hover { background: var(--hover); color: var(--text-1); }
 .format-toolbar select:nth-child(2) { min-width: 60px; }
@@ -1291,7 +1302,9 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
  * headings stay in proportion when the reader changes font size.
  */
 .editor-page {
-  --prose-size: 17px;
+  /* A4 sheet with Word's 12pt/Arial default, so a new document opens on the
+     same page a reader would see in a word processor. */
+  --prose-size: 12pt;
   --prose-leading: 1.72;
   --prose-gap: 0.95em;
 }
@@ -1411,14 +1424,31 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   table-layout: fixed;
   font-size: inherit;
 }
+/* TableKit keeps the table in a scrolling wrapper so a wide table cannot push
+   the writing column off screen. */
+.document-prose .tableWrapper { overflow-x: auto; }
+/* Column resizing: the handle is absolutely positioned in the cell, which is
+   why the cells below are `position: relative`. The accent line is easy to
+   find against both themes. */
 .document-prose th,
 .document-prose td {
+  position: relative;
   border: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
 }
+.document-prose .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -1px;
+  width: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.document-prose .resize-cursor { cursor: col-resize; }
 .document-prose th {
   background: var(--hover);
   color: var(--text-1);
@@ -1492,32 +1522,9 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .queued-chip { display: flex; align-items: center; gap: 6px; width: fit-content; margin-bottom: 8px; padding: 5px 10px; color: var(--text-3); background: var(--hover); border: 1px solid var(--border); border-radius: 999px; font-size: 10.5px; white-space: nowrap; }
 .attachment-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-chip button { display: grid; place-items: center; color: var(--text-3); background: transparent; }
-/* --- Write a thesis ----------------------------------------------------------
-   A card above the composer rather than a dialog: a run takes twenty minutes, so
-   the reader has to be able to close it and carry on reading the draft while it
-   works. The progress itself is in the transcript, which is where the assistant
-   already says things; this is only the request and the state of the service. */
-.chat-control.active { color: var(--text-1); background: var(--hover); }
-.run-card { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; padding: 10px; background: var(--main); border: 1px solid var(--border); border-radius: 13px; box-shadow: var(--shadow-1); }
-.run-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.run-label { color: var(--text-1); font-size: 12px; font-weight: 600; }
-/* The service's own state. Quiet for stopped, accent for the two states the
-   reader is waiting on, danger for the one they have to act on. */
-.run-state { color: var(--text-3); font-size: 10.5px; text-align: right; }
-.run-state.run-ready, .run-state.run-starting { color: var(--accent); }
-.run-state.run-failed { color: var(--danger); }
-.run-prompt { display: block; width: 100%; min-height: 52px; resize: vertical; padding: 7px 8px; color: var(--text-1); background: var(--chat); border: 1px solid var(--border); border-radius: 9px; font-family: var(--sans); font-size: 12.5px; line-height: 1.45; }
-.run-prompt::placeholder { color: var(--text-3); }
-.run-prompt:disabled { opacity: 0.62; }
-.run-actions { display: flex; align-items: center; gap: 7px; }
-.run-actions .soft-button { min-height: 30px; padding: 0 11px; font-size: 11.5px; }
-/* The phase reads like the `.message-status` it sits beside: this is the last
-   thing that happened, not the run's log. */
-.run-phase { min-width: 0; overflow: hidden; color: var(--text-3); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
-.run-error { margin: 0; color: var(--danger); font-size: 11px; line-height: 1.5; }
-/* Progress rows are the same rows as everything else in the transcript, a shade
-   quieter so twenty minutes of them do not read as twenty minutes of replies. */
-.chat-message.ai.is-run .message-body { color: var(--text-2); }
+/* An unreadable pick is still the reader's file; it stays visible with the
+   reason instead of vanishing, and the send button refuses it. */
+.attachment-chip.is-error { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 
 .selection-bubble { position: fixed; z-index: 80; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--main); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2); transform: translateX(-50%); }
 .selection-bubble button { display: grid; place-items: center; width: 29px; height: 30px; color: var(--text-2); background: transparent; border-radius: 7px; }
@@ -2046,7 +2053,6 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .model-trigger:focus-visible { outline: none; }
 .assistant-head-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 32px; color: var(--text-2); background: transparent; border: 1px solid transparent; border-radius: 10px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
 .assistant-head-action:hover { color: var(--text-1); background: var(--hover); }
-.run-thoughts { margin-top: 7px; color: var(--text-3); }
 .assistant-head-action { flex: none; min-height: 34px; padding: 0 11px; border-radius: 10px; }
 .share-popover { position: absolute; z-index: 14; top: calc(100% + 6px); right: 12px; width: min(260px, calc(100% - 24px)); padding: 12px; background: var(--main); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2); }
 .share-popover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
@@ -2115,7 +2121,7 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
   border-radius: 14px;
   box-shadow: var(--shadow-1);
 }
-.boot-screen .boot-mark img { width: 100%; height: 100%; object-fit: contain; }
+.boot-screen .boot-mark img { width: 100%; height: 100%; object-fit: contain; border-radius: 22%; }
 .boot-screen p { margin: 0; font-size: 13px; }
 .boot-screen h1 { margin: 0; color: var(--text-1); font-size: 18px; letter-spacing: -0.02em; }
 .boot-error p { max-width: 420px; color: var(--danger); line-height: 1.6; }
@@ -2703,18 +2709,20 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
    reader had finished asking it. It sits above the boot layer (20) and above
    Settings, which is a flex sibling rather than a layered surface -- the last
    step closes this card before opening that page, so the two never stack. */
-.onboarding-layer { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; background: var(--backdrop); }
-.onboarding-card { width: min(560px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; padding: 26px 30px 22px; color: var(--screen-ink); background: var(--screen-card); border: 1px solid var(--screen-card-edge); border-radius: 18px; box-shadow: var(--shadow-2); }
-.onboarding-card h1 { margin: 16px 0 8px; color: var(--screen-ink-strong); font-size: 21px; letter-spacing: -0.01em; }
-.onboarding-progress { display: flex; gap: 6px; margin-bottom: 4px; }
-.onboarding-progress span { width: 22px; height: 3px; background: var(--screen-rule); border-radius: 2px; }
-.onboarding-progress span[data-on] { background: var(--screen-accent); }
-.onboarding-mark { display: grid; place-items: center; width: 42px; height: 42px; margin-top: 6px; background: var(--screen-control); border-radius: 12px; }
-.onboarding-mark img { width: 26px; height: 26px; }
-.onboarding-lede { margin: 0 0 14px; color: var(--screen-ink-muted); font-size: 13.5px; line-height: 1.6; }
+.onboarding-layer { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; overflow: hidden; background: radial-gradient(ellipse 70% 60% at 50% 18%, var(--screen-control-hover), var(--screen-card) 62%, var(--screen-primary-ink)); }
+.onboarding-layer::before { position: absolute; inset: 0; background-image: url("/textures/grain.svg"); background-size: 180px 180px; opacity: 0.16; pointer-events: none; content: ""; }
+.onboarding-card { position: relative; z-index: 1; width: min(560px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; padding: 34px 34px 24px; color: var(--screen-ink); background: var(--screen-primary-ink); border: 1px solid var(--screen-card-edge); border-radius: 20px; box-shadow: var(--shadow-3); text-align: center; }
+.onboarding-card h1 { margin: 18px 0 8px; color: var(--screen-brand-ink); font-size: 30px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; }
+.onboarding-progress { display: flex; justify-content: center; gap: 6px; margin-bottom: 22px; }
+.onboarding-progress span { width: 24px; height: 3px; background: var(--screen-rule); border-radius: 2px; }
+.onboarding-progress span[data-on] { background: var(--screen-brand-ink); }
+.onboarding-mark { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 2px; background: var(--screen-card); border: 1px solid var(--screen-card-edge); border-radius: 16px; }
+.onboarding-mark img { width: 46px; height: 46px; border-radius: 22%; }
+.onboarding-lede { max-width: 42ch; margin: 0 auto 10px; color: var(--screen-ink-muted); font-size: 14px; line-height: 1.6; }
 .onboarding-points { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; color: var(--screen-ink-muted); font-size: 13px; line-height: 1.5; }
 .onboarding-points li { position: relative; padding-left: 18px; }
 .onboarding-points li::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--screen-accent); border-radius: 50%; }
+.onboarding-themes, .onboarding-tools, .onboarding-alts { text-align: left; }
 .onboarding-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 8px; }
 .onboarding-theme { display: grid; gap: 6px; justify-items: start; padding: 10px; color: var(--screen-ink-muted); background: var(--screen-control); border: 1px solid var(--screen-control-edge); border-radius: 10px; font-size: 12px; text-align: left; }
 .onboarding-theme:hover { color: var(--screen-ink); background: var(--screen-control-hover); }
@@ -2736,11 +2744,15 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .onboarding-alts { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; }
 .onboarding-alt { padding: 0; color: var(--screen-ink-muted); background: transparent; border: 0; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .onboarding-alt:hover { color: var(--screen-ink); }
-.onboarding-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; }
+.onboarding-actions { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 24px; }
 .onboarding-back { padding: 0; color: var(--screen-ink-faint); background: transparent; border: 0; font-size: 12.5px; }
 .onboarding-back:hover { color: var(--screen-ink); }
-.onboarding-next { min-height: 36px; padding: 0 16px; color: var(--screen-primary-ink); background: var(--screen-ink-strong); border-radius: 9px; font-size: 12.5px; font-weight: 600; }
-.onboarding-next:hover { background: var(--screen-ink); }
+.onboarding-next { min-height: 40px; padding: 0 20px; color: var(--screen-primary-ink); background: var(--screen-paper); border-radius: 9px; font-size: 13px; font-weight: 700; transition: background 0.16s var(--ease), transform 0.16s var(--ease); }
+.onboarding-next.wide { flex: 1; }
+.onboarding-next:hover { background: var(--screen-paper-hover); }
+.onboarding-terms { margin: 14px 0 0; color: var(--screen-ink-faint); font-size: 10.5px; line-height: 1.45; }
+.onboarding-fineprint { margin: 0 auto 4px; color: var(--screen-ink); font-size: 11.5px; line-height: 1.5; }
+
 
 /* ===========================================================================
    Settings and navigation: the design-system pass (2026-11-04).
@@ -2836,6 +2848,33 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .theme-cards-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+/* The light/dark demarcation. It spans both card columns and draws the rule to
+   the end of the row, so the shelf reads as two groups rather than one long
+   list that happens to alternate modes. */
+.theme-group-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--text-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.theme-group-heading:first-child { margin-top: 0; }
+.theme-group-heading::after {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+  content: "";
+}
+.theme-group-count {
+  color: var(--text-3);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 .theme-card {
   display: grid;
@@ -3303,3 +3342,44 @@ section#settings-assistant.settings-section {
   #settings-assistant .keys-head { align-items: stretch; }
   #settings-assistant .keys-primary { justify-content: center; }
 }
+
+/* A path the app does not own. Fixed brand palette: this can render before
+   settings load, and a 404 should not be a theme-dependent surprise. */
+.notfound {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: 28px;
+  color: var(--screen-primary-ink);
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 20%, var(--screen-control-hover), transparent 70%),
+    var(--screen-paper);
+}
+.notfound-card {
+  width: min(680px, 100%);
+  padding: 62px 34px 54px;
+  color: var(--screen-brand-ink);
+  background: var(--screen-card);
+  border: 1px solid var(--screen-card-edge);
+  border-radius: 22px;
+  box-shadow: var(--shadow-3);
+  text-align: center;
+}
+.notfound-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 11px;
+  color: var(--screen-ink-muted);
+  background: var(--screen-control);
+  border: 1px solid var(--screen-card-edge);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.notfound h1 { max-width: 16ch; margin: 20px auto 10px; color: var(--screen-brand-ink); font-size: clamp(30px, 5vw, 44px); font-weight: 700; letter-spacing: -0.04em; line-height: 1.06; }
+.notfound p { max-width: 38ch; margin: 0 auto 24px; color: var(--screen-ink-muted); font-size: 13px; line-height: 1.6; }
+.notfound-home { min-height: 40px; padding: 0 18px; color: var(--screen-primary-ink); background: var(--screen-paper); border-radius: 9px; font-size: 12.5px; font-weight: 700; }
+.notfound-home:hover { background: var(--screen-paper-hover); }

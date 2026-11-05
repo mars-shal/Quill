@@ -18,6 +18,7 @@ import { Editor } from './library/Editor.jsx'
 import { describeAccount } from './library/account.js'
 import { ErrorBoundary } from './ErrorBoundary.jsx'
 import { OnboardingFlow } from './OnboardingFlow.jsx'
+import { NotFound } from './NotFound.jsx'
 import { Button } from './library/ui/button.jsx'
 
 // The onboarding theme picker shows the built-in themes, resolved once at module
@@ -37,6 +38,7 @@ const SEED_KEY = 'quill:seeded:v1'
  * the reader's own system face.
  */
 function readingFontStack(font) {
+  if (font === 'Arial') return 'Arial, Helvetica, sans-serif'
   if (font === 'Georgia') return 'Georgia, "Times New Roman", serif'
   if (font === 'DM Mono') return '"DM Mono", "JetBrains Mono", ui-monospace, monospace'
   if (font === 'Inter') return 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -161,50 +163,32 @@ const seedDocs = [
  * boundary costs a paint rather than a teardown. Onboarding and sign-in will
  * mount here for the same reason.
  */
-function BootLayer({ bootstrapped, bootError, libraryEmpty, onCreate, reducedMotion }) {
-  // Nothing to say once the workspace is ready and a document is available.
-  if (bootstrapped && !bootError && !libraryEmpty) return null
+
+/**
+ * The boot error and empty-library states, rendered as an overlay.
+ *
+ * The loading state is not an overlay any more: the library itself renders a
+ * skeleton shelf while `bootstrapped` is false, so the first frame a reader sees
+ * is the place their books will appear. This layer now only speaks when the
+ * store failed or when the library is genuinely empty.
+ */
+function BootLayer({ bootstrapped, bootError }) {
+  // The loading state is the library's skeleton shelf, and the empty library
+  // is a designed state in the library itself. This layer is only the one thing
+  // that cannot be drawn in place: a store that failed to open.
+  if (!bootstrapped || !bootError) return null
   const mark = <div className="boot-mark"><img src="/quill-mark.png" alt="" /></div>
 
-  let body
-  if (!bootstrapped) {
-    body = (
-      <>
-        <p>Opening your workspace…</p>
-        <div style={{ marginTop: '16px', width: '220px', opacity: 0.8 }}>
-          <div style={{ fontFamily: 'monospace', fontSize: '12px', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
-            ░░░░░░░░░░░░░░░░░░<br/>
-            ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒<br/>
-            ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-          </div>
-        </div>
-      </>
-    )
-  } else if (bootError) {
-    body = (
-      <>
+  return (
+    <div className="boot-layer" role="alert">
+      <div className="boot-screen boot-error">
+        {mark}
         <h1>Quill could not open your library</h1>
         <p>{bootError}</p>
         <Button type="button" className="soft-button" onClick={() => window.location.reload()}>
           Try again
         </Button>
-      </>
-    )
-  } else {
-    // An empty library is a real state, not a failure. It has to stay visible:
-    // rendering nothing produced a blank window indistinguishable from a crash.
-    body = (
-      <>
-        <h1>Your library is empty</h1>
-        <p>Create a document to start writing, or import an existing file.</p>
-        <Button type="button" className="soft-button primary" onClick={onCreate}>New document</Button>
-      </>
-    )
-  }
-
-  return (
-    <div className="boot-layer" role={bootError ? 'alert' : undefined}>
-      <div className={`boot-screen${bootError ? ' boot-error' : ''}`}>{mark}{body}</div>
+      </div>
     </div>
   )
 }
@@ -897,7 +881,7 @@ function App() {
   return (
     <div className={`app-shell ${leftOpen ? 'left-open' : ''} ${rightOpen ? 'right-open' : ''} ${zen ? 'zen' : ''} ${settingsOpen ? 'settings-open' : ''}`} data-theme={theme.id} data-view={view}>
       <div className="library-layer">
-        <Library docs={docs} filter={filter} onFilter={applyFilter} onOpenDoc={openDoc} onNew={createDocument} onSettings={toggleSettings} onDetails={setDetailsId} onDownload={downloadDoc} onDelete={deleteDocument} sortAscending={sortAscending} onSort={toggleSort} viewMode={viewMode} onView={setViewMode} density={density} onDensity={setDensity} />
+        <Library docs={docs} filter={filter} onFilter={applyFilter} onOpenDoc={openDoc} onNew={createDocument} onSettings={toggleSettings} onDetails={setDetailsId} onDownload={downloadDoc} onDelete={deleteDocument} sortAscending={sortAscending} onSort={toggleSort} viewMode={viewMode} onView={setViewMode} density={density} onDensity={setDensity} loading={!bootstrapped} />
       </div>
       {currentDoc && (
         <div key={currentDoc.id} className="editor-layer" style={{ pointerEvents: view === 'editor' ? 'auto' : 'none' }}>
@@ -906,7 +890,7 @@ function App() {
       )}
       {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}
       {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} />}
-      <BootLayer key="boot-layer" bootstrapped={bootstrapped} bootError={bootError} libraryEmpty={!currentDoc} onCreate={createDocument} reducedMotion={reducedMotion} />
+      <BootLayer key="boot-layer" bootstrapped={bootstrapped} bootError={bootError} />
       {onboarding && bootstrapped && !bootError && (
         <OnboardingFlow
           key="onboarding"
@@ -919,17 +903,24 @@ function App() {
           onFinish={finishOnboarding}
         />
       )}
-      {!bootstrapped && (
-        <div style={{ position: 'fixed', bottom: '10px', right: '10px', width: '40px', opacity: 0.4, pointerEvents: 'none', zIndex: 100, fontFamily: 'monospace', fontSize: '10px', lineHeight: '1' }}>
-          <div>▓▒░</div>
-        </div>
-      )}
     </div>
   )
 }
 
+/**
+ * The app owns `/` and `/index.html`; every other path is a real 404 rather
+ * than a library that happens to load under a wrong URL.
+ */
+function Root() {
+  const path = typeof window !== 'undefined'
+    ? window.location.pathname.replace(/\/index\.html$/, '/')
+    : '/'
+  if (path !== '/') return <NotFound />
+  return <App />
+}
+
 createRoot(document.getElementById('root')).render(
   <ErrorBoundary>
-    <App />
+    <Root />
   </ErrorBoundary>,
 )

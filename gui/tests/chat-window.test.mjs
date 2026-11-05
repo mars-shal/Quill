@@ -580,3 +580,58 @@ test('a conversation belongs to one document, not the window', async () => {
   assert.doesNotMatch(transcript, /what is missing from this draft\?/, 'another document has its own conversation')
   assert.match(transcript, /second pair of eyes/, 'and opens on its own welcome message')
 })
+
+/** Picks a file on the composer's hidden input, the way the dialog does. */
+const pickFile = async (name, contents, type = 'text/markdown') => {
+  const input = root.querySelector('.chat-box input[type="file"]')
+  assert.ok(input, 'the composer offers a file input')
+  const file = new window.File([contents], name, { type })
+  Object.defineProperty(input, 'files', { value: [file], configurable: true })
+  input.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await tick(80)
+}
+
+test('an attached text file travels to the provider, not just its name', async () => {
+  const before = chatCalls.length
+  await pickFile('notes.md', 'The lighthouse keeper kept two journals.')
+
+  const chip = root.querySelector('.attachment-chip')
+  assert.ok(chip, 'the picked file gets a chip above the composer')
+  assert.match(chip.textContent, /notes\.md/)
+  assert.equal(chip.classList.contains('is-error'), false, 'a readable file is not an error')
+
+  await send('summarise this')
+  await tick(120)
+
+  assert.equal(chatCalls.length, before + 1, 'the turn still reaches the transport')
+  const { messages } = chatCalls.at(-1)
+  assert.match(
+    messages.at(-1).content,
+    /The lighthouse keeper kept two journals\./,
+    'the file contents are part of the prompt the model reads',
+  )
+  assert.match(messages.at(-1).content, /Attached file: notes\.md/, 'the prompt names the file')
+
+  const userTurn = [...root.querySelectorAll('.chat-message.user')].at(-1)
+  assert.match(userTurn.textContent, /Attached: notes\.md/, 'the reader sees the attachment named')
+  assert.doesNotMatch(
+    userTurn.textContent,
+    /lighthouse keeper/,
+    'the 12k-character body stays out of the visible bubble',
+  )
+})
+
+test('an unreadable file is shown with its reason instead of being sent', async () => {
+  await pickFile('scan.png', 'not really a png', 'image/png')
+
+  const chip = root.querySelector('.attachment-chip')
+  assert.ok(chip, 'the rejected pick still has a chip')
+  assert.equal(chip.classList.contains('is-error'), true, 'the chip reports the rejection')
+  assert.match(chip.textContent, /scan\.png/)
+  assert.match(chip.textContent, /text files/i, 'the reason says what can be read')
+  assert.equal(sendButton().disabled, true, 'an unreadable attachment cannot be sent on its own')
+
+  const dismiss = chip.querySelector('button')
+  await click(dismiss)
+  assert.equal(root.querySelector('.attachment-chip'), null, 'dismissing clears it')
+})

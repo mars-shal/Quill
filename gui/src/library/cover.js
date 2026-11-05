@@ -57,47 +57,40 @@
  *    and it costs the theme nothing because it borrows a token it already has.
  *
  * The pigment is a *tint in the cloth*, not the cloth itself. A cover is bound
- * in `--cover-cloth`, a near-black defined once in the stylesheet, and the
- * pigment is mixed into it at `COVER_PIGMENT_TINT`. That is what keeps the
- * shelf reading as shades of black -- a dark walnut, a near-black green, a
- * charcoal -- rather than as three saturated book jackets. The ratio is a
+ * in the theme's `--sidebar`, so the shelf always sits inside the active
+ * palette -- Catppuccin books are Catppuccin-coloured, night books are night --
+ * and the pigment is mixed into it at `COVER_PIGMENT_TINT`. The ratio is a
  * constant rather than a per-document axis because it is a property of the
  * dyeing, not of the individual book.
  */
 export const COVER_PIGMENTS = ['--accent', '--publish', '--sheet-shade']
 
 /**
- * How much pigment is dyed into the near-black cloth, as a percentage.
+ * How much pigment is dyed into the cloth, as a percentage.
  *
  * Small on purpose. At a third or a half the covers are coloured books; at one
  * part in seven the hue is legible when two covers sit side by side and
- * invisible when they do not, which is exactly what a shelf of black cloth
- * looks like under a lamp. `coverStyle` emits it as `--cover-tint` so the
- * stylesheet and `check:contrast` cannot disagree about the number.
+ * invisible when they do not, which is exactly what a cloth binding looks like
+ * under a lamp. `coverStyle` emits it as `--cover-tint` so the stylesheet and
+ * `check:contrast` cannot disagree about the number.
  */
 export const COVER_PIGMENT_TINT = 14
 
 /**
- * How much `--sheet-face` is lifted into the cloth, as a percentage.
+ * How much `--main` is lifted into the cloth, as a percentage.
  *
- * The ladder is what makes fifteen dark books fifteen *different* books. A
- * short, coarse, hand-spaced ladder rather than a continuous hash range, and the
- * spacing is the whole argument. Adjacent covers are read side by side at
- * roughly 168px, which is a large flat field of colour, so a fine-grained range
- * would hand fifteen documents fifteen technically-different blacks that all
- * read as the same black. Five steps, 5 points apart, are separable at a glance:
- * they land at roughly L* 14, 18, 22, 26 and 29, which is four points of
- * lightness per step across a 168px swatch.
+ * The ladder is what makes fifteen books fifteen *different* books. A short,
+ * coarse, hand-spaced ladder rather than a continuous hash range, because
+ * adjacent covers are read side by side at roughly 168px: a fine-grained range
+ * hands fifteen documents fifteen technically-different covers that all read as
+ * the same one. Each step mixes a little more of the page surface into the
+ * cloth, so a neighbour is visibly lighter without leaving the theme.
  *
- * The ceiling is 24% and it is a *material* decision before it is a contrast
- * one. Past about a quarter the cloth stops being black and becomes grey, which
- * is a different shelf; the ladder starts at 4% because below that every cover
- * is the same absence of light. The contrast side is the other bound: the title
- * ink is now the cover family's own `--cover-ink-strong` rather than the sheet's
- * dark ink, and the tile menu is `--cover-ink` on `--cover-plate`. Both are
- * theme-independent for the same reason `--cover-cloth` is -- cloth is cloth in
- * every theme -- so the lightest step is the only one that can disappoint, and
- * `check:contrast` re-measures it against every theme on every run.
+ * The ceiling is 24% and it is a material decision before it is a contrast one:
+ * past about a quarter the cloth stops reading as a binding and becomes the page
+ * again. The floor is 4% because below that every cover is the same absence of
+ * lift. The title is `--text-1` over the mixed surface, and `check:contrast`
+ * re-measures the whole ladder against every theme on every run.
  */
 export const COVER_TONES = [4, 9, 14, 19, 24]
 

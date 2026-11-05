@@ -295,7 +295,7 @@ test('the app shell is rendered without any early return', () => {
   assert.match(appBody, /<BootLayer/, 'the boot states must be an overlay in the shell')
 })
 
-test('the boot overlay is present while loading and gone once ready', async () => {
+test('the ready workspace has no boot overlay', async () => {
   // The suite's stubbed bootstrap resolves immediately, so the ready state is
   // what is observable here: no overlay, and a real shell.
   assertGone('.boot-layer', 'no overlay once the workspace is ready')
@@ -303,9 +303,12 @@ test('the boot overlay is present while loading and gone once ready', async () =
   assert.match(root.innerHTML, /library-layout/)
 })
 
-test('an empty library shows the overlay rather than a blank window', async () => {
-  // Drive the state directly: the render suite's stub always returns documents,
-  // so the empty branch is reached by clearing the list.
-  assert.ok(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main.jsx'), 'utf8')
-    .includes('libraryEmpty={!currentDoc}'), 'the overlay must be driven by document availability')
+test('an empty library shows a designed empty state rather than a blank window', async () => {
+  // The library owns the empty state now; the boot overlay is reserved for a
+  // store failure. The render suite's stub always returns documents, so this is
+  // pinned at the source rather than by clearing a list that is already built.
+  const library = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'library', 'Library.jsx'), 'utf8')
+  assert.match(library, /<EmptyState/, 'the library must render the shared empty state')
+  assert.match(library, /Your library is empty/, 'and say what the state is')
+  assert.match(library, /New document/, 'with the action that leaves it')
 })

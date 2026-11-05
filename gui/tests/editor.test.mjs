@@ -239,3 +239,61 @@ test('the app extension set registers the font family and size commands', async 
 
   editor.destroy()
 })
+
+// --- table size --------------------------------------------------------------
+//
+// The toolbar's Rows/Cols pickers walk Tiptap's one-step add/delete commands
+// until the table reaches the requested shape. That walk is the part that can
+// silently stop early, so it runs against the real extension list here.
+
+const table = (rows, cols) => {
+  const header = `<tr>${'<th>h</th>'.repeat(cols)}</tr>`
+  const body = `<tr>${'<td>c</td>'.repeat(cols)}</tr>`.repeat(rows - 1)
+  return `<table><tbody>${header}${body}</tbody></table>`
+}
+
+const selectFirstCell = (editor) => {
+  let position = null
+  editor.state.doc.descendants((node, at) => {
+    if (position !== null) return false
+    if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+      position = at + 2
+      return false
+    }
+    return true
+  })
+  assert.notEqual(position, null, 'the document contains a table cell')
+  editor.commands.setTextSelection(position)
+}
+
+test('the table size helper shrinks and grows a real table', async () => {
+  const { baseExtensions } = await import('../src/editor/useCollaborativeDocument.js')
+  const { readTableSize, resizeTable } = await import('../src/editor/tableSize.js')
+  const doc = new Y.Doc()
+  const editor = new Editor({
+    extensions: [
+      ...baseExtensions(),
+      Collaboration.configure({ document: doc, field: FRAGMENT }),
+    ],
+    content: null,
+  })
+
+  editor.commands.setContent(table(3, 3))
+  selectFirstCell(editor)
+  assert.deepEqual(readTableSize(editor), { rows: 3, cols: 3 }, 'a 3x3 table reads back as 3x3')
+
+  resizeTable(editor, 2, 2)
+  assert.deepEqual(readTableSize(editor), { rows: 2, cols: 2 }, 'shrinking removes rows and columns')
+  assert.match(editor.getHTML(), /<th[\s>]/, 'the header row survives a shrink')
+
+  resizeTable(editor, 4, 5)
+  assert.deepEqual(readTableSize(editor), { rows: 4, cols: 5 }, 'growing adds rows and columns')
+  assert.match(editor.getHTML(), /<th[\s>]/, 'the header row is still first after growing')
+
+  // The last row cannot be deleted, so the helper reports what it reached
+  // rather than pretending the request succeeded.
+  resizeTable(editor, 1, 1)
+  assert.deepEqual(readTableSize(editor), { rows: 1, cols: 1 }, 'a table can shrink to a single cell')
+
+  editor.destroy()
+})

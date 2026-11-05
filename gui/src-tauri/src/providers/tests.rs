@@ -433,7 +433,7 @@ async fn the_providers_table_has_the_expected_column_shape() {
 }
 
 /// The migration must land on a database that already carries the reader's
-/// data. Runs the real shipped file, against the real tables from 0001-0004,
+/// data. Runs the real shipped file, against the real tables from 0001-0006,
 /// with rows in them.
 #[tokio::test]
 async fn the_migration_preserves_rows_written_by_earlier_migrations() {
@@ -461,8 +461,8 @@ async fn the_migration_preserves_rows_written_by_earlier_migrations() {
     let themes: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM custom_themes")
         .fetch_one(&pool)
         .await
-        .expect("count 0004 themes");
-    assert_eq!(themes, 6, "0004 seeds six curated themes");
+        .expect("count curated themes");
+    assert_eq!(themes, 12, "0004 and 0006 seed twelve curated themes");
 
     sqlx::raw_sql(MIGRATION)
         .execute(&pool)

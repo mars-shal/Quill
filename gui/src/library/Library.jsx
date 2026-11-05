@@ -22,7 +22,9 @@
 import React, { memo, useEffect, useMemo, useState } from 'react'
 import { Icon } from '../Icon.jsx'
 import { coverStyle, coverTreatment } from './cover.js'
-import { Button } from './ui/button.jsx'
+import { AsciiRevealSafe } from './ui/AsciiRevealSafe.jsx'
+import { AsciiSkeleton } from 'ascii-reveal'
+import { EmptyState } from './ui/EmptyState.jsx'
 
 const navGroups = [
   {
@@ -62,7 +64,7 @@ function countWords(value) {
  * item, for tiles that were behind the library at `opacity: 0`. The props are
  * all referentially stable in `App` for that to be worth anything.
  */
-const Library = memo(function Library({ docs, filter, onFilter, onOpenDoc, onNew, onSettings, onDetails, onDownload, onDelete, sortAscending, onSort, viewMode, onView, density, onDensity }) {
+const Library = memo(function Library({ docs, filter, onFilter, onOpenDoc, onNew, onSettings, onDetails, onDownload, onDelete, sortAscending, onSort, viewMode, onView, density, onDensity, loading = false }) {
   const filteredDocs = useMemo(() => {
     const next = docs.filter((doc) => {
       if (filter.type === 'all') return true
@@ -132,26 +134,26 @@ const Library = memo(function Library({ docs, filter, onFilter, onOpenDoc, onNew
     return new Map(entries.map((entry) => [entry.id, entry]))
   }, [filteredDocs])
   const title = filter.type === 'all' ? 'All documents' : filter.value
-  const subtitle = filter.type === 'all' ? 'A quiet place for the things worth keeping.' : `${filteredDocs.length} ${filteredDocs.length === 1 ? 'document' : 'documents'} in ${filter.value.toLowerCase()}.`
+  const subtitle = loading ? 'Opening the shelf…' : filter.type === 'all' ? 'A quiet place for the things worth keeping.' : `${filteredDocs.length} ${filteredDocs.length === 1 ? 'document' : 'documents'} in ${filter.value.toLowerCase()}.`
 
   return <section className="library-page" aria-label="Quill library">
     <div className="library-backdrop" aria-hidden="true" />
     <div className="library-layout">
       <aside className="library-sidebar">
-        <div className="library-brand-row"><img className="library-wordmark" src="/quill-brand.png" width="523" height="194" alt="Quill" /></div>
+        <div className="library-brand-row"><img className="library-wordmark" src="/quill-brand.png" width="1680" height="759" alt="Quill" /></div>
         <nav className="library-nav" aria-label="Library filters">
           {navGroups.map((group) => <div className="nav-group" key={group.label}><div className="nav-group-label">{group.label}</div><div className="nav-list">{group.items.map((item) => { const active = filter.type === item.type && filter.value === item.value; return <button key={item.label} className={`nav-item${active ? ' active' : ''}`} type="button" aria-pressed={active} onClick={() => onFilter(item.type, item.value)}><Icon name={item.icon} size={15} /><span>{item.label}</span><span className="nav-count">{navCounts.get(item.label) ?? 0}</span></button> })}</div></div>)}
         </nav>
-        <Button className="soft-button sidebar-settings" type="button" onClick={onSettings}><Icon name="settings" size={14} /><span>Settings</span></Button>
+        <button className="soft-button sidebar-settings" type="button" onClick={onSettings}><Icon name="settings" size={14} /><span>Settings</span></button>
       </aside>
       <main className="library-main">
-        <header className="library-main-head"><div><div className="eyebrow">Workspace / Personal</div><h1>{title}</h1><p>{subtitle}</p></div><div className="library-main-tools"><Button className="soft-button" type="button" onClick={onSort}><Icon name="sort" size={14} /><span>{sortAscending ? 'Oldest' : 'Recent'}</span></Button><Button className="soft-button settings-fallback" type="button" onClick={onSettings}><Icon name="settings" size={14} /><span>Settings</span></Button><Button className="soft-button primary" type="button" onClick={onNew}><Icon name="plus" size={14} /><span>New document</span></Button></div></header>
-        <div className="library-toolbar"><span className="library-count">{filteredDocs.length} {filteredDocs.length === 1 ? 'document' : 'documents'}</span><div className="library-controls"><div className="view-toggle" role="group" aria-label="Library view"><button className={viewMode === 'grid' ? 'active' : ''} type="button" aria-label="Grid view" aria-pressed={viewMode === 'grid'} onClick={() => onView('grid')}><Icon name="grid" size={14} /></button><button className={viewMode === 'list' ? 'active' : ''} type="button" aria-label="List view" aria-pressed={viewMode === 'list'} onClick={() => onView('list')}><Icon name="list" size={14} /></button></div><div className="density-toggle" role="group" aria-label="Grid density"><button className={density === 'comfortable' ? 'active' : ''} type="button" data-density="comfortable" aria-pressed={density === 'comfortable'} onClick={() => onDensity('comfortable')}>Comfortable</button><button className={density === 'compact' ? 'active' : ''} type="button" data-density="compact" aria-pressed={density === 'compact'} onClick={() => onDensity('compact')}>Compact</button></div></div></div>
+        <header className="library-main-head"><div><div className="eyebrow">Workspace / Personal</div><h1>{title}</h1><p>{subtitle}</p></div><div className="library-main-tools"><button className="soft-button" type="button" onClick={onSort}><Icon name="sort" size={14} /><span>{sortAscending ? 'Oldest' : 'Recent'}</span></button><button className="soft-button settings-fallback" type="button" onClick={onSettings}><Icon name="settings" size={14} /><span>Settings</span></button><button className="soft-button primary" type="button" onClick={onNew}><Icon name="plus" size={14} /><span>New document</span></button></div></header>
+        <div className="library-toolbar"><span className="library-count">{loading ? 'Loading library…' : `${filteredDocs.length} ${filteredDocs.length === 1 ? 'document' : 'documents'}`}</span><div className="library-controls"><div className="view-toggle" role="group" aria-label="Library view"><button className={viewMode === 'grid' ? 'active' : ''} type="button" aria-label="Grid view" aria-pressed={viewMode === 'grid'} onClick={() => onView('grid')}><Icon name="grid" size={14} /></button><button className={viewMode === 'list' ? 'active' : ''} type="button" aria-label="List view" aria-pressed={viewMode === 'list'} onClick={() => onView('list')}><Icon name="list" size={14} /></button></div><div className="density-toggle" role="group" aria-label="Grid density"><button className={density === 'comfortable' ? 'active' : ''} type="button" data-density="comfortable" aria-pressed={density === 'comfortable'} onClick={() => onDensity('comfortable')}>Comfortable</button><button className={density === 'compact' ? 'active' : ''} type="button" data-density="compact" aria-pressed={density === 'compact'} onClick={() => onDensity('compact')}>Compact</button></div></div></div>
         {/* Keyed on the view and density. React remounts the grid when the key
             changes, which is what replays the tile entrance -- so returning from a
             document fades the books back in rather than showing them already
             standing there. */}
-        <div key={`${viewMode}:${density}`} className={`library-grid ${viewMode === 'list' ? 'list-view' : ''} ${density === 'compact' ? 'compact' : ''}`} aria-live="polite">
+        <AsciiRevealSafe key={`${viewMode}:${density}`} as="div" className={`library-grid ${viewMode === 'list' ? 'list-view' : ''} ${density === 'compact' ? 'compact' : ''}${loading ? ' library-loading' : ''}`} aria-live="polite" aria-busy={loading} preset="dither" duration="fast" origin="top-left" lazy={false} loading={loading} revealOnMount={!loading}>
           {/* Plain elements, no framer-motion. Every tile used to carry its own
               spring -- an `initial`/`animate` pair on mount, a `whileHover` lift,
               a `whileTap` press, and an `exit` -- and a fifteen-tile library meant
@@ -169,28 +171,42 @@ const Library = memo(function Library({ docs, filter, onFilter, onOpenDoc, onNew
               `<strong>`: `.tile-copy strong` is how the tests find a tile by its
               title, and a second strong inside the cover would make that query
               depend on DOM order for no reason. */}
-          {/* An empty filter says so.
-
-              This branch used to render two skeleton tiles reading "Loading… /
-              Preparing library" in the same voice as the boot screen. They never
-              resolved, because the list was not loading -- it was genuinely
-              empty -- so picking a collection with nothing in it left two fake
-              books promising a library that was never coming, and no way out of
-              the screen. The boot overlay already covers the first paint, so
-              nothing here was ever the real loading state.
-
-              The block is a plain element rather than a `.document-tile`: the
-              grid's tiles are the documents, and an empty filter has none. */}
-          {filteredDocs.length === 0 ? (
-            <div className="library-empty">
-              <p>No documents here yet.</p>
-              <small>Pick another collection, or start something new.</small>
-            </div>
+          {/* Loading is a shelf of ASCII skeletons; empty is a designed state
+              with its own next action. They are different facts and now look
+              different: a filter with nothing in it used to show two permanent
+              "Loading…" tiles, which promised a library that was never coming.
+              The skeleton is only rendered while the platform store is opening. */}
+          {loading ? (
+            Array.from({ length: 4 }, (_, index) => (
+              <div className="document-tile loading-tile" key={`loading-${index}`} aria-hidden="true">
+                <div className="book-skeleton" data-ascii-skeleton>
+                  <AsciiSkeleton as="div" variant="dither" rows={7} width="100%" height="100%" animate={false} seed={index} />
+                </div>
+                <div className="tile-copy"><span className="skeleton-line" /></div>
+              </div>
+            ))
+          ) : filteredDocs.length === 0 ? (
+            <EmptyState
+              className="library-empty"
+              title={docs.length === 0 ? 'Your library is empty' : 'Nothing here yet'}
+              copy={docs.length === 0
+                ? 'Create a document to start writing, or import an existing file.'
+                : `No documents in ${filter.value.toLowerCase()}. Try another collection, or start something new.`}
+            >
+              <button className="soft-button primary" type="button" onClick={onNew}>
+                <Icon name="plus" size={14} /><span>New document</span>
+              </button>
+              {docs.length > 0 && filter.type !== 'all' && (
+                <button className="soft-button" type="button" onClick={() => onFilter('all', 'all')}>
+                  Show all documents
+                </button>
+              )}
+            </EmptyState>
           ) : (
-            filteredDocs.map((doc, index) => { const tile = tiles.get(doc.id); const cover = tile.cover; return <article key={doc.id} className={`document-tile ${viewMode === 'list' ? 'list-tile' : ''}`} tabIndex="0" role="button" aria-label={`Open ${doc.title}`} onClick={() => onOpenDoc(doc.id)} onContextMenu={(event) => openContextMenu(event, doc)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenDoc(doc.id) } }}><div className={`document-cover ${cover.layout}`} style={coverStyle(cover)} aria-hidden="true"><span className="cover-ribbon" /><span className="cover-badge">{index + 1}</span><span className="cover-title">{doc.title}</span><span className="cover-edition">{doc.kind}</span></div><div className="tile-copy"><strong>{doc.title}</strong><span>{doc.kind} · {tile?.words ?? 0} words</span></div></article> })
+            filteredDocs.map((doc) => { const tile = tiles.get(doc.id); const cover = tile.cover; return <article key={doc.id} className={`document-tile ${viewMode === 'list' ? 'list-tile' : ''}`} tabIndex="0" role="button" aria-label={`Open ${doc.title}`} onClick={() => onOpenDoc(doc.id)} onContextMenu={(event) => openContextMenu(event, doc)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenDoc(doc.id) } }}><div className={`document-cover ${cover.layout}`} style={coverStyle(cover)} data-ascii="surface" aria-hidden="true"><span className="cover-ribbon" /><span className="cover-title">{doc.title}</span><span className="cover-edition">{doc.kind}</span></div><div className="tile-copy"><strong>{doc.title}</strong><span>{doc.kind} · {tile?.words ?? 0} words</span></div></article> })
           )}
-          <article key="new-document" className={`document-tile new-document-tile ${viewMode === 'list' ? 'list-tile' : ''}`} tabIndex="0" role="button" aria-label="Create a new document" onClick={onNew} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNew() } }}><div className="new-cover"><Icon name="plus" size={18} /><span>New document</span></div><div className="tile-copy"><strong>New document</strong><span>Starts a blank draft</span></div></article>
-        </div>
+          <article key="new-document" className={`document-tile new-document-tile ${viewMode === 'list' ? 'list-tile' : ''}`} tabIndex="0" role="button" aria-label="Create a new document" onClick={onNew} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNew() } }}><div className="new-cover" data-ascii="surface"><Icon name="plus" size={18} /><span>New document</span></div><div className="tile-copy"><strong>New document</strong><span>Starts a blank draft</span></div></article>
+        </AsciiRevealSafe>
       </main>
     </div>
     {contextMenu && (

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build a square 1024x1024 source icon for `tauri icon` from the Quill brand mark.
+"""Build the square source icon for `tauri icon` from the Quill brand icon.
 
-The brand mark is 185x194 (not square), so it is centred on a transparent square
-canvas with generous padding. The result is written to src-tauri/icons/source.png
-and is used as the input for `npm run tauri icon`.
+The brand kit ships a reversed square (ink cloth with the light wordmark), so
+the source is already square. It is scaled full-bleed rather than padded: the
+platform supplies its own mask and margin, and adding a second margin here made
+the tile small inside an already-rounded macOS icon.
 """
 
 from pathlib import Path
@@ -11,33 +12,18 @@ from pathlib import Path
 from PIL import Image
 
 GUI = Path(__file__).resolve().parents[1]
-MARK = GUI / "quill-mark.png"
+MARK = GUI / "public" / "brand" / "quill-reversed-2048.png"
 OUT = GUI / "src-tauri" / "icons" / "source.png"
 
 CANVAS = 1024
-INNER = 620  # glyph size, leaving safe padding around the mark
 
 
 def main() -> None:
     mark = Image.open(MARK).convert("RGBA")
-
-    # Scale the mark to the inner box while preserving aspect ratio.
-    scale = INNER / max(mark.size)
-    resized = mark.resize(
-        (max(1, round(mark.width * scale)), max(1, round(mark.height * scale))),
-        Image.LANCZOS,
-    )
-
-    canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-    offset = (
-        (CANVAS - resized.width) // 2,
-        (CANVAS - resized.height) // 2,
-    )
-    canvas.alpha_composite(resized, offset)
-
+    resized = mark.resize((CANVAS, CANVAS), Image.LANCZOS)
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(OUT)
-    print(f"wrote {OUT} ({canvas.size[0]}x{canvas.size[1]})")
+    resized.save(OUT)
+    print(f"wrote {OUT} ({resized.size[0]}x{resized.size[1]})")
 
 
 if __name__ == "__main__":

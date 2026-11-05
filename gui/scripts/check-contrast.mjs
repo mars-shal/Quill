@@ -206,34 +206,29 @@ function runSeparation(themes) {
  * The covers, which are the one surface a `color-mix` builds at paint time.
  *
  * Every other suite above names two tokens and measures them. A cover cannot be
- * measured that way: it is a near-black cloth, dyed with one of three pigments
+ * measured that way: it is the theme's sidebar, dyed with one of three pigments
  * and lifted by one of five strengths, and `flattenToken` cannot resolve a
  * `color-mix` -- `parseColor` returns null for it, deliberately, because a check
  * that silently skipped what it could not measure is a check that reports a
  * theme as accessible when part of it was never looked at. So this pass builds
  * the same two mixes the stylesheet builds, with `mix()`, out of the same
  * `COVER_PIGMENTS` / `COVER_PIGMENT_TINT` / `COVER_TONES` the grid renders from,
- * and measures the two inks that sit on top of it.
+ * and measures the title that sits on top of it.
  *
  * Both ends of the ladder are checked for every pigment in every theme rather
  * than a sample. Fifteen covers in a library is a small number, but the ladder
  * is fifteen long across three pigments and a reader's library is not bounded,
  * so the whole cross product is 45 colours per theme and it costs nothing.
  *
- * What each pair is:
- *
- *  - the cover title against the cover, at 4.5. It is body text at 12px, the
- *    same threshold `--text-1` on `--main` is held to.
- *  - the tile menu's ink against its own plate, at 3. It is an icon and a
- *    border, not text, and the plate is `--cover-plate` laid over the cover --
- *    the number that decides how far a cover may be lifted at all.
+ * The pair is the cover title against the cover, at 4.5. It is body text at
+ * 12px, the same threshold `--text-1` on `--main` is held to.
  */
 function runCovers(themes) {
   const failures = []
   const checks = []
   for (const [name, tokens] of themes) {
-    const face = flattenToken(tokens, '--sheet-face', '#ffffff')
-    const cloth = flattenToken(tokens, '--cover-cloth', face || '#ffffff')
+    const face = flattenToken(tokens, '--main', '#ffffff')
+    const cloth = flattenToken(tokens, '--sidebar', face || '#ffffff')
     if (!face || !cloth) {
       failures.push({ theme: name, label: 'cover tokens', detail: 'a cover token is not measurable' })
       continue
@@ -255,33 +250,27 @@ function runCovers(themes) {
           failures.push({ theme: name, label: `${pigment} ${tone}%`, detail: 'mix produced no colour' })
           continue
         }
-        // The inks are translucent, so each has to be flattened over the surface
-        // it is actually painted on -- the cover for the title, the cover's own
-        // plate for the menu. Flattening over white would measure a colour no
-        // reader ever sees. `mix()` returns channels, and `parseColor` only
-        // accepts strings, so the computed cover is rendered back to `rgb()`.
+        // The title is `--text-1` over the mixed cover. It has to be flattened
+        // over that surface rather than over white, because the cover is a
+        // theme surface with a pigment in it and can be light or dark.
+        // `mix()` returns channels, and `parseColor` only accepts strings, so
+        // the computed cover is rendered back to `rgb()`.
         const coverCss = `rgb(${cover.join(', ')})`
-        const printedTitle = flattenToken(tokens, '--cover-ink-strong', coverCss)
-        const plate = flattenToken(tokens, '--cover-plate', coverCss)
-        const printedMenu = plate ? flattenToken(tokens, '--cover-ink', plate) : null
+        const printedTitle = flattenToken(tokens, '--text-1', coverCss)
         const titleRatio = printedTitle ? contrast(printedTitle, coverCss) : null
-        const menuRatio = printedMenu && plate ? contrast(printedMenu, plate) : null
         checks.push({ theme: name, label: `${pigment} ${tone}%` })
         if (titleRatio === null || titleRatio < 4.5) {
           failures.push({ theme: name, label: `title on ${pigment} ${tone}%`, detail: `${titleRatio === null ? 'unmeasurable' : `${titleRatio.toFixed(2)}:1`}, needs 4.5` })
         }
-        if (menuRatio === null || menuRatio < 3) {
-          failures.push({ theme: name, label: `tile menu on ${pigment} ${tone}%`, detail: `${menuRatio === null ? 'unmeasurable' : `${menuRatio.toFixed(2)}:1`}, needs 3` })
-        }
       }
     }
   }
-  console.log(`\n--- Document covers (${COVER_PIGMENTS.length} pigments x ${COVER_TONES.length} tones x ${checks.length / (COVER_PIGMENTS.length * COVER_TONES.length)} themes, title 4.5 / menu 3) ---`)
+  console.log(`\n--- Document covers (${COVER_PIGMENTS.length} pigments x ${COVER_TONES.length} tones x ${checks.length / (COVER_PIGMENTS.length * COVER_TONES.length)} themes, title 4.5) ---`)
   // Only the worst case per theme is printed; 45 passing rows per theme is noise.
   for (const [name] of themes) {
     const mine = failures.filter((failure) => failure.theme === name)
     if (mine.length === 0) {
-      console.log(`  PASS  ${name.padEnd(7)} every binding holds both inks`)
+      console.log(`  PASS  ${name.padEnd(7)} the title holds on every binding`)
     } else {
       for (const failure of mine) {
         console.log(`  FAIL  ${failure.theme.padEnd(7)} ${failure.label.padEnd(30)} ${failure.detail}`)

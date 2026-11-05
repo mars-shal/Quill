@@ -138,7 +138,7 @@ test('a migrated control shows the value the setting already holds', async () =>
   assert.match(density.textContent, /comfortable/i, 'density shows its stored value')
 
   const font = root.querySelector('.settings-form #font')
-  assert.match(font.textContent, /Inter/, 'font shows its stored value')
+  assert.match(font.textContent, /Arial/, 'font shows its stored value')
 })
 
 test('the assistant and toolbar pickers are hand-built listboxes', async () => {
@@ -170,8 +170,8 @@ test('the assistant and toolbar pickers are hand-built listboxes', async () => {
   assert.match(source, /function ToolbarSelect\(/, 'the toolbar has its own listbox')
   assert.match(source, /label="Font family"/, 'the font control keeps its name')
   assert.match(source, /label="Text size"/, 'and so does the size control')
-  assert.match(source, /placeholder="Font"/, 'an unset family reads as a prompt, not "Inter"')
-  assert.match(source, /placeholder="Size"/, 'and an unset size is not reported as 16')
+  assert.match(source, /const DEFAULT_FONT = 'Arial'/, 'the document default family is Arial')
+  assert.match(source, /const DEFAULT_SIZE = '12'/, 'the document default size is 12pt')
   assert.match(
     source,
     /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/,

@@ -26,6 +26,7 @@ import { Icon } from '../Icon.jsx'
 import { hasWebGL2 } from '../platform/capabilities.js'
 import { EffectBoundary } from '../ErrorBoundary.jsx'
 import { getFastTransition, getMotionTransition } from './motion.js'
+import { readTableSize, resizeTable, tableSizes } from '../editor/tableSize.js'
 import {
   Select,
   SelectContent,
@@ -36,17 +37,9 @@ import {
 import { BorderBeam, BotAvatar, Liquid, LiquidItem, MetalFx, ThinkingOrb } from './chat-effects.js'
 import ThoughtLine from './ui/ThoughtLine.jsx'
 import {
-  cancelRun,
   chat,
   describeFailure,
   listProviderModels,
-  onPipelineStatus,
-  onRunEvent,
-  pipelineStart,
-  pipelineStatus,
-  runStatus,
-  startRun,
-  streamRun,
 } from '../platform/store.js'
 
 /**
@@ -121,44 +114,15 @@ const READING_FONTS = [
   'Trebuchet MS', 'Verdana',
   'Inter', 'DM Mono',
 ]
+// Point sizes, the unit the toolbar applies, so the list matches a word
+// processor rather than a CSS pixel ruler.
 const READING_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '22', '24', '28', '32', '36', '48', '72']
 
-/**
- * A thesis run, in the panel's own vocabulary.
- *
- * A run takes seven to twenty minutes, so the honest thing to show is the work
- * arriving rather than a progress bar: each event becomes one assistant message
- * in the transcript, and the assistant reads as the thing doing the writing.
- *
- * The Rust side sends the whole SSE record as the payload, so these fields sit at
- * the top level of it -- `payload.section`, not `payload.data.section`. The copy
- * is the panel's: sentence case, no exclamation, a plain report of what happened.
- */
-const RUN_PHASE = {
-  started: 'Getting started',
-  entity: 'Resolving the subject',
-  drift: 'Checking the sources',
-  section: 'Writing',
-  grounding: 'Checking the claims',
-  write_gate: 'Assembling the document',
-  finished: 'Done',
-  blocked: 'Refused',
-  failed: 'Failed',
-  cancelled: 'Cancelled',
-}
-
-const RUN_TERMINAL = ['finished', 'failed', 'blocked', 'cancelled']
-
-/** What the sidecar says about itself, as a word rather than a state name. */
-const RUN_SIDECAR = {
-  ready: 'Writing service ready',
-  starting: 'Starting the writing service',
-  stopped: 'Writing service stopped',
-  unavailable: 'Writing service unavailable',
-  failed: 'Writing service failed',
-}
-
-const RUN_STARTING_COPY = 'Starting the writing service'
+// The document defaults. A paragraph with no explicit mark is set in Arial at
+// 12pt by `.editor-page`/`.document-prose`, so the toolbar reports those values
+// instead of showing an empty picker that looks like nothing has been decided.
+const DEFAULT_FONT = 'Arial'
+const DEFAULT_SIZE = '12'
 
 const THOUGHT_VERBS = ['Thinking', 'Conspiring', 'Evaluating', 'Grounding', 'Sleuthing', 'Drafting']
 
@@ -180,128 +144,6 @@ function orbStateFor(steps) {
   if (/plan|lay out|outline|section/.test(last)) return 'weaving'
   if (/subject|concept|thinking it/.test(last)) return 'shaping'
   return 'working'
-}
-
-/**
- * One event as one assistant message.
- *
- * Every branch reads the payload rather than guessing: a run that says it was
- * refused, or that three claims could not be corroborated, has to be able to say
- * so in the reader's own transcript instead of behind a generic failure.
- */
-function friendlyLogLine(line) {
-  if (typeof line !== 'string') return line
-  let trimmed = line.trim()
-  if (!trimmed) return trimmed
-  // Network errors
-  if (/URLError|Connection refused|connect.*refused/i.test(trimmed)) {
-    return 'Network connection failed'
-  }
-  if (/searxng failed/i.test(trimmed)) {
-    return 'Search service unavailable'
-  }
-  if (/WARNING.*searxng/i.test(trimmed)) {
-    return 'Search service unavailable'
-  }
-  // Parse timing lines
-  if (/\|\s*INFO\s*\|.*timing/i.test(trimmed)) {
-    const m = trimmed.match(/-\s+([^\s(]+)\s+took\s+([0-9.]+)s/i)
-    if (m) {
-      const name = m[1]
-      const secs = parseFloat(m[2])
-      const secLabel = secs < 0.001 ? `${Math.round(secs * 1000000)}μs` : secs < 1 ? `${(secs * 1000).toFixed(0)}ms` : `${secs.toFixed(2)}s`
-      if (/parse_text/i.test(name)) return `Parsed document (${secLabel})`
-      if (/set\b/i.test(name)) return `Saved state (${secLabel})`
-      if (/get\b/i.test(name)) return `Loaded state (${secLabel})`
-      if (/derive_name/i.test(name)) return `Derived session name (${secLabel})`
-      if (/create\b/i.test(name)) return `Created session (${secLabel})`
-      if (/_flatten/i.test(name)) return `Flattened concepts (${secLabel})`
-      if (/estimate_tokens/i.test(name)) return `Estimated tokens (${secLabel})`
-      if (/run_with_retry/i.test(name)) return `Retried request (${secLabel})`
-      if (/wait_for/i.test(name)) return `Waited for budget (${secLabel})`
-      if (/Agent\.model|model took/i.test(name) || /model took/i.test(trimmed)) return `Model response (${secLabel})`
-      if (/Agent\./i.test(name)) return `Agent step (${secLabel})`
-      if (/_prompt_concept/i.test(name)) return `Generated concept (${secLabel})`
-      if (/TokenBudget/i.test(name)) return `Prepared request (${secLabel})`
-      if (/_searxng/i.test(name)) return `Searched the web (${secLabel})`
-      if (/ResearchEngine/i.test(name)) return `Researching (${secLabel})`
-      if (/ConceptEngine/i.test(name)) return `Building concept map (${secLabel})`
-      return `${name.replace(/_/g, ' ')} (${secLabel})`
-    }
-  }
-  // Concept source lines
-  if (/concept source:/i.test(trimmed)) {
-    const cm = trimmed.match(/concept source:.*concept='([^']+)'/i)
-    if (cm) return `Concept: ${cm[1]}`
-    return 'Refining concept'
-  }
-  // Clean up long log lines
-  if (trimmed.length > 150) {
-    if (/model took/i.test(trimmed)) return 'Model thinking...'
-    if (/searxng/i.test(trimmed)) return 'Searching web...'
-    if (/ConceptEngine/i.test(trimmed)) return 'Building concept map...'
-    if (/Agent/i.test(trimmed)) return 'Processing...'
-    if (/URLError|Connection refused/i.test(trimmed)) return 'Network connection failed'
-  }
-  // If it contains pipe-separated log format, try to extract the message part
-  if (trimmed.includes(' | ') && trimmed.includes(' - ')) {
-    const parts = trimmed.split(' - ')
-    if (parts.length > 1) {
-      trimmed = parts.slice(1).join(' - ')
-      // Re-apply cleaning
-      if (/URLError|Connection refused/i.test(trimmed)) return 'Network connection failed'
-      if (/searxng failed/i.test(trimmed)) return 'Search service unavailable'
-      if (trimmed.length > 120) {
-        if (/model took/i.test(trimmed)) return 'Model thinking...'
-        if (/searxng/i.test(trimmed)) return 'Searching web...'
-        if (/ConceptEngine/i.test(trimmed)) return 'Building concept map...'
-        if (/Agent/i.test(trimmed)) return 'Processing...'
-      }
-    }
-  }
-  return trimmed
-}
-
-function runLine(payload) {
-  const phase = RUN_PHASE[payload.event] || 'Writing'
-  const unverified = payload.unverified ?? 0
-  const placeholders = payload.placeholder ?? 0
-  // If payload contains log/trace lines, use them (formatted)
-  if (Array.isArray(payload.logs) && payload.logs.length) {
-    return friendlyLogLine(payload.logs[payload.logs.length - 1])
-  }
-  if (Array.isArray(payload.thoughts) && payload.thoughts.length) {
-    const last = payload.thoughts[payload.thoughts.length - 1]
-    if (typeof last === 'string') return friendlyLogLine(last)
-    if (last?.text) return friendlyLogLine(last.text)
-  }
-  if (typeof payload.log === 'string' && payload.log.trim()) {
-    return friendlyLogLine(payload.log)
-  }
-  if (typeof payload.detail === 'string' && /INFO.*\|/i.test(payload.detail)) {
-    return friendlyLogLine(payload.detail)
-  }
-  switch (payload.event) {
-    case 'entity':
-      return payload.detail || phase
-    case 'drift':
-      return `The sources describe a different period than the subject${payload.signal ? ` (${payload.signal})` : ''}`
-    case 'section':
-      return [payload.section, payload.verdict, payload.attempt > 1 ? `attempt ${payload.attempt}` : '']
-        .filter(Boolean)
-        .join(' · ')
-    case 'grounding':
-      return `${payload.section} · ${payload.corroborated ?? 0}/${payload.claims ?? 0} claims sourced${unverified ? `, ${unverified} softened` : ''}`
-    case 'write_gate':
-      return `${payload.written ?? 0} sections written · ${placeholders} left as placeholder${placeholders === 1 ? '' : 's'}`
-    case 'finished':
-      return 'The document is written.'
-    case 'blocked':
-    case 'failed':
-      return payload.error || phase
-    default:
-      return phase
-  }
 }
 
 /**
@@ -485,7 +327,7 @@ function ToolbarSelect({
  * plus TextStyle and Highlight. Alignment and tables would need extra
  * extensions and are deliberately not stubbed in.
  */
-function FormatToolbar({ editor, runCommand, onFont, onSize, tagsOpen, onToggleTags, applyTag, onInsertImage, onInsertMath }) {
+function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAULT_FONT, tagsOpen, onToggleTags, applyTag, onInsertImage, onInsertMath }) {
   useSelectionTick(editor)
   // Before the early return: hooks must run unconditionally.
   const [insertChoice, setInsertChoice] = useState('')
@@ -512,18 +354,18 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, tagsOpen, onToggleT
 
   // Read the family and size straight off the caret, the same way alignment
   // and spacing are read. Keeping them in local state meant the picker showed
-  // whatever was last applied (and "Inter"/"16" before anything was), so it
-  // looked pre-selected even in an untouched paragraph. An empty value is the
-  // honest answer: no explicit family or size is applied, and the trigger
-  // shows its placeholder rather than inventing one.
+  // whatever was last applied (and "Inter"/"16" before anything was). When no
+  // mark is present the document default is reported instead: Arial at 12pt,
+  // which is what `.editor-page` actually paints.
   const textStyle = editor.getAttributes('textStyle')
-  const currentFont = String(textStyle.fontFamily || '')
+  const currentFont = String(textStyle.fontFamily || defaultFont || DEFAULT_FONT)
     .replace(/["']/g, '')
     .split(',')[0]
     .trim()
   // Stored without units so it matches the fixed list; the unit is added back
-  // when the command runs.
-  const currentSize = String(textStyle.fontSize || '').replace('px', '').trim()
+  // when the command runs. Older documents may still carry pixels, so both
+  // units are stripped and the number is what the picker compares.
+  const currentSize = String(textStyle.fontSize || `${DEFAULT_SIZE}pt`).replace(/(?:px|pt)$/i, '').trim()
 
   // A family or size applied elsewhere can be absent from the fixed lists; the
   // applied value joins its own list instead of being blank in the trigger.
@@ -565,6 +407,7 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, tagsOpen, onToggleT
   // or 1x1 or remove it again -- the shape had to be right on the first try.
   // Rows and columns are separate actions because they are separate dimensions:
   // "delete row" cannot answer "make it two columns".
+  const tableSize = readTableSize(editor)
   if (editor.isActive('table')) {
     tools.push({ kind: 'group', label: 'Table', items: [
       { key: 'row-after', label: 'Add row below', title: 'Add row below', icon: 'plus', run: () => runCommand('addRowAfter') },
@@ -676,6 +519,27 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, tagsOpen, onToggleT
         </div>
       ))}
 
+      {tableSize && (
+        <div className="tool-group table-size" role="group" aria-label="Table size">
+          <span className="table-size-label">Rows</span>
+          <ToolbarSelect
+            label="Table rows"
+            value={String(tableSize.rows)}
+            placeholder="Rows"
+            options={tableSizes(tableSize.rows).map((count) => ({ value: String(count), label: String(count) }))}
+            onChange={(value) => resizeTable(editor, value, tableSize.cols)}
+          />
+          <span className="table-size-label">Cols</span>
+          <ToolbarSelect
+            label="Table columns"
+            value={String(tableSize.cols)}
+            placeholder="Cols"
+            options={tableSizes(tableSize.cols).map((count) => ({ value: String(count), label: String(count) }))}
+            onChange={(value) => resizeTable(editor, tableSize.rows, value)}
+          />
+        </div>
+      )}
+
       <div className="tool-group" role="group" aria-label="Highlight">
         {HIGHLIGHT_TAGS.map((tag) => (
           <button
@@ -706,7 +570,7 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, tagsOpen, onToggleT
       <div className="tool-group" role="group" aria-label="Text colour">
         <label className="color-control" title="Text colour">
           <span className="color-dot" />
-          <input type="color" defaultValue="#3d7dff" aria-label="Choose text color" onChange={(event) => runCommand('setColor', event.target.value)} />
+          <input type="color" defaultValue="#1A1A1A" aria-label="Choose text color" onChange={(event) => runCommand('setColor', event.target.value)} />
         </label>
       </div>
     </div>
@@ -743,8 +607,75 @@ function SuggestionRow({ onPick, gooey = false, transition }) {
   )
 }
 
+/**
+ * What a reader can attach to a turn.
+ *
+ * The panel can only hand the provider text, so the picker offers the formats
+ * that are genuinely text: prose, notes, data and source files. The cap keeps a
+ * long attachment from swallowing the per-model token budget; the turn says so
+ * when it truncates rather than silently dropping the rest.
+ */
+const MAX_ATTACHMENT_CHARS = 12000
+// A UTF-8 character is at most four bytes, so this is enough to fill the
+// character cap. Slicing before `text()` matters: a reader can pick a log file
+// far larger than the token budget, and reading all of it just to throw 99% away
+// would freeze the panel.
+const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_CHARS * 4
+const TEXT_FILE = /\.(?:txt|text|md|markdown|mdx|csv|tsv|json|ndjson|html?|xml|rtf|tex|ya?ml|toml|ini|cfg|log|rst|org|jsx?|tsx?|py|rs|go|c|cc|cpp|h|hpp|css|scss|sass|sql|sh|bash|zsh|rb|java|kt|swift|php|lua|r)$/i
+
+const formatBytes = (bytes) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** Reads one picked file into the shape the composer and the turn use. */
+async function readAttachment(file) {
+  if (!file.type.startsWith('text/') && !TEXT_FILE.test(file.name)) {
+    throw new Error('Quill can read text files such as .txt, .md, .csv, .json or code.')
+  }
+  const raw = await file.slice(0, MAX_ATTACHMENT_BYTES).text()
+  if (raw.includes('\u0000')) throw new Error('That file is not plain text.')
+  const text = raw.trim()
+  if (!text) throw new Error('That file is empty.')
+  return {
+    name: file.name,
+    size: file.size,
+    text: text.slice(0, MAX_ATTACHMENT_CHARS),
+    truncated: file.size > MAX_ATTACHMENT_BYTES || text.length > MAX_ATTACHMENT_CHARS,
+  }
+}
+
+/** How an attachment is quoted into the prompt the model reads. */
+function attachmentPrompt(attachment) {
+  if (!attachment) return ''
+  if (attachment.error) return `Attached file: ${attachment.name} (could not be read: ${attachment.error})`
+  return [
+    `Attached file: ${attachment.name}${attachment.truncated ? ' (truncated)' : ''}`,
+    '',
+    attachment.text,
+    '',
+    `--- end of ${attachment.name} ---`,
+  ].join('\n')
+}
+
 /** The message box, its controls and the send button. */
-function ChatComposer({ input, setInput, send, mode, setMode, attachment, setAttachment, fileRef, sendButton, runOpen, setRunOpen }) {
+function ChatComposer({ input, setInput, send, mode, setMode, attachment, setAttachment, fileRef, sendButton }) {
+  // The input is cleared before the read so picking the same file twice fires
+  // change again; the File object itself stays valid after the reset.
+  const pickFile = async (event) => {
+    const inputElement = event.currentTarget
+    const file = inputElement.files?.[0]
+    inputElement.value = ''
+    if (!file) return
+    try {
+      setAttachment(await readAttachment(file))
+    } catch (error) {
+      setAttachment({ name: file.name, size: file.size, error: reasonFor(error) })
+    }
+  }
+
   return (
     <div className="chat-box">
       <textarea
@@ -756,22 +687,14 @@ function ChatComposer({ input, setInput, send, mode, setMode, attachment, setAtt
       />
       <div className="chat-controls">
         <div className="chat-control-left">
-          <input ref={fileRef} type="file" hidden onChange={(event) => setAttachment(event.target.files?.[0]?.name || '')} />
-          <button className="chat-control" type="button" aria-label="Attach a file" onClick={() => fileRef.current?.click()}><Icon name="attach" size={15} /></button>
-          {/* The thesis run is a deliberate mode of its own, not a phrasing of
-              chat: it commits the reader to twenty minutes of writing, so it is
-              something they turn on rather than something they can trip over
-              while asking a question. */}
-          <button
-            className={`chat-control ${runOpen ? 'active' : ''}`}
-            type="button"
-            aria-pressed={runOpen}
-            aria-label="Write a thesis"
-            title="Write a thesis"
-            onClick={() => setRunOpen((value) => !value)}
-          >
-            <Icon name="draft" size={15} />
-          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            accept=".txt,.text,.md,.markdown,.mdx,.csv,.tsv,.json,.ndjson,.html,.htm,.xml,.rtf,.tex,.yaml,.yml,.toml,.ini,.cfg,.log,.rst,.org,.js,.jsx,.ts,.tsx,.py,.rs,.go,.c,.cc,.cpp,.h,.hpp,.css,.scss,.sass,.sql,.sh,.bash,.zsh,.rb,.java,.kt,.swift,.php,.lua,.r,text/*"
+            onChange={pickFile}
+          />
+          <button className="chat-control" type="button" aria-label="Attach a file" title="Attach a text file" onClick={() => fileRef.current?.click()}><Icon name="attach" size={15} /></button>
           <button className={`chat-mode ${mode === 'Auto' ? 'active' : ''}`} type="button" aria-pressed={mode === 'Auto'} onClick={() => setMode((value) => value === 'Ask' ? 'Edit' : 'Ask')}>{mode} <Icon name="down" size={12} /></button>
         </div>
         {sendButton}
@@ -780,26 +703,10 @@ function ChatComposer({ input, setInput, send, mode, setMode, attachment, setAtt
   )
 }
 
-/**
- * The closing report for a finished run.
- *
- * Read from the run's own snapshot rather than assembled from the event stream,
- * because the events stop at `write_gate` and the counts the reader cares about
- * are the ones the service settled on.
- */
-function summaryLine(summary) {
-  const written = summary?.written ?? 0
-  const placeholders = summary?.placeholders ?? 0
-  const parts = [`${written} written`, `${placeholders} placeholder${placeholders === 1 ? '' : 's'}`]
-  if (summary?.eventCount) parts.push(`${summary.eventCount} events`)
-  if (summary?.elapsed > 0) parts.push(`${Math.round(summary.elapsed)}s`)
-  return parts.join(' · ')
-}
-
 /** A rejected command, as something a reader can be told. */
 function reasonFor(error) {
   const message = String(error?.message ?? error ?? '').trim()
-  return message || 'The run did not start.'
+  return message || 'That did not work.'
 }
 
 /** What kind of turn answered, as the line under the answer. */
@@ -903,7 +810,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     if (value) selectModel(value)
   }
 
-  const [attachment, setAttachment] = useState('')
+  const [attachment, setAttachment] = useState(null)
   const [typing, setTyping] = useState(false)
   // Turns typed while one is thinking are held here, in order, and dispatch
   // when the composer goes idle (see the flush effect after `send`).
@@ -914,29 +821,10 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const [modelsState, setModelsState] = useState('idle')
   const [modelsError, setModelsError] = useState('')
   const [modelsRevision, setModelsRevision] = useState(0)
-  const [runSteps, setRunSteps] = useState([])
   // The stages this turn has actually reported, in the order they happened.
-  // Distinct from `runSteps`, which belongs to the thesis run: a question is not
-  // a run, and the two can be on screen at once.
   const [turnSteps, setTurnSteps] = useState([])
   const [thoughtVerb, setThoughtVerb] = useState(THOUGHT_VERBS[0])
   const [shownCount, setShownCount] = useState(MESSAGE_WINDOW)
-  // The thesis run: `{ state, runId, phase, error }`. Deliberately not the
-  // sidecar's state -- a healthy service can still refuse a run, so the two are
-  // reported apart.
-  const [runOpen, setRunOpen] = useState(false)
-  const [runPrompt, setRunPrompt] = useState('')
-  const [run, setRun] = useState(null)
-  const [sidecar, setSidecar] = useState(null)
-  // Which run the listener belongs to. `quill://run-event` carries every run the
-  // service has ever started, so an event is only progress if it names this one.
-  const activeRunId = useRef('')
-  const lastSeq = useRef(0)
-  const releaseRunEvent = useRef(null)
-  // Bumped whenever the reader cancels or starts again, so a sidecar that is
-  // still coming up when they gave up cannot wake up later and start a run
-  // nobody is waiting for.
-  const runTicket = useRef(0)
   const scrollRef = useRef(null)
   const fileRef = useRef(null)
   // Every effect below is decorative motion, so a reduced-motion request has to
@@ -995,12 +883,6 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // keeps the conversation; only the canvases go away.
   const live = Boolean(effectsActive) && Boolean(rightOpen)
 
-  // Whether the run is still owed output. The transient "Thinking" row is the
-  // 850ms chat reply's own signal, so a run replaces it: two indicators of the
-  // same assistant working would be one too many.
-  const runActive = run?.state === 'starting' || run?.state === 'running'
-  const runSettled = !!run && !runActive
-
   // The rendered slice. The full list stays in state, so this is a cap on what
   // is mounted rather than a truncation of the conversation.
   const hiddenCount = Math.max(0, messages.length - shownCount)
@@ -1027,7 +909,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     })
   }
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [messages, typing, runActive])
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [messages, typing])
 
   // The document-level Escape listener that only ever closed the Share popover
   // went with the popover; the panel's own Escape handling lives elsewhere.
@@ -1059,191 +941,6 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     return () => { cancelled = true }
   }, [activeProvider?.id, modelsRevision])
 
-  useEffect(() => {
-    if (!runActive) return undefined
-    setThoughtVerb(THOUGHT_VERBS[0])
-    const id = window.setInterval(() => {
-      setThoughtVerb((current) => THOUGHT_VERBS[(THOUGHT_VERBS.indexOf(current) + 1) % THOUGHT_VERBS.length])
-    }, 1200)
-    return () => window.clearInterval(id)
-  }, [runActive])
-
-  /**
-   * One event becomes one assistant message.
-   *
-   * Stable by construction -- refs and the message setter are the only things it
-   * closes over -- so the subscription below can be made once per visible run
-   * surface rather than on every render of a panel that gets new messages
-   * constantly.
-   */
-  // The latest write-through callback, reachable from that stable handler
-  // without breaking its contract: `appendToDocument` changes identity when the
-  // editor mounts, and a stale capture would append into nothing.
-  const writeDocumentRef = useRef(onWriteToDocument)
-  useEffect(() => { writeDocumentRef.current = onWriteToDocument }, [onWriteToDocument])
-  const handleRunEvent = useCallback((payload) => {
-    if (!payload || payload.runId !== activeRunId.current) return
-    // The stream is resumable, which means a reconnect replays everything after
-    // the last sequence number it was given. Without this a resumed stream would
-    // print sections the transcript already carries.
-    if (typeof payload.seq === 'number') {
-      if (payload.seq <= lastSeq.current) return
-      lastSeq.current = payload.seq
-    }
-    setRunSteps((current) => {
-      const pageSteps = payload.event === 'finished' && Array.isArray(payload.sources)
-        ? payload.sources.map((source) => `Read ${source.title || source.url}`)
-        : []
-      const step = runLine(payload)
-      // Also handle array of logs if present
-      let extra = []
-      if (Array.isArray(payload.logs)) {
-        extra = payload.logs.map((l) => friendlyLogLine(l)).filter(Boolean)
-      } else if (Array.isArray(payload.thoughts)) {
-        extra = payload.thoughts
-          .map((t) => (typeof t === 'string' ? friendlyLogLine(t) : t?.text ? friendlyLogLine(t.text) : null))
-          .filter(Boolean)
-      }
-      if (typeof payload.log === 'string' && payload.log.trim()) {
-        extra = [...extra, friendlyLogLine(payload.log)]
-      }
-      if (typeof payload.detail === 'string' && payload.detail.trim()) {
-        const d = friendlyLogLine(payload.detail)
-        if (d) extra = [...extra, d]
-      }
-      if (typeof payload.message === 'string' && payload.message.trim()) {
-        extra = [...extra, friendlyLogLine(payload.message)]
-      }
-      if (typeof payload.text === 'string' && payload.text.trim() && /INFO|WARNING|URLError|timing|searxng/i.test(payload.text)) {
-        extra = [...extra, friendlyLogLine(payload.text)]
-      }
-      const combined = [...current, step, ...extra, ...pageSteps].filter(Boolean)
-      // Avoid duplicate consecutive steps
-      const dedup = combined.filter((v, i, arr) => i === 0 || v !== arr[i - 1])
-      return dedup.slice(-200)
-    })
-    setMessages((current) => [...current, {
-      id: nextMessageId('ai'),
-      role: 'ai',
-      run: true,
-      text: payload.event === 'finished'
-        ? (payload.document_markdown ? 'The document is written into your open document.' : 'The document is written.')
-        : runLine(payload),
-      status: RUN_PHASE[payload.event] || 'Writing',
-    }])
-    if (!RUN_TERMINAL.includes(payload.event)) {
-      setRun({ state: 'running', runId: payload.runId, phase: RUN_PHASE[payload.event] || 'Writing', error: '' })
-      return
-    }
-    // The listener goes with the run. A subscription left behind keeps appending
-    // to a conversation nobody is watching, and the next run's first event would
-    // land in this one.
-    releaseRunEvent.current?.()
-    setRun({ state: payload.event === 'finished' ? 'done' : payload.event, runId: payload.runId, phase: '', error: payload.error || '' })
-    const finishedId = payload.runId
-    activeRunId.current = ''
-    if (payload.event !== 'finished') return
-    // The finished payload carries the written document itself, so it lands in
-    // the open document through the same path a chat WRITE uses. Without this
-    // the run's text stayed in the sidecar's store, where no reader could see
-    // it (2026-11-01: a full report, invisible until imported by hand).
-    if (payload.document_markdown) {
-      writeDocumentRef.current?.(payload.document_markdown)
-    }
-    // `finished` carries no counts of its own; the run's snapshot has the ones
-    // the reader cares about, and a missing snapshot must not swallow the news
-    // that the document exists.
-    runStatus(finishedId)
-      .then((summary) => setMessages((current) => [...current, {
-        id: nextMessageId('ai'), role: 'ai', run: true, text: summaryLine(summary), status: 'Done',
-      }]))
-      .catch(() => {})
-  }, [])
-
-  // Subscribed while the run surface is on screen, and torn down with it -- plus
-  // at the terminal event above, so a run that ended while the card was open does
-  // not hold a channel open against a service that has nothing left to say.
-  useEffect(() => {
-    if (!runOpen && !runActive) return undefined
-    pipelineStatus().then(setSidecar).catch(() => {})
-    const releaseStatus = onPipelineStatus((payload) => { if (payload) setSidecar(payload) })
-
-    // The run stream, unlike the sidecar status, is only wanted between Start and
-    // the terminal event: that handler releases it deliberately, and `runActive`
-    // flipping false re-runs this effect, so subscribing again would leave a
-    // channel nothing ever closes. The status above must keep refreshing with the
-    // card open regardless -- a settled run means the reader may well have walked
-    // away to Settings, and "ready" has to be re-checked when they come back.
-    if (!runActive && runSettled) return () => { releaseStatus() }
-
-    const releaseEvents = onRunEvent(handleRunEvent)
-    releaseRunEvent.current = releaseEvents
-    return () => {
-      if (releaseRunEvent.current === releaseEvents) releaseRunEvent.current = null
-      releaseEvents()
-      releaseStatus()
-    }
-  }, [runOpen, runActive, runSettled, handleRunEvent])
-
-  /**
-   * Brings the writing service up if it is not already, and reports whether the
-   * run may start. The poll is bounded because a sidecar that never becomes ready
-   * is the reader's answer to get now, not a spinner that runs all evening.
-   */
-  const ensureSidecar = async (ticket) => {
-    let state = await pipelineStatus()
-    if (state?.state !== 'ready') state = await pipelineStart()
-    setSidecar(state)
-    for (let attempt = 0; state?.state === 'starting' && attempt < 30 && runTicket.current === ticket; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 700))
-      state = await pipelineStatus()
-      setSidecar(state)
-    }
-    if (state?.state === 'ready') return true
-    setRun({ state: 'failed', runId: '', phase: '', error: state?.detail || 'The writing service is not running.' })
-    return false
-  }
-
-  const beginRun = async () => {
-    const subject = runPrompt.trim()
-    if (!subject) return
-    const ticket = (runTicket.current += 1)
-    setMessages((current) => [...current, { id: nextMessageId('user'), role: 'user', text: subject }])
-    setRunSteps([`${RUN_STARTING_COPY}…`])
-    setRun({ state: 'starting', runId: '', phase: `${RUN_STARTING_COPY}…`, error: '' })
-    if (!(await ensureSidecar(ticket))) return
-    if (runTicket.current !== ticket) return
-    try {
-      const started = await startRun({ prompt: subject, conceptMode: 'reference' })
-      if (!started?.runId) throw new Error('The writing service did not return a run.')
-      activeRunId.current = started.runId
-      lastSeq.current = 0
-      setRun({ state: 'running', runId: started.runId, phase: RUN_PHASE.started, error: '' })
-      // Opens the stream and resolves when the run ends, so it is started rather
-      // than awaited; the progress itself arrives on the event channel.
-      streamRun(started.runId).catch(() => {})
-    } catch (error) {
-      setRun({ state: 'failed', runId: '', phase: '', error: reasonFor(error) })
-    }
-  }
-
-  const stopRun = async () => {
-    const runId = activeRunId.current
-    runTicket.current += 1
-    if (!runId) {
-      setRun(null)
-      return
-    }
-    setRun((current) => (current ? { ...current, phase: 'Stopping' } : current))
-    try {
-      await cancelRun(runId)
-    } catch (error) {
-      setMessages((current) => [...current, {
-        id: nextMessageId('ai'), role: 'ai', run: true, text: reasonFor(error), status: 'Cancelled',
-      }])
-    }
-  }
-
   const selectModel = (value) => {
     onSelectModel?.(value)
   }
@@ -1254,7 +951,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     // widest one, so the bound holds without them having to think about it.
     setShownCount(MESSAGE_WINDOW)
     setInput('')
-    setAttachment('')
+    setAttachment(null)
     setTyping(false)
   }
 
@@ -1274,11 +971,21 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
    */
   const dispatch = (value, att) => {
     if (!value && !att) return
-    const text = [value, att ? `Attached: ${att}` : ''].filter(Boolean).join('\n')
+    const attachmentText = attachmentPrompt(att)
+    const prompt = [value, attachmentText].filter(Boolean).join('\n\n')
+    const text = [value, att ? `Attached: ${att.name}` : ''].filter(Boolean).join('\n')
     const userId = nextMessageId('user')
-    setMessages((current) => [...current, { id: userId, role: 'user', text }])
+    setMessages((current) => [...current, {
+      id: userId,
+      role: 'user',
+      text,
+      // The transcript shows the file's name; the provider gets its contents.
+      // Keeping them apart is what stops a 12k-character attachment from
+      // filling the reader's own bubble.
+      prompt: prompt === text ? undefined : prompt,
+    }])
     setInput('')
-    setAttachment('')
+    setAttachment(null)
     setTyping(true)
 
     // After the question it answers, not at the end of the transcript. The
@@ -1303,10 +1010,10 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     // own error text as if the reader had typed it.
     const history = [
       ...messages.filter((message) => message.id !== 'welcome' && message.role !== 'error'),
-      { id: userId, role: 'user', text },
+      { id: userId, role: 'user', text, prompt: prompt === text ? undefined : prompt },
     ].map((message) => ({
       role: message.role === 'ai' ? 'assistant' : 'user',
-      content: message.text,
+      content: message.prompt || message.text,
     }))
 
     setTurnSteps([])
@@ -1361,14 +1068,14 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
 
   const send = () => {
     const value = input.trim()
-    if (!value && !attachment) return
+    if (!value && !attachment?.text) return
     // A reply in flight holds the next turn instead of racing it: the queue
     // keeps order and the transcript never interleaves two turns. The composer
     // stays live -- typing here means "queued", and the chip above it says so.
     if (typing) {
       setQueued((q) => [...q, { value, attachment }])
       setInput('')
-      setAttachment('')
+      setAttachment(null)
       return
     }
     dispatch(value, attachment)
@@ -1402,7 +1109,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const canUseMetal = hasWebGL2() && live
 
   const plainSendButton = (
-    <motion.button className="send-button" type="button" disabled={!input.trim() && !attachment} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
+    <motion.button className="send-button" type="button" disabled={!input.trim() && !attachment?.text} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
       <Icon name="send" size={15} />
     </motion.button>
   )
@@ -1417,47 +1124,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     plainSendButton
   )
 
-  const composerProps = { input, setInput, send, mode, setMode, attachment, setAttachment, fileRef, runOpen, setRunOpen }
-
-  const runCard = (
-    <div className="run-card" role="group" aria-label="Write a thesis">
-      <div className="run-head">
-        <span className="run-label">Write a thesis</span>
-        <span className={`run-state run-${sidecar?.state ?? 'unknown'}`}>{RUN_SIDECAR[sidecar?.state] || 'Checking the writing service'}</span>
-      </div>
-      <textarea
-        className="run-prompt"
-        value={runPrompt}
-        onChange={(event) => setRunPrompt(event.target.value)}
-        aria-label="What the thesis should be about"
-        placeholder="Describe the subject. A run takes about ten minutes."
-        rows={2}
-        disabled={runActive}
-      />
-      <div className="run-actions">
-        <button className="soft-button primary" type="button" disabled={runActive || !runPrompt.trim()} onClick={beginRun}>
-          {runActive ? 'Writing' : 'Start writing'}
-        </button>
-        {runActive && <button className="soft-button" type="button" onClick={stopRun}>Cancel</button>}
-        <span className="run-phase" aria-live="polite">{run?.phase}</span>
-      </div>
-      {(runActive || runSteps.length > 0) && (
-        <ThoughtLine
-          className="run-thoughts"
-          label={`${thoughtVerb}…`}
-          doneLabel="Finished"
-          steps={runSteps}
-          working={runActive}
-          fontSize={13}
-          collapsible={true}
-          collapseOnSettle={false}
-          showTimer={true}
-          glyph={runSteps.some((s) => /search|research|searxng|compass/i.test(s)) ? 'compass' : runSteps.some((s) => /write|document|build|assemble|section|draft/i.test(s)) ? 'blocks' : 'sparkle'}
-        />
-      )}
-      {run?.error && <p className="run-error" role="alert">{run.error}</p>}
-    </div>
-  )
+  const composerProps = { input, setInput, send, mode, setMode, attachment, setAttachment, fileRef }
 
   return (
     <aside className="assistant-panel reduce-motion-exempt" aria-label="Conclave assistant">
@@ -1555,7 +1222,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         )}
         <AnimatePresence initial={false}>
           {visibleMessages.map((message) => (
-            <motion.div key={message.id} className={`chat-message ${message.role}${message.run ? ' is-run' : ''}${message.written ? ' is-written' : ''}`} initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={fast}>
+            <motion.div key={message.id} className={`chat-message ${message.role}${message.written ? ' is-written' : ''}`} initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={fast}>
               <div className="message-content">
                 {message.role === 'ai' && effectsActive && (
                   <EffectBoundary fallback={null}>
@@ -1564,7 +1231,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
                         type={message.id === 'welcome' ? 'clover' : 'star'}
                         size={26}
                         face="eyes"
-                        state={(typing || runActive) && message.id === messages[messages.length - 1]?.id ? 'working' : 'default'}
+                        state={typing && message.id === messages[messages.length - 1]?.id ? 'working' : 'default'}
                         theme={effectTheme}
                         interactive={false}
                         speed={0.8}
@@ -1609,7 +1276,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
               </div>
             </motion.div>
           ))}
-          {typing && !runActive && (
+          {typing && (
             <motion.div className="chat-message ai is-pending" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={fast}>
               <div className="message-content">
                 <div className="message-status typing-status">
@@ -1676,8 +1343,6 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
           </Liquid> : <SuggestionRow onPick={setInput} />}
         </EffectBoundary>
 
-        {runOpen && runCard}
-
         {queued.length > 0 && (
           <div className="queued-chip" role="status">
             <Icon name="sort" size={12} />
@@ -1685,10 +1350,14 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
           </div>
         )}
         {attachment && (
-          <div className="attachment-chip">
+          <div className={`attachment-chip${attachment.error ? ' is-error' : ''}`} role={attachment.error ? 'alert' : undefined}>
             <Icon name="file" size={12} />
-            <span>{attachment}</span>
-            <button type="button" aria-label={`Remove ${attachment}`} onClick={() => setAttachment('')}><Icon name="close" size={12} /></button>
+            <span title={attachment.error || attachment.name}>
+              {attachment.name}
+              {attachment.error ? ` — ${attachment.error}` : attachment.size ? ` · ${formatBytes(attachment.size)}` : ''}
+              {attachment.truncated ? ' · first 12,000 characters' : ''}
+            </span>
+            <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => setAttachment(null)}><Icon name="close" size={12} /></button>
           </div>
         )}
 
