@@ -392,6 +392,72 @@ pub async fn read_image_as_data_url(path: String) -> AppResult<ImageData> {
     images::read_image_as_data_url(Path::new(&path))
 }
 
+/// Check the public release feed for a newer Quill.
+///
+/// This is a network check, not a silent installer: the reader sees the
+/// version and the release link. Signed in-place updates need a release
+/// signing key and a published latest.json, which this repository does not
+/// have yet.
+#[tauri::command]
+pub async fn check_updates() -> AppResult<serde_json::Value> {
+    let current = env!("CARGO_PKG_VERSION");
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .user_agent(format!("Quill/{current}"))
+        .build()
+        .map_err(|err| AppError::Other(format!("cannot build the update client: {err}")))?;
+    let response = match client
+        .get("https://api.github.com/repos/mars-shal/Quill/releases/latest")
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(err) => {
+            return Ok(serde_json::json!({
+                "current": current,
+                "available": false,
+                "error": format!("could not reach GitHub: {err}"),
+            }))
+        }
+    };
+    if !response.status().is_success() {
+        return Ok(serde_json::json!({
+            "current": current,
+            "available": false,
+            "error": format!("GitHub returned {}", response.status()),
+        }));
+    }
+    let release: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|err| AppError::Other(format!("update feed was not JSON: {err}")))?;
+    let tag = release
+        .get("tag_name")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let key = |value: &str| -> Vec<u32> {
+        value
+            .trim_start_matches('v')
+            .split('.')
+            .map(|part| part.split('-').next().unwrap_or("0").parse().unwrap_or(0))
+            .collect()
+    };
+    let available = !tag.is_empty() && key(tag) > key(current);
+    Ok(serde_json::json!({
+        "current": current,
+        "latest": tag.trim_start_matches('v'),
+        "available": available,
+        "url": release.get("html_url").and_then(|value| value.as_str()).unwrap_or(""),
+        "notes": release.get("body").and_then(|value| value.as_str()).unwrap_or(""),
+        "published_at": release.get("published_at").and_then(|value| value.as_str()).unwrap_or(""),
+    }))
+}
+
+#[tauri::command]
+pub async fn convert_document(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    crate::pipeline::convert_with_sidecar(&app, &path).await
+}
+
 /// Reads one document the reader chose in the Open dialog.
 ///
 /// Like `read_image_as_data_url`, the path is the grant: the dialog chose it,

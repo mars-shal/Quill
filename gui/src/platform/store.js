@@ -166,6 +166,35 @@ export async function pickImportPaths() {
   return Array.isArray(picked) ? picked : [picked]
 }
 
+/** Broad document picker for chat attachments; MarkItDown handles the rest. */
+export async function pickDocumentPaths() {
+  if (!isTauri) return []
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const picked = await open({
+    title: 'Attach a document',
+    multiple: false,
+    directory: false,
+    filters: [
+      {
+        name: 'Documents',
+        extensions: [
+          'md', 'markdown', 'txt', 'text', 'html', 'htm', 'pdf', 'docx',
+          'pptx', 'xlsx', 'xls', 'csv', 'json', 'xml', 'epub', 'rtf',
+          'odt', 'ods', 'odp',
+        ],
+      },
+      { name: 'All files', extensions: ['*'] },
+    ],
+  })
+  return picked ? [picked] : []
+}
+
+/** Convert one chosen document to Markdown through MarkItDown. */
+export async function convertDocument(path) {
+  if (!isTauri) throw new Error('Document conversion requires the desktop app')
+  return (await tauriInvoke())('convert_document', { path })
+}
+
 /** Reads one text file the reader chose through the shell. */
 export async function readTextFile(path) {
   if (!isTauri) throw new Error('Opening a file requires the desktop app')
@@ -305,6 +334,8 @@ export const defaultSettings = {
   // A plain, direct academic voice for generated prose. It changes the prompt,
   // not the model: shorter sentences, active voice, no formulaic transitions.
   naturalVoice: true,
+  // JSON string of the saved writing profile, or empty for none.
+  writingProfile: '',
 }
 
 /**
@@ -828,7 +859,7 @@ export async function startRun({ prompt, documentId, sessionName, conceptMode } 
  * the first is still answering -- so the id is the only thing that stops one
  * turn's progress appearing inside another's bubble.
  */
-export async function chat({ messages, draft, conceptMode, variant, tokenSaving, naturalVoice, onStage } = {}) {
+export async function chat({ messages, draft, conceptMode, variant, tokenSaving, naturalVoice, writingProfile, researchMode, onStage } = {}) {
   if (!isTauri) throw new Error('The assistant needs the desktop app.')
   const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const release = typeof onStage === 'function'
@@ -847,6 +878,8 @@ export async function chat({ messages, draft, conceptMode, variant, tokenSaving,
       variant: variant ?? 'balanced',
       tokenSaving: Boolean(tokenSaving),
       naturalVoice: Boolean(naturalVoice),
+      writingProfile: writingProfile || null,
+      researchMode: Boolean(researchMode),
     })
   } finally {
     release()
@@ -871,6 +904,39 @@ export async function questionnaire({ messages, draft, tokenSaving } = {}) {
   const questions = Array.isArray(payload?.questions) ? payload.questions : []
   if (!questions.length) throw new Error('The assistant returned no questions.')
   return questions
+}
+
+/** Check the public release feed for a newer Quill. */
+export async function checkUpdates() {
+  if (!isTauri) return { current: 'browser-dev', available: false, error: 'Updates need the desktop app.' }
+  return (await tauriInvoke())('check_updates')
+}
+
+/** Open a release page in the system browser. */
+export async function openExternal(url) {
+  if (!url) return
+  if (!isTauri) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+    return
+  }
+  const { openUrl } = await import('@tauri-apps/plugin-opener')
+  await openUrl(url)
+}
+
+/** Build a local writing profile from the reader's own documents. */
+export async function profileWritingStyle({ texts } = {}) {
+  if (!isTauri) throw new Error('The writing profile needs the desktop app.')
+  return (await tauriInvoke())('api_profile', { texts: (texts ?? []).map(String) })
+}
+
+/** Transcribe one short voice recording through the provider. */
+export async function transcribeAudio({ audio, mime, filename } = {}) {
+  if (!isTauri) throw new Error('Voice input needs the desktop app.')
+  return (await tauriInvoke())('api_transcribe', {
+    audio,
+    mime: mime ?? 'audio/webm',
+    filename: filename ?? 'recording.webm',
+  })
 }
 
 /**

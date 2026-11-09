@@ -90,6 +90,9 @@ pub struct Settings {
     /// A plain, direct academic voice for generated prose.
     #[serde(default = "default_true")]
     pub natural_voice: bool,
+    /// JSON string of the locally built writing profile.
+    #[serde(default)]
+    pub writing_profile: String,
 }
 
 fn default_theme() -> String {
@@ -188,6 +191,7 @@ impl Settings {
             completion_delay: default_completion_delay(),
             format_on_import: default_true(),
             natural_voice: default_true(),
+            writing_profile: String::new(),
         }
     }
 
@@ -252,6 +256,9 @@ impl Settings {
         }
         if let Some(value) = patch.natural_voice {
             next.natural_voice = value;
+        }
+        if let Some(value) = &patch.writing_profile {
+            next.writing_profile = value.clone();
         }
         if let Some(value) = patch.texture_wash {
             // NaN is not `is_finite` and is not greater than 0.6, so a bare
@@ -323,6 +330,7 @@ pub struct SettingsPatch {
     pub completion_delay: Option<i64>,
     pub format_on_import: Option<bool>,
     pub natural_voice: Option<bool>,
+    pub writing_profile: Option<String>,
 }
 
 const SETTINGS_KEY: &str = "app";

@@ -191,6 +191,9 @@ export const handlers = {
   api_complete: () => '',
   api_questionnaire: () => ({ questions: [] }),
   api_verify: () => ({ dois: [], urls: [], url_checks: [], citations: [], reference_lines: [], plagiarism: { checked_sentences: 0, flagged_sentences: 0, matches: [] } }),
+  api_profile: () => ({ profile: { documents: 2, words: 1200, mean_sentence_words: 16, contractions_per_1000_words: 2, natural_voice_score: 82 }, prompt: 'Match the writer.' }),
+  api_transcribe: () => ({ text: 'spoken words' }),
+  check_updates: () => ({ current: '0.1.0', latest: '0.1.0', available: false, url: '' }),
   get_settings: () => SETTINGS,
   usage_stats: () => ({
     date: '2026-01-01',

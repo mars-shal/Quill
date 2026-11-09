@@ -27,6 +27,7 @@ import { hasWebGL2 } from '../platform/capabilities.js'
 import { EffectBoundary } from '../ErrorBoundary.jsx'
 import { getFastTransition, getMotionTransition } from './motion.js'
 import { renderChatMarkdown } from './chatMarkdown.js'
+import { VoiceBeam, useMicrophone } from 'voice-glow'
 import { readTableSize, resizeTable, tableSizes } from '../editor/tableSize.js'
 import {
   Select,
@@ -42,6 +43,10 @@ import {
   describeFailure,
   listProviderModels,
   questionnaire,
+  transcribeAudio,
+  pickDocumentPaths,
+  convertDocument,
+  runtime,
 } from '../platform/store.js'
 
 /**
@@ -674,7 +679,30 @@ function attachmentPrompt(attachment) {
 }
 
 /** The message box, its controls and the send button. */
-function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setConceptMode, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, sendButton, busy = false }) {
+function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setConceptMode, variant, setVariant, interview, setInterview, researchMode, setResearchMode, attachment, setAttachment, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
+  // The desktop picker goes through MarkItDown, which covers PDF, DOCX,
+  // PPTX, XLSX, HTML and more. The hidden input remains the browser fallback.
+  const pickDocument = async () => {
+    if (!runtime.isTauri) {
+      fileRef.current?.click()
+      return
+    }
+    try {
+      const [path] = await pickDocumentPaths()
+      if (!path) return
+      const markdown = await convertDocument(path)
+      const name = String(path).split(/[\\/]/).pop() || String(path)
+      setAttachment({
+        name,
+        size: markdown.length,
+        text: markdown.slice(0, MAX_ATTACHMENT_CHARS),
+        truncated: markdown.length > MAX_ATTACHMENT_CHARS,
+      })
+    } catch (error) {
+      setAttachment({ name: 'Document', size: 0, error: reasonFor(error) })
+    }
+  }
+
   // The input is cleared before the read so picking the same file twice fires
   // change again; the File object itself stays valid after the reset.
   const pickFile = async (event) => {
@@ -708,7 +736,23 @@ function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setCo
             accept=".txt,.text,.md,.markdown,.mdx,.csv,.tsv,.json,.ndjson,.html,.htm,.xml,.rtf,.tex,.yaml,.yml,.toml,.ini,.cfg,.log,.rst,.org,.js,.jsx,.ts,.tsx,.py,.rs,.go,.c,.cc,.cpp,.h,.hpp,.css,.scss,.sass,.sql,.sh,.bash,.zsh,.rb,.java,.kt,.swift,.php,.lua,.r,text/*"
             onChange={pickFile}
           />
-          <button className="chat-control" type="button" aria-label="Attach a file" title="Attach a text file" onClick={() => fileRef.current?.click()}><Icon name="attach" size={15} /></button>
+          <button className="chat-control" type="button" aria-label="Attach a document" title="Attach a document (PDF, DOCX, Markdown, text…)" onClick={pickDocument}><Icon name="attach" size={15} /></button>
+          <button
+            className={`chat-control chat-voice${voiceState === 'recording' ? ' is-recording' : ''}`}
+            type="button"
+            aria-label={voiceState === 'recording' ? 'Stop recording' : 'Record a voice note'}
+            aria-pressed={voiceState === 'recording'}
+            title={voiceState === 'recording' ? 'Stop and transcribe' : 'Record a voice note'}
+            onClick={voiceState === 'recording' ? onVoiceStop : onVoiceStart}
+            disabled={busy || voiceState === 'transcribing'}
+          >
+            <Icon name={voiceState === 'recording' ? 'mic-off' : 'mic'} size={15} />
+          </button>
+          {voiceState !== 'idle' && (
+            <span className="chat-voice-status" role="status">
+              {voiceState === 'recording' ? 'Listening…' : voiceState === 'transcribing' ? 'Transcribing…' : voiceError || 'Microphone'}
+            </span>
+          )}
           <button className={`chat-mode ${mode === 'Auto' ? 'active' : ''}`} type="button" aria-pressed={mode === 'Auto'} onClick={() => setMode((value) => value === 'Ask' ? 'Edit' : 'Ask')}>{mode} <Icon name="down" size={12} /></button>
           <button
             className={`chat-mode chat-concept ${conceptMode === 'survey' ? 'active' : ''}`}
@@ -719,6 +763,16 @@ function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setCo
             onClick={() => setConceptMode((value) => value === 'survey' ? 'reference' : 'survey')}
           >
             {conceptMode === 'survey' ? 'Survey' : 'Reference'} <Icon name="down" size={12} />
+          </button>
+          <button
+            className={`chat-mode chat-search ${researchMode ? 'active' : ''}`}
+            type="button"
+            title="Search the web, pull the sources into the answer, then write from them."
+            aria-label={`Search and pull: ${researchMode ? 'on' : 'off'}`}
+            aria-pressed={researchMode}
+            onClick={() => setResearchMode((value) => !value)}
+          >
+            Search &amp; pull
           </button>
           <button
             className="chat-mode chat-variant"
@@ -1001,6 +1055,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // Interview is a one-shot mode: it asks the questionnaire for the next turn,
   // then turns itself off so the answers can be written without another round.
   const [interview, setInterview] = useState(false)
+  const [researchMode, setResearchMode] = useState(false)
   const [liveModels, setLiveModels] = useState([])
   const [modelsState, setModelsState] = useState('idle')
   const [modelsError, setModelsError] = useState('')
@@ -1011,6 +1066,79 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const [shownCount, setShownCount] = useState(MESSAGE_WINDOW)
   const scrollRef = useRef(null)
   const fileRef = useRef(null)
+  const mic = useMicrophone()
+  const micRef = useRef(mic)
+  micRef.current = mic
+  const recorderRef = useRef(null)
+  const chunksRef = useRef([])
+  const [voiceState, setVoiceState] = useState('idle')
+  const [voiceError, setVoiceError] = useState('')
+
+  const startVoice = useCallback(async () => {
+    const microphone = micRef.current
+    if (!microphone?.supported) {
+      setVoiceError('This webview has no microphone support.')
+      setVoiceState('error')
+      return
+    }
+    try {
+      const stream = await microphone.start()
+      if (!stream) {
+        setVoiceError(microphone.error?.message || 'Microphone permission was not granted.')
+        setVoiceState('error')
+        return
+      }
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
+      const mimeType = candidates.find((type) => window.MediaRecorder?.isTypeSupported?.(type)) || ''
+      const recorder = mimeType ? new window.MediaRecorder(stream, { mimeType }) : new window.MediaRecorder(stream)
+      chunksRef.current = []
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size) chunksRef.current.push(event.data)
+      }
+      recorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        chunksRef.current = []
+        setVoiceState('transcribing')
+        setVoiceError('')
+        try {
+          const bytes = new Uint8Array(await blob.arrayBuffer())
+          let binary = ''
+          for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+          }
+          const result = await transcribeAudio({
+            audio: window.btoa(binary),
+            mime: blob.type || 'audio/webm',
+            filename: 'quill-voice.webm',
+          })
+          const text = String(result?.text || '').trim()
+          if (text) {
+            setInput((current) => (current.trim() ? `${current.trim()} ${text}` : text))
+          } else {
+            setVoiceError('No speech was detected.')
+          }
+        } catch (error) {
+          setVoiceError(error?.message || 'The recording could not be transcribed.')
+        } finally {
+          setVoiceState('idle')
+        }
+      }
+      recorder.start()
+      recorderRef.current = recorder
+      setVoiceError('')
+      setVoiceState('recording')
+    } catch (error) {
+      setVoiceError(error?.message || 'The microphone could not be started.')
+      setVoiceState('error')
+    }
+  }, [setInput])
+
+  const stopVoice = useCallback(() => {
+    const recorder = recorderRef.current
+    recorderRef.current = null
+    if (recorder && recorder.state !== 'inactive') recorder.stop()
+    micRef.current?.stop?.()
+  }, [])
   // Every effect below is decorative motion, so a reduced-motion request has to
   // freeze all of them, not just the CSS transitions.
   //
@@ -1206,6 +1334,14 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       variant,
       tokenSaving: Boolean(settings?.tokenSaving),
       naturalVoice: Boolean(settings?.naturalVoice),
+      researchMode,
+      writingProfile: (() => {
+        try {
+          return JSON.parse(settings?.writingProfile || 'null')?.prompt || ''
+        } catch {
+          return ''
+        }
+      })(),
       // Each stage the sidecar reports is appended once. The sidecar already
       // drops a repeat of the stage it just emitted; this keeps a step that
       // legitimately happens twice from filling the list twice.
@@ -1236,6 +1372,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
           role: 'ai',
           text: wrote ? 'Written to the document.' : (reply || 'The assistant returned an empty answer.'),
           status: describeTransport(transport, task),
+          task,
           sources: Array.isArray(sources) ? sources : [],
           written: wrote,
         })
@@ -1377,7 +1514,13 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     plainSendButton
   )
 
-  const composerProps = { input, setInput, send, mode, setMode, conceptMode, setConceptMode, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, busy: typing }
+  const composerProps = {
+    input, setInput, send, mode, setMode, conceptMode, setConceptMode,
+    variant, setVariant, interview, setInterview, researchMode, setResearchMode,
+    attachment, setAttachment,
+    fileRef, busy: typing, voiceState, voiceError, onVoiceStart: startVoice,
+    onVoiceStop: stopVoice,
+  }
 
   return (
     <aside className="assistant-panel reduce-motion-exempt" aria-label="Conclave assistant">
@@ -1519,6 +1662,21 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
                     />
                   )}
                 </div>
+                {message.sources?.length > 0 && message.task === 'RESEARCH' && (
+                  <button
+                    className="message-pull"
+                    type="button"
+                    onClick={() => {
+                      const markdown = [
+                        '## Sources',
+                        ...message.sources.map((source, index) => `${index + 1}. [${source.title || source.url}](${source.url})`),
+                      ].join('\n')
+                      onWriteToDocument?.(markdown)
+                    }}
+                  >
+                    <Icon name="download" size={12} /> Pull sources into the document
+                  </button>
+                )}
                 {message.sources?.length > 0 && (
                   <details className="message-sources">
                     <summary>
@@ -1631,9 +1789,20 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         {/* BorderBeam wraps the composer, so the fallback re-renders the same
             component without the beam. */}
         <EffectBoundary fallback={<ChatComposer {...composerProps} sendButton={plainSendButton} />}>
-          <BorderBeam className="chat-beam" size="line" colorVariant={effectTheme === 'dark' ? 'ice' : 'ocean'} strength={0.55} active={typing && !assistantReducedMotion} theme={effectTheme} duration={3.2}>
-            <ChatComposer {...composerProps} sendButton={decoratedSendButton} />
-          </BorderBeam>
+          {voiceState === 'idle' ? (
+            <BorderBeam className="chat-beam" size="line" colorVariant={effectTheme === 'dark' ? 'ice' : 'ocean'} strength={0.55} active={typing && !assistantReducedMotion} theme={effectTheme} duration={3.2}>
+              <ChatComposer {...composerProps} sendButton={decoratedSendButton} />
+            </BorderBeam>
+          ) : (
+            <VoiceBeam
+              stream={mic.stream}
+              processing={voiceState === 'transcribing'}
+              theme={effectTheme}
+              paused={assistantReducedMotion}
+            >
+              <ChatComposer {...composerProps} sendButton={decoratedSendButton} />
+            </VoiceBeam>
+          )}
         </EffectBoundary>
       </div>
     </aside>

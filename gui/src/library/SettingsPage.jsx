@@ -42,6 +42,7 @@ import {
 } from "./ui/select.jsx";
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.jsx'
 import { Switch } from './ui/switch.jsx'
+import { profileWritingStyle, checkUpdates, openExternal } from '../platform/store.js'
 
 /**
  * The sections, and the only list of them.
@@ -333,6 +334,7 @@ function SettingsPage({
   onSaveProvider,
   onCreateProvider,
   onReplayOnboarding,
+  documents = [],
 }) {
   const [draft, setDraft] = useState(settings);
   const [apiKey, setApiKey] = useState(sessionApiKey);
@@ -593,6 +595,7 @@ function SettingsPage({
               onSaveProvider,
               onCreateProvider,
               onReplayOnboarding,
+              documents,
             };
             return SETTINGS_SECTIONS.map((section) => {
               const Panel = section.Panel;
@@ -691,6 +694,7 @@ function AssistantPanel({
   onDisconnect,
   onSelectModel,
   localTools = [],
+  documents = [],
   onAdoptTool,
   onSaveProvider,
   onCreateProvider,
@@ -1350,7 +1354,56 @@ function ChoiceBadge() {
   );
 }
 
-function WritingPanel({ draft, update, onReplayOnboarding }) {
+function WritingPanel({ draft, update, onReplayOnboarding, documents = [] }) {
+  const [profileState, setProfileState] = useState("idle");
+  const [profileError, setProfileError] = useState("");
+  const [updateState, setUpdateState] = useState("idle");
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const savedProfile = (() => {
+    try {
+      return draft.writingProfile ? JSON.parse(draft.writingProfile) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const studyWriting = async () => {
+    const texts = documents
+      .map((doc) => String(doc.content || ""))
+      .filter((text) => text.trim());
+    if (!texts.length) {
+      setProfileError("Open or import a few documents first.");
+      setProfileState("error");
+      return;
+    }
+    setProfileState("loading");
+    setProfileError("");
+    try {
+      const result = await profileWritingStyle({ texts });
+      const data = result?.profile || {};
+      update("writingProfile", JSON.stringify({
+        ...data,
+        prompt: result?.prompt || "",
+        builtAt: new Date().toISOString(),
+      }));
+      setProfileState("ready");
+    } catch (error) {
+      setProfileError(error?.message || "Could not build the profile.");
+      setProfileState("error");
+    }
+  };
+
+  const lookForUpdates = async () => {
+    setUpdateState("loading");
+    try {
+      setUpdateInfo(await checkUpdates());
+      setUpdateState("ready");
+    } catch (error) {
+      setUpdateInfo({ current: "", available: false, error: error?.message || "Check failed." });
+      setUpdateState("error");
+    }
+  };
+
   return (
     <>
       <ToggleRow
@@ -1423,6 +1476,50 @@ function WritingPanel({ draft, update, onReplayOnboarding }) {
         checked={draft.reduceMotion}
         onChange={(value) => update("reduceMotion", value)}
       />
+      <div className="settings-profile-card">
+        <div className="settings-profile-head">
+          <div>
+            <strong>Writing profile</strong>
+            <p>Studies only the documents in this library. The profile stays local and is used to steer generated prose.</p>
+          </div>
+          <button className="soft-button" type="button" onClick={studyWriting} disabled={profileState === "loading"}>
+            {profileState === "loading" ? "Studying…" : "Study my writing"}
+          </button>
+        </div>
+        {profileState === "error" && <p className="settings-profile-error">{profileError}</p>}
+        {savedProfile ? (
+          <div className="settings-profile-metrics">
+            <span><strong>{Number(savedProfile.documents) || 0}</strong> documents</span>
+            <span><strong>{Number(savedProfile.words || 0).toLocaleString()}</strong> words</span>
+            <span><strong>{Number(savedProfile.mean_sentence_words) || 0}</strong> avg words/sentence</span>
+            <span><strong>{Number(savedProfile.contractions_per_1000_words) || 0}</strong> contractions/1k</span>
+            <span><strong>{savedProfile.natural_voice_score ?? 0}</strong> voice score</span>
+            <button className="link-button" type="button" onClick={() => update("writingProfile", "")}>Forget profile</button>
+          </div>
+        ) : (
+          <p className="settings-profile-empty">No profile yet. Build one to make generated text follow your own rhythm and vocabulary.</p>
+        )}
+      </div>
+      <div className="settings-update-card">
+        <div>
+          <strong>Updates</strong>
+          <p>Check the public release feed. Quill never installs an update without showing you the version first.</p>
+          {updateInfo && (
+            <p className="settings-update-result">
+              {updateInfo.error
+                ? updateInfo.error
+                : updateInfo.available
+                  ? `Quill ${updateInfo.latest} is available (you have ${updateInfo.current}).`
+                  : `You are on the latest version (${updateInfo.current}).`}
+              {updateInfo?.available && updateInfo.url && (
+                <> <button className="link-button" type="button" onClick={() => openExternal(updateInfo.url)}>Open release</button></>)}
+            </p>
+          )}
+        </div>
+        <button className="soft-button" type="button" onClick={lookForUpdates} disabled={updateState === "loading"}>
+          {updateState === "loading" ? "Checking…" : "Check for updates"}
+        </button>
+      </div>
       <div className="settings-replay">
         <div>
           <strong>Welcome flow</strong>

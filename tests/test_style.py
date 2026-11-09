@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utilis.style import analyse, to_markdown
+from utilis.style import analyse, profile, profile_prompt, to_markdown
 
 ok = 0
 
@@ -46,5 +46,10 @@ chk("metrics carry sentence variation", human["metrics"]["sentences"] > 0 and "s
 chk("report is explicit that it is not an authorship score", "not an authorship probability" in robot["note"])
 chk("markdown artifact renders", "Natural voice review" in to_markdown(robot))
 
-print(f"\n{'ALL PASS' if ok == 9 else 'FAILURES'}: {ok}/9")
-raise SystemExit(0 if ok == 9 else 1)
+writing = profile([natural, robotic])
+chk("profile counts the documents it studied", writing["documents"] == 2, writing["documents"])
+chk("profile records a sentence-length signal", writing["mean_sentence_words"] > 0)
+chk("profile prompt carries the rhythm", "average sentence length" in profile_prompt(writing))
+
+print(f"\n{'ALL PASS' if ok == 12 else 'FAILURES'}: {ok}/12")
+raise SystemExit(0 if ok == 12 else 1)

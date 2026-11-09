@@ -248,7 +248,7 @@ class Task:
     def Write(
         self, prompt: str, document_id: str, session_name: str = "",
         concept_mode: str = "reference", token_saving: bool = False,
-        natural_voice: bool = False,
+        natural_voice: bool = False, writing_profile: str = "",
     ):
         document = self.database.get(document_id) or {}
         if not document:
@@ -294,9 +294,14 @@ class Task:
         )
         research_note = _research_note(research)
         evidence = _evidence_of(research)
+        style_parts = []
+        if natural_voice:
+            style_parts.append(NATURAL_VOICE_STYLE)
+        if writing_profile.strip():
+            style_parts.append(writing_profile.strip())
         writer = WritingEngine(
             model=self.agent,
-            style=NATURAL_VOICE_STYLE if natural_voice else "",
+            style="\n".join(style_parts),
         )
         written = writer.writer(plan, context, research_note, evidence=evidence)
 
@@ -592,6 +597,7 @@ class Task:
     @timed("Task.ReWrite")
     def ReWrite(
         self, prompt: str, document_id: str = "", natural_voice: bool = False,
+        writing_profile: str = "",
     ):
         document_id = document_id or self._last_document_id
         if not document_id:
@@ -620,9 +626,14 @@ class Task:
             "quality": float(research.get("quality") or 0.0),
             "page_titles": [p.get("title", "") for p in (research.get("pages") or [])],
         }
+        style_parts = []
+        if natural_voice:
+            style_parts.append(NATURAL_VOICE_STYLE)
+        if writing_profile.strip():
+            style_parts.append(writing_profile.strip())
         written = WritingEngine(
             model=self.agent,
-            style=NATURAL_VOICE_STYLE if natural_voice else "",
+            style="\n".join(style_parts),
         ).writer(plan, context, evidence=evidence)
         plagiarism = PlagiarismEngine(agent=self.agent).run(
             written,

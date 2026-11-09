@@ -1056,7 +1056,7 @@ function App() {
         </div>
       )}
       {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} labels={labelOptions} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}
-      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} onReplayOnboarding={replayOnboarding} />}
+      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} onReplayOnboarding={replayOnboarding} documents={docs} />}
       <BootLayer key="boot-layer" bootstrapped={bootstrapped} bootError={bootError} />
       {onboarding && bootstrapped && !bootError && (
         <OnboardingFlow

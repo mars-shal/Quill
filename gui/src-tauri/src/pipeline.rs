@@ -603,6 +603,82 @@ pub async fn api_complete(
         .to_string())
 }
 
+/// Build a local writing profile from the reader's own documents.
+#[tauri::command]
+pub async fn api_profile(
+    app: tauri::AppHandle,
+    state: crate::commands::SharedState<'_>,
+    texts: Vec<String>,
+) -> AppResult<serde_json::Value> {
+    if texts.is_empty() {
+        return Err(AppError::Validation("no documents to profile".into()));
+    }
+    let _ = ensure_started(&app).await;
+    let _ = state;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(map_transport)?;
+    let response = client
+        .post(format!("{}/profile", base_url()))
+        .json(&serde_json::json!({ "texts": texts }))
+        .send()
+        .await
+        .map_err(|_| AppError::Offline)?;
+    let status = response.status();
+    let payload: serde_json::Value = response.json().await.map_err(map_transport)?;
+    if !status.is_success() {
+        let message = payload
+            .get("error")
+            .and_then(|value| value.as_str())
+            .unwrap_or("the writing profile could not be built");
+        return Err(AppError::Validation(message.into()));
+    }
+    Ok(payload)
+}
+
+/// Transcribe one short voice recording.
+#[tauri::command]
+pub async fn api_transcribe(
+    app: tauri::AppHandle,
+    state: crate::commands::SharedState<'_>,
+    audio: String,
+    mime: Option<String>,
+    filename: Option<String>,
+) -> AppResult<serde_json::Value> {
+    if audio.trim().is_empty() {
+        return Err(AppError::Validation("no audio to transcribe".into()));
+    }
+    let _ = ensure_started(&app).await;
+    let provider = resolve_provider(&state.pool).await?;
+    let client = reqwest::Client::builder()
+        .connect_timeout(SIDECAR_CONNECT_TIMEOUT)
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(map_transport)?;
+    let response = client
+        .post(format!("{}/transcribe", base_url()))
+        .json(&serde_json::json!({
+            "provider": provider,
+            "audio": audio,
+            "mime": mime.unwrap_or_else(|| "audio/webm".into()),
+            "filename": filename.unwrap_or_else(|| "recording.webm".into()),
+        }))
+        .send()
+        .await
+        .map_err(|_| AppError::Offline)?;
+    let status = response.status();
+    let payload: serde_json::Value = response.json().await.map_err(map_transport)?;
+    if !status.is_success() {
+        let message = payload
+            .get("error")
+            .and_then(|value| value.as_str())
+            .unwrap_or("the recording could not be transcribed");
+        return Err(AppError::Validation(message.into()));
+    }
+    Ok(payload)
+}
+
 /// Resolve citations and search open indexes for copied passages.
 #[tauri::command]
 pub async fn api_verify(
@@ -695,6 +771,8 @@ pub async fn api_chat(
     variant: Option<String>,
     token_saving: Option<bool>,
     natural_voice: Option<bool>,
+    writing_profile: Option<String>,
+    research_mode: Option<bool>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -709,6 +787,8 @@ pub async fn api_chat(
         "variant": variant.unwrap_or_else(|| "balanced".into()),
         "token_saving": token_saving.unwrap_or(false),
         "natural_voice": natural_voice.unwrap_or(false),
+        "writing_profile": writing_profile.unwrap_or_default(),
+        "research_mode": research_mode.unwrap_or(false),
     });
 
     chat_via_sidecar_or_direct(&payload).await
@@ -771,6 +851,8 @@ pub async fn api_chat_stream(
     variant: Option<String>,
     token_saving: Option<bool>,
     natural_voice: Option<bool>,
+    writing_profile: Option<String>,
+    research_mode: Option<bool>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -785,6 +867,8 @@ pub async fn api_chat_stream(
         "variant": variant.unwrap_or_else(|| "balanced".into()),
         "token_saving": token_saving.unwrap_or(false),
         "natural_voice": natural_voice.unwrap_or(false),
+        "writing_profile": writing_profile.unwrap_or_default(),
+        "research_mode": research_mode.unwrap_or(false),
     });
 
     match stream_chat(&app, &turn_id, &payload).await {

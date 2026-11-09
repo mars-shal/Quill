@@ -252,3 +252,117 @@ def to_markdown(report: dict) -> str:
     else:
         lines += ["", "No rhythm, repetition or stock-phrase findings."]
     return "\n".join(lines).rstrip() + "\n"
+
+
+# --- writing profile -------------------------------------------------------
+# A profile is a compressed description of how one writer actually writes,
+# built only from that writer's own documents. It is local data: the sidecar
+# returns metrics and a prompt fragment, never a copy of the corpus.
+
+_STOP = {
+    "the", "a", "an", "and", "or", "but", "if", "then", "than", "that", "this",
+    "these", "those", "is", "are", "was", "were", "be", "been", "being", "to",
+    "of", "in", "on", "for", "with", "as", "at", "by", "from", "it", "its",
+    "we", "our", "you", "your", "i", "my", "me", "they", "their", "he", "she",
+    "his", "her", "not", "no", "do", "does", "did", "have", "has", "had",
+}
+
+_CONTRACTION = re.compile(r"\b(?:[A-Za-z]+)'(?:t|s|re|ve|ll|d|m)\b", re.I)
+_FIRST_PERSON = re.compile(r"\b(?:I|we|our|my|us)\b", re.I)
+
+
+def _plain(text: str) -> str:
+    """Strip HTML and code fences before measuring prose."""
+    text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", text or "", flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"```.*?```", " ", text, flags=re.S)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def profile(texts: list[str]) -> dict:
+    """Build a local writing profile from the reader's own documents.
+
+    The result is deliberately modest: rhythm, register, punctuation and a
+    handful of repeated openings. It is enough to steer a generation prompt and
+    not enough to pretend the model has copied a person.
+    """
+    cleaned = [_plain(text) for text in texts if _plain(text)]
+    combined = "\n\n".join(cleaned)
+    sentences = _sentences(combined)
+    paragraphs = _paragraphs(combined)
+    words = _words(combined)
+    lengths = [len(_words(s)) for s in sentences]
+    total_words = len(words) or 1
+
+    contractions = len(_CONTRACTION.findall(combined))
+    first_person = len(_FIRST_PERSON.findall(combined))
+    semicolons = combined.count(";")
+    dashes = combined.count("—") + combined.count("–")
+    parentheses = combined.count("(")
+
+    openings: dict[str, int] = {}
+    for sentence in sentences:
+        first = _opening(sentence)
+        if first and first not in _STOP:
+            openings[first] = openings.get(first, 0) + 1
+    top_openings = sorted(openings.items(), key=lambda item: -item[1])[:6]
+
+    frequency: dict[str, int] = {}
+    for word in words:
+        if len(word) < 5 or word in _STOP:
+            continue
+        frequency[word] = frequency.get(word, 0) + 1
+    vocabulary = sorted(frequency.items(), key=lambda item: -item[1])[:12]
+
+    stock = [phrase for phrase in _STOCK if phrase in combined.lower()]
+    report = analyse(combined)
+    return {
+        "documents": len(cleaned),
+        "words": total_words,
+        "sentences": len(sentences),
+        "paragraphs": len(paragraphs),
+        "mean_sentence_words": round(statistics.fmean(lengths), 1) if lengths else 0,
+        "sentence_length_cv": round(_coefficient_of_variation(lengths), 3),
+        "short_sentence_share": round(
+            sum(1 for n in lengths if n <= 10) / max(1, len(lengths)), 3
+        ),
+        "long_sentence_share": round(
+            sum(1 for n in lengths if n >= 35) / max(1, len(lengths)), 3
+        ),
+        "contractions_per_1000_words": round(contractions * 1000 / total_words, 2),
+        "first_person_per_1000_words": round(first_person * 1000 / total_words, 2),
+        "semicolons_per_1000_words": round(semicolons * 1000 / total_words, 2),
+        "dashes_per_1000_words": round(dashes * 1000 / total_words, 2),
+        "parentheses_per_1000_words": round(parentheses * 1000 / total_words, 2),
+        "favourite_openings": [{"word": word, "count": count} for word, count in top_openings],
+        "frequent_words": [{"word": word, "count": count} for word, count in vocabulary],
+        "stock_phrases": stock,
+        "natural_voice_score": report.get("score", 0),
+        "natural_voice_verdict": report.get("verdict", "unknown"),
+    }
+
+
+def profile_prompt(data: dict) -> str:
+    """A compact style instruction derived from a saved profile."""
+    if not data or not data.get("words"):
+        return ""
+    mean = float(data.get("mean_sentence_words") or 0)
+    short = float(data.get("short_sentence_share") or 0)
+    long = float(data.get("long_sentence_share") or 0)
+    contractions = float(data.get("contractions_per_1000_words") or 0)
+    first = float(data.get("first_person_per_1000_words") or 0)
+    openings = [entry.get("word", "") for entry in (data.get("favourite_openings") or [])][:4]
+    words = [entry.get("word", "") for entry in (data.get("frequent_words") or [])][:6]
+    bits = [
+        "Match the writer's own style profile:",
+        f"average sentence length about {mean:.0f} words; {short:.0%} short sentences; {long:.0%} long sentences.",
+        f"Contractions {contractions:.1f} per 1,000 words; first person {first:.1f} per 1,000 words.",
+    ]
+    if openings:
+        bits.append("They often open with: " + ", ".join(openings) + ".")
+    if words:
+        bits.append("Words they use often: " + ", ".join(words) + ".")
+    if data.get("stock_phrases"):
+        bits.append("They avoid stock transitions: " + ", ".join(data["stock_phrases"][:5]) + ".")
+    bits.append("Do not invent facts or citations to imitate the style.")
+    return " ".join(bits)

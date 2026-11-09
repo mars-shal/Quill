@@ -538,6 +538,7 @@ def _chat_dispatch(
     concept_mode: str = "reference",
     token_saving: bool = False,
     natural_voice: bool = False,
+    writing_profile: str = "",
 ) -> dict:
     """Runs one classified chat turn and returns the panel's reply shape.
 
@@ -566,6 +567,7 @@ def _chat_dispatch(
             result = executor.Write(
                 task, ephemeral_id, concept_mode=concept_mode,
                 token_saving=token_saving, natural_voice=natural_voice,
+                writing_profile=writing_profile,
             )
         elif task_type == "REWRITE":
             # ReWrite reads `written:{id}`, which a fresh draft does not have. The
@@ -575,9 +577,11 @@ def _chat_dispatch(
             executor.Write(
                 task, ephemeral_id, concept_mode=concept_mode,
                 token_saving=token_saving, natural_voice=natural_voice,
+                writing_profile=writing_profile,
             )
             result = executor.ReWrite(
                 task, ephemeral_id, natural_voice=natural_voice,
+                writing_profile=writing_profile,
             )
         elif task_type == "CRITIQUE":
             # Same reasoning as ReWrite: there is nothing to critique until the
@@ -585,6 +589,7 @@ def _chat_dispatch(
             executor.Write(
                 task, ephemeral_id, concept_mode=concept_mode,
                 token_saving=token_saving, natural_voice=natural_voice,
+                writing_profile=writing_profile,
             )
             result = executor.Critique(task, ephemeral_id)
         elif task_type == "RESEARCH":
@@ -672,6 +677,8 @@ def _route_chat_turn(
     token_saving: bool = False,
     variant: str = "balanced",
     natural_voice: bool = False,
+    writing_profile: str = "",
+    research_mode: bool = False,
 ) -> dict:
     """Classifies one chat turn and dispatches it to the matching task engine."""
     from utilis.model import Agent
@@ -690,6 +697,15 @@ def _route_chat_turn(
         task += "\n\n[Token-saving mode: answer concisely, do not repeat the draft.]"
     task += _VARIANT_INSTRUCTIONS.get(str(variant or "balanced").lower(), "")
 
+    if research_mode:
+        # "Search & pull" is an explicit research turn: skip classification so
+        # the reader gets sources rather than a WRITE that quietly uses them.
+        return _chat_dispatch(
+            provider, "RESEARCH", task, draft,
+            concept_mode=concept_mode, token_saving=token_saving,
+            natural_voice=natural_voice, writing_profile=writing_profile,
+        )
+
     response = Agent(provider).Nous(task)
     if not hasattr(response, "task"):
         raise RuntimeError("the classifier returned no task type")
@@ -705,6 +721,7 @@ def _route_chat_turn(
         provider, task_type, task, draft,
         concept_mode=concept_mode, token_saving=token_saving,
         natural_voice=natural_voice,
+        writing_profile=writing_profile,
     )
 
 
@@ -974,6 +991,69 @@ class Handler(BaseHTTPRequestHandler):
             logger.exception("completion failed")
             return self._json(502, {"error": str(exc)})
 
+    def _profile(self, body: dict) -> None:
+        """Build a local writing profile from the reader's own documents."""
+        texts = body.get("texts")
+        if not isinstance(texts, list) or not texts:
+            return self._json(400, {"error": "texts must be a non-empty list"})
+        cleaned = [str(text) for text in texts if str(text).strip()]
+        if not cleaned:
+            return self._json(400, {"error": "texts contained no content"})
+        # 200k characters is enough for a useful profile and keeps a huge
+        # library from turning one click into a multi-second scan.
+        sample = [text[:20_000] for text in cleaned[:50]]
+        try:
+            from utilis.style import profile, profile_prompt
+
+            data = profile(sample)
+            return self._json(200, {"profile": data, "prompt": profile_prompt(data)})
+        except Exception as exc:  # noqa: BLE001 - the reason is the result
+            logger.exception("api profile failed")
+            return self._json(502, {"error": str(exc)})
+
+    def _transcribe(self, body: dict) -> None:
+        """Turn a short voice recording into text through the provider's STT."""
+        import base64
+
+        provider = _provider_config(body)
+        if provider.get("error"):
+            return self._json(400, {"error": provider["error"]})
+        if not provider:
+            return self._json(400, {"error": "no provider configured"})
+        encoded = str(body.get("audio") or "").strip()
+        if not encoded:
+            return self._json(400, {"error": "audio is required"})
+        try:
+            audio = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            return self._json(400, {"error": "audio must be base64"})
+        if len(audio) > 24 * 1024 * 1024:
+            return self._json(400, {"error": "recording is too large"})
+        filename = str(body.get("filename") or "recording.webm")
+        mime = str(body.get("mime") or "audio/webm")
+        model = str(
+            body.get("model")
+            or os.environ.get("QUILL_TRANSCRIBE_MODEL")
+            or "whisper-large-v3"
+        )
+        try:
+            from utilis.model import Agent
+
+            client = Agent(provider).OpenAi
+            if client is None:
+                return self._json(400, {"error": "this provider has no audio endpoint"})
+            result = client.audio.transcriptions.create(
+                model=model,
+                file=(filename, audio, mime),
+            )
+            text = getattr(result, "text", "") or (
+                result.get("text", "") if isinstance(result, dict) else ""
+            )
+            return self._json(200, {"text": str(text).strip(), "model": model})
+        except Exception as exc:  # noqa: BLE001 - the panel shows the reason
+            logger.exception("api transcription failed")
+            return self._json(502, {"error": str(exc)})
+
     def _verify(self, body: dict) -> None:
         """Resolve citations and look for copied passages in open indexes.
 
@@ -1120,6 +1200,8 @@ class Handler(BaseHTTPRequestHandler):
                 token_saving=bool(body.get("token_saving")),
                 variant=str(body.get("variant") or "balanced"),
                 natural_voice=bool(body.get("natural_voice")),
+                writing_profile=str(body.get("writing_profile") or ""),
+                research_mode=bool(body.get("research_mode")),
             )
         except Exception as exc:  # noqa: BLE001 - the reason is the whole answer
             logger.exception("api chat failed")
@@ -1176,6 +1258,8 @@ class Handler(BaseHTTPRequestHandler):
                     token_saving=bool(body.get("token_saving")),
                     variant=str(body.get("variant") or "balanced"),
                     natural_voice=bool(body.get("natural_voice")),
+                    writing_profile=str(body.get("writing_profile") or ""),
+                    research_mode=bool(body.get("research_mode")),
                 )
             except Exception as exc:  # noqa: BLE001 - the reason is the answer
                 logger.exception("api chat stream failed")
@@ -1235,6 +1319,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._questionnaire(body)
         if route == "/verify":
             return self._verify(body)
+        if route == "/profile":
+            return self._profile(body)
+        if route == "/transcribe":
+            return self._transcribe(body)
         if route == "/chat":
             return self._chat(body)
         if route == "/chat/stream":

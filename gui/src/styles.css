@@ -4501,3 +4501,24 @@ section#settings-assistant.settings-section {
 .send-button:disabled { opacity: 0.34; cursor: not-allowed; filter: saturate(0.6); }
 .chat-box[data-ready] .send-button { box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-1); }
 .chat-box[data-ready] .send-button:not(:disabled) { filter: brightness(1.08); }
+
+/* Voice capture in the composer. The glow is decorative; the button state and
+   the status text carry the meaning. */
+.chat-voice.is-recording { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.chat-voice:disabled { opacity: 0.4; cursor: not-allowed; }
+.chat-voice-status { max-width: 120px; overflow: hidden; color: var(--text-3); font-family: var(--mono); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Writing profile and update check, both local-first cards in Settings. */
+.settings-profile-card { display: block; margin-top: 14px; padding: 13px 14px; background: var(--sidebar); border: 1px solid var(--border); border-radius: 10px; }
+.settings-update-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 13px 14px; background: var(--sidebar); border: 1px solid var(--border); border-radius: 10px; }
+.settings-profile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; width: 100%; }
+.settings-profile-card strong, .settings-update-card strong { color: var(--text-1); font-size: 12px; font-weight: 650; }
+.settings-profile-card p, .settings-update-card p { margin: 3px 0 0; color: var(--text-2); font-size: 10.5px; line-height: 1.5; }
+.settings-profile-metrics { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; color: var(--text-3); font-size: 10px; }
+.settings-profile-metrics strong { color: var(--text-1); font-size: 12px; }
+.settings-profile-empty, .settings-profile-error { color: var(--text-3) !important; }
+.settings-profile-error { color: var(--danger) !important; }
+.settings-update-card > div { min-width: 0; }
+.settings-update-result { color: var(--text-2) !important; }
+.link-button { padding: 0; color: var(--accent); background: transparent; font-size: inherit; font-weight: 600; }
+.link-button:hover { text-decoration: underline; }
