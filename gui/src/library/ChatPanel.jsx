@@ -27,6 +27,7 @@ import { hasWebGL2 } from '../platform/capabilities.js'
 import { EffectBoundary } from '../ErrorBoundary.jsx'
 import { getFastTransition, getMotionTransition } from './motion.js'
 import { renderChatMarkdown } from './chatMarkdown.js'
+import { notify } from './toast.js'
 import { VoiceBeam, useMicrophone } from 'voice-glow'
 import { readTableSize, resizeTable, tableSizes } from '../editor/tableSize.js'
 import {
@@ -85,6 +86,17 @@ const SUGGESTIONS = ['Summarize draft', 'Tighten intro', 'Suggest three titles']
  * asked to spend a different amount of effort. They are not different models,
  * so the picker above still names the model; this only sets the budget.
  */
+const TASKS = [
+  { value: 'rewrite', label: 'Rewrite' },
+  { value: 'auto', label: 'Auto' },
+  { value: 'write', label: 'Write' },
+  { value: 'research', label: 'Research' },
+  { value: 'critique', label: 'Critique' },
+  { value: 'explain', label: 'Explain' },
+  { value: 'search', label: 'Search & pull' },
+  { value: 'survey', label: 'Survey' },
+]
+
 const VARIANTS = [
   { id: 'fast', label: 'Fast', hint: 'Short answers, minimal research. Best for quick edits.' },
   { id: 'balanced', label: 'Balanced', hint: 'The normal mix of research and writing.' },
@@ -679,7 +691,7 @@ function attachmentPrompt(attachment) {
 }
 
 /** The message box, its controls and the send button. */
-function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setConceptMode, variant, setVariant, interview, setInterview, researchMode, setResearchMode, attachment, setAttachment, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
+function ChatComposer({ input, setInput, send, mode, setMode, task, setTask, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
   // The desktop picker goes through MarkItDown, which covers PDF, DOCX,
   // PPTX, XLSX, HTML and more. The hidden input remains the browser fallback.
   const pickDocument = async () => {
@@ -699,7 +711,9 @@ function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setCo
         truncated: markdown.length > MAX_ATTACHMENT_CHARS,
       })
     } catch (error) {
-      setAttachment({ name: 'Document', size: 0, error: reasonFor(error) })
+      const message = reasonFor(error)
+      setAttachment({ name: 'Document', size: 0, error: message })
+      notify(message)
     }
   }
 
@@ -753,27 +767,16 @@ function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setCo
               {voiceState === 'recording' ? 'Listening…' : voiceState === 'transcribing' ? 'Transcribing…' : voiceError || 'Microphone'}
             </span>
           )}
-          <button className={`chat-mode ${mode === 'Auto' ? 'active' : ''}`} type="button" aria-pressed={mode === 'Auto'} onClick={() => setMode((value) => value === 'Ask' ? 'Edit' : 'Ask')}>{mode} <Icon name="down" size={12} /></button>
-          <button
-            className={`chat-mode chat-concept ${conceptMode === 'survey' ? 'active' : ''}`}
-            type="button"
-            title="Concept extraction: Reference follows the whole document; Survey extracts a concept for every selected section."
-            aria-label={`Concept mode: ${conceptMode === 'survey' ? 'Survey' : 'Reference'}`}
-            aria-pressed={conceptMode === 'survey'}
-            onClick={() => setConceptMode((value) => value === 'survey' ? 'reference' : 'survey')}
-          >
-            {conceptMode === 'survey' ? 'Survey' : 'Reference'} <Icon name="down" size={12} />
-          </button>
-          <button
-            className={`chat-mode chat-search ${researchMode ? 'active' : ''}`}
-            type="button"
-            title="Search the web, pull the sources into the answer, then write from them."
-            aria-label={`Search and pull: ${researchMode ? 'on' : 'off'}`}
-            aria-pressed={researchMode}
-            onClick={() => setResearchMode((value) => !value)}
-          >
-            Search &amp; pull
-          </button>
+          <ToolbarSelect
+            label="Orchestrator task"
+            value={(TASKS.find((entry) => entry.value === task) || TASKS[0]).label}
+            placeholder="Auto"
+            options={TASKS.map((entry) => ({ value: entry.label, label: entry.label }))}
+            onChange={(label) => {
+              const found = TASKS.find((entry) => entry.label === label)
+              if (found) setTask(found.value)
+            }}
+          />
           <button
             className="chat-mode chat-variant"
             type="button"
@@ -1055,7 +1058,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // Interview is a one-shot mode: it asks the questionnaire for the next turn,
   // then turns itself off so the answers can be written without another round.
   const [interview, setInterview] = useState(false)
-  const [researchMode, setResearchMode] = useState(false)
+  const [task, setTask] = useState('rewrite')
   const [liveModels, setLiveModels] = useState([])
   const [modelsState, setModelsState] = useState('idle')
   const [modelsError, setModelsError] = useState('')
@@ -1118,7 +1121,9 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
             setVoiceError('No speech was detected.')
           }
         } catch (error) {
-          setVoiceError(error?.message || 'The recording could not be transcribed.')
+          const message = error?.message || 'The recording could not be transcribed.'
+          setVoiceError(message)
+          notify(message)
         } finally {
           setVoiceState('idle')
         }
@@ -1128,7 +1133,9 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       setVoiceError('')
       setVoiceState('recording')
     } catch (error) {
-      setVoiceError(error?.message || 'The microphone could not be started.')
+      const message = error?.message || 'The microphone could not be started.'
+      setVoiceError(message)
+      notify(message)
       setVoiceState('error')
     }
   }, [setInput])
@@ -1330,11 +1337,11 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     chat({
       messages: history,
       draft: typeof getDraft === 'function' ? getDraft() : '',
-      conceptMode,
+      conceptMode: task === 'survey' ? 'survey' : 'reference',
+      task,
       variant,
       tokenSaving: Boolean(settings?.tokenSaving),
       naturalVoice: Boolean(settings?.naturalVoice),
-      researchMode,
       writingProfile: (() => {
         try {
           return JSON.parse(settings?.writingProfile || 'null')?.prompt || ''
@@ -1381,6 +1388,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         // A failure is reported as itself. Falling back to a canned reply is
         // exactly what made this panel unable to tell the reader anything was
         // ever wrong.
+        notify(describeFailure(error))
         setTyping(false)
         appendReply({
           id: nextMessageId('ai'),
@@ -1442,6 +1450,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         })
       })
       .catch((error) => {
+        notify(describeFailure(error))
         setTyping(false)
         appendReply({
           id: nextMessageId('ai'),
@@ -1516,7 +1525,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
 
   const composerProps = {
     input, setInput, send, mode, setMode, conceptMode, setConceptMode,
-    variant, setVariant, interview, setInterview, researchMode, setResearchMode,
+    task, setTask, variant, setVariant, interview, setInterview,
     attachment, setAttachment,
     fileRef, busy: typing, voiceState, voiceError, onVoiceStart: startVoice,
     onVoiceStop: stopVoice,

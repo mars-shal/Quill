@@ -635,21 +635,28 @@ const pickFile = async (name, contents, type = 'text/markdown') => {
   await tick(80)
 }
 
-test('the chosen concept mode travels with the turn', async () => {
+test('the orchestrator task travels with the turn', async () => {
   const before = chatCalls.length
-  const toggle = root.querySelector('.chat-concept')
-  assert.ok(toggle, 'the composer offers a concept mode')
-  assert.match(toggle.textContent, /Reference/, 'reference is the default')
+  const trigger = root.querySelector('[aria-label="Orchestrator task"]')
+  assert.ok(trigger, 'the composer offers an orchestrator task picker')
+  assert.match(trigger.textContent, /Rewrite/, 'Rewrite is the default')
 
-  await click(toggle)
-  assert.match(root.querySelector('.chat-concept').textContent, /Survey/)
+  await click(trigger)
+  const survey = [...dom.window.document.querySelectorAll('.tool-listbox-popover [role="option"]')]
+    .find((node) => node.textContent.trim() === 'Survey')
+  assert.ok(survey, 'the task list offers Survey')
+  await click(survey)
   await send('write this up')
   await tick(120)
   assert.equal(chatCalls.length, before + 1, 'the turn reaches the transport')
-  assert.equal(chatCalls.at(-1).conceptMode, 'survey', 'survey is passed through')
+  assert.equal(chatCalls.at(-1).task, 'survey', 'survey is passed as a task')
+  assert.equal(chatCalls.at(-1).conceptMode, 'survey', 'survey keeps the concept mode')
 
-  await click(root.querySelector('.chat-concept'))
-  assert.match(root.querySelector('.chat-concept').textContent, /Reference/, 'the mode toggles back')
+  await click(root.querySelector('[aria-label="Orchestrator task"]'))
+  const rewrite = [...dom.window.document.querySelectorAll('.tool-listbox-popover [role="option"]')]
+    .find((node) => node.textContent.trim() === 'Rewrite')
+  await click(rewrite)
+  assert.match(root.querySelector('[aria-label="Orchestrator task"]').textContent, /Rewrite/, 'the task resets')
 })
 
 test('an attached text file travels to the provider, not just its name', async () => {

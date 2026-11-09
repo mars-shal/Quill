@@ -17,6 +17,8 @@ import { fileToDocument } from './library/importFile.js'
 import { backgroundProperties } from './library/backgrounds.js'
 import { DetailsDialog, SettingsPage } from './library/SettingsPage.jsx'
 import { Library } from './library/Library.jsx'
+import { ToastHost } from './library/ToastHost.jsx'
+import { notify } from './library/toast.js'
 import { Editor } from './library/Editor.jsx'
 import { describeAccount } from './library/account.js'
 import { ErrorBoundary } from './ErrorBoundary.jsx'
@@ -200,6 +202,17 @@ function App() {
   // fetch it. `resolveTheme` is pure, so this is the only place the two meet.
   const [customThemes, setCustomThemes] = useState([])
   const [bootstrapped, setBootstrapped] = useState(false)
+
+  useEffect(() => {
+    const onError = (event) => notify(event?.error?.message || event?.message || 'Something went wrong.')
+    const onRejection = (event) => notify(event?.reason?.message || event?.reason || 'Something went wrong.')
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onRejection)
+    return () => {
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onRejection)
+    }
+  }, [])
   // P6-3. `undefined` until `account_state` answers, and `describeAccount`
   // renders that as signed out rather than as a spinner. Read for the export
   // author only: there is no account surface in the app any more, so nothing
@@ -534,6 +547,7 @@ function App() {
       refreshTrash()
     } catch (error) {
       console.error('Failed to delete documents', error)
+      notify('Could not move those documents to Trash.')
     }
   }, [currentId, refreshTrash])
   const deleteDocument = useCallback((id) => deleteDocuments([id]), [deleteDocuments])
@@ -548,6 +562,7 @@ function App() {
       setFilter({ type: 'all', value: 'all' })
     } catch (error) {
       console.error('Failed to restore documents', error)
+      notify('Could not restore those documents.')
     }
   }, [])
   const restoreDocument = useCallback((id) => restoreDocuments([id]), [restoreDocuments])
@@ -561,6 +576,7 @@ function App() {
       if (list.includes(currentId)) setCurrentId(null)
     } catch (error) {
       console.error('Failed to permanently delete documents', error)
+      notify('Could not delete those documents permanently.')
     }
   }, [currentId])
   const purgeDocument = useCallback((id) => purgeDocuments([id]), [purgeDocuments])
@@ -581,7 +597,10 @@ function App() {
       setFilter({ type: 'all', value: 'all' })
       setCurrentId(doc.id)
       setView('editor')
-    }).catch((error) => console.error('Failed to create document', error))
+    }).catch((error) => {
+      console.error('Failed to create document', error)
+      notify('Could not create that document.')
+    })
   }, [])
   const importDocuments = useCallback(async () => {
     try {
@@ -598,8 +617,8 @@ function App() {
           failures.push(`${path}: ${error instanceof Error ? error.message : String(error)}`)
         }
       }
-      if (failures.length && typeof window !== 'undefined' && window.alert) {
-        window.alert(`Quill could not open ${failures.length === 1 ? 'this file' : 'these files'}:\n\n${failures.join('\n')}`)
+      if (failures.length) {
+        notify(`Quill could not open ${failures.length === 1 ? 'this file' : 'these files'}: ${failures.join('; ')}`)
       }
       if (!created.length) return
       setDocs((current) => [...created, ...current])
@@ -608,9 +627,7 @@ function App() {
       setView('editor')
     } catch (error) {
       console.error('Failed to open files', error)
-      if (typeof window !== 'undefined' && window.alert) {
-        window.alert(`Quill could not open that file.\n\n${error instanceof Error ? error.message : String(error)}`)
-      }
+      notify(error instanceof Error ? error.message : String(error))
     }
   }, [settings.formatOnImport])
   const setPanel = useCallback((side, open) => { if (side === 'left') setLeftOpen(open); else setRightOpen(open) }, [])
@@ -1057,6 +1074,7 @@ function App() {
       )}
       {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} labels={labelOptions} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}
       {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} onReplayOnboarding={replayOnboarding} documents={docs} />}
+      <ToastHost key="toast-host" />
       <BootLayer key="boot-layer" bootstrapped={bootstrapped} bootError={bootError} />
       {onboarding && bootstrapped && !bootError && (
         <OnboardingFlow

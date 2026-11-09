@@ -43,6 +43,7 @@ import {
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.jsx'
 import { Switch } from './ui/switch.jsx'
 import { profileWritingStyle, checkUpdates, openExternal } from '../platform/store.js'
+import { notify } from './toast.js'
 
 /**
  * The sections, and the only list of them.
@@ -701,6 +702,7 @@ function AssistantPanel({
 }) {
   const [liveModels, setLiveModels] = useState([]);
   const [modelsState, setModelsState] = useState("idle");
+  const [micState, setMicState] = useState("idle");
   const [modelsError, setModelsError] = useState("");
   const [modelsRevision, setModelsRevision] = useState(0);
   const providerId = activeProvider?.id;
@@ -750,6 +752,20 @@ function AssistantPanel({
         };
       }).sort((a, b) => b.total - a.total)
     : [];
+
+  const requestMicrophone = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setMicState("unsupported");
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMicState("granted");
+    } catch {
+      setMicState("denied");
+    }
+  };
 
   useEffect(() => {
     if (!providerId) {
@@ -1060,6 +1076,23 @@ function AssistantPanel({
       {/* Detection is a choice, not a fixture: off stops the probe entirely
           (the same setting gates the scan in the shell) and hides the rows
           below, so a reader who never wants local agents pays for none of it. */}
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <span className="settings-row-label">Microphone</span>
+          <small>
+            Voice notes use the microphone only while the mic button is active.
+            Grant it now so the first recording does not stop for a permission prompt.
+          </small>
+        </div>
+        <div className="settings-row-control">
+          <span className={`settings-status${micState === "granted" ? " connected" : ""}`}>
+            {micState === "granted" ? "Granted" : micState === "denied" ? "Blocked" : micState === "unsupported" ? "Unsupported" : "Ask on first use"}
+          </span>
+          <button className="soft-button" type="button" onClick={requestMicrophone} disabled={micState === "granted"}>
+            {micState === "granted" ? "Ready" : "Allow microphone"}
+          </button>
+        </div>
+      </div>
       <div className="settings-row">
         <div className="settings-row-copy">
           <span className="settings-row-label">Local tools</span>
@@ -1388,7 +1421,9 @@ function WritingPanel({ draft, update, onReplayOnboarding, documents = [] }) {
       }));
       setProfileState("ready");
     } catch (error) {
-      setProfileError(error?.message || "Could not build the profile.");
+      const message = error?.message || "Could not build the profile.";
+      setProfileError(message);
+      notify(message);
       setProfileState("error");
     }
   };
@@ -1399,7 +1434,9 @@ function WritingPanel({ draft, update, onReplayOnboarding, documents = [] }) {
       setUpdateInfo(await checkUpdates());
       setUpdateState("ready");
     } catch (error) {
-      setUpdateInfo({ current: "", available: false, error: error?.message || "Check failed." });
+      const message = error?.message || "Check failed.";
+      setUpdateInfo({ current: "", available: false, error: message });
+      notify(message);
       setUpdateState("error");
     }
   };

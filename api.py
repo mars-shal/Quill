@@ -679,6 +679,7 @@ def _route_chat_turn(
     natural_voice: bool = False,
     writing_profile: str = "",
     research_mode: bool = False,
+    forced_task: str = "auto",
 ) -> dict:
     """Classifies one chat turn and dispatches it to the matching task engine."""
     from utilis.model import Agent
@@ -697,11 +698,17 @@ def _route_chat_turn(
         task += "\n\n[Token-saving mode: answer concisely, do not repeat the draft.]"
     task += _VARIANT_INSTRUCTIONS.get(str(variant or "balanced").lower(), "")
 
+    forced = str(forced_task or "auto").strip().lower()
     if research_mode:
-        # "Search & pull" is an explicit research turn: skip classification so
-        # the reader gets sources rather than a WRITE that quietly uses them.
+        forced = "search"
+    if forced == "search":
+        forced = "research"
+    if forced == "survey":
+        concept_mode = "survey"
+        forced = "write"
+    if forced in ("write", "rewrite", "research", "critique", "explain"):
         return _chat_dispatch(
-            provider, "RESEARCH", task, draft,
+            provider, forced.upper(), task, draft,
             concept_mode=concept_mode, token_saving=token_saving,
             natural_voice=natural_voice, writing_profile=writing_profile,
         )
@@ -1202,6 +1209,7 @@ class Handler(BaseHTTPRequestHandler):
                 natural_voice=bool(body.get("natural_voice")),
                 writing_profile=str(body.get("writing_profile") or ""),
                 research_mode=bool(body.get("research_mode")),
+                forced_task=str(body.get("task") or "auto"),
             )
         except Exception as exc:  # noqa: BLE001 - the reason is the whole answer
             logger.exception("api chat failed")
@@ -1260,6 +1268,7 @@ class Handler(BaseHTTPRequestHandler):
                     natural_voice=bool(body.get("natural_voice")),
                     writing_profile=str(body.get("writing_profile") or ""),
                     research_mode=bool(body.get("research_mode")),
+                    forced_task=str(body.get("task") or "auto"),
                 )
             except Exception as exc:  # noqa: BLE001 - the reason is the answer
                 logger.exception("api chat stream failed")

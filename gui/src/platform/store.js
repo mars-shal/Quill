@@ -859,7 +859,7 @@ export async function startRun({ prompt, documentId, sessionName, conceptMode } 
  * the first is still answering -- so the id is the only thing that stops one
  * turn's progress appearing inside another's bubble.
  */
-export async function chat({ messages, draft, conceptMode, variant, tokenSaving, naturalVoice, writingProfile, researchMode, onStage } = {}) {
+export async function chat({ messages, draft, conceptMode, task, variant, tokenSaving, naturalVoice, writingProfile, onStage } = {}) {
   if (!isTauri) throw new Error('The assistant needs the desktop app.')
   const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const release = typeof onStage === 'function'
@@ -879,7 +879,7 @@ export async function chat({ messages, draft, conceptMode, variant, tokenSaving,
       tokenSaving: Boolean(tokenSaving),
       naturalVoice: Boolean(naturalVoice),
       writingProfile: writingProfile || null,
-      researchMode: Boolean(researchMode),
+      task: task || 'auto',
     })
   } finally {
     release()

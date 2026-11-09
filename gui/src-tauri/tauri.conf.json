@@ -52,6 +52,9 @@
     ],
     "category": "Productivity",
     "shortDescription": "A desktop editor for long-form writing",
-    "longDescription": "Quill is a desktop editor for long-form writing, with built-in AI help, local-first storage, offline sync, and live collaboration."
+    "longDescription": "Quill is a desktop editor for long-form writing, with built-in AI help, local-first storage, offline sync, and live collaboration.",
+    "macOS": {
+      "infoPlist": "Info.plist"
+    }
   }
 }

@@ -772,7 +772,7 @@ pub async fn api_chat(
     token_saving: Option<bool>,
     natural_voice: Option<bool>,
     writing_profile: Option<String>,
-    research_mode: Option<bool>,
+    task: Option<String>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -788,7 +788,7 @@ pub async fn api_chat(
         "token_saving": token_saving.unwrap_or(false),
         "natural_voice": natural_voice.unwrap_or(false),
         "writing_profile": writing_profile.unwrap_or_default(),
-        "research_mode": research_mode.unwrap_or(false),
+        "task": task.unwrap_or_else(|| "auto".into()),
     });
 
     chat_via_sidecar_or_direct(&payload).await
@@ -852,7 +852,7 @@ pub async fn api_chat_stream(
     token_saving: Option<bool>,
     natural_voice: Option<bool>,
     writing_profile: Option<String>,
-    research_mode: Option<bool>,
+    task: Option<String>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -868,7 +868,7 @@ pub async fn api_chat_stream(
         "token_saving": token_saving.unwrap_or(false),
         "natural_voice": natural_voice.unwrap_or(false),
         "writing_profile": writing_profile.unwrap_or_default(),
-        "research_mode": research_mode.unwrap_or(false),
+        "task": task.unwrap_or_else(|| "auto".into()),
     });
 
     match stream_chat(&app, &turn_id, &payload).await {

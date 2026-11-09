@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { ModalLayer } from '../ModalLayer.jsx'
 import { Icon } from '../Icon.jsx'
 import { verifyText } from '../platform/store.js'
+import { notify } from './toast.js'
 
 /**
  * Citation and plagiarism verification for the open draft.
@@ -28,7 +29,9 @@ export function VerificationDialog({ text, onClose }) {
       })
       .catch((reason) => {
         if (cancelled) return
-        setError(String(reason?.message || reason || 'Verification failed.'))
+        const message = String(reason?.message || reason || 'Verification failed.')
+        setError(message)
+        notify(message)
         setState('error')
       })
     return () => { cancelled = true }
