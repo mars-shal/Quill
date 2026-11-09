@@ -537,6 +537,7 @@ def _chat_dispatch(
     draft: str,
     concept_mode: str = "reference",
     token_saving: bool = False,
+    natural_voice: bool = False,
 ) -> dict:
     """Runs one classified chat turn and returns the panel's reply shape.
 
@@ -564,7 +565,7 @@ def _chat_dispatch(
         if task_type == "WRITE":
             result = executor.Write(
                 task, ephemeral_id, concept_mode=concept_mode,
-                token_saving=token_saving,
+                token_saving=token_saving, natural_voice=natural_voice,
             )
         elif task_type == "REWRITE":
             # ReWrite reads `written:{id}`, which a fresh draft does not have. The
@@ -573,15 +574,17 @@ def _chat_dispatch(
             # ephemeral document will never see.
             executor.Write(
                 task, ephemeral_id, concept_mode=concept_mode,
-                token_saving=token_saving,
+                token_saving=token_saving, natural_voice=natural_voice,
             )
-            result = executor.ReWrite(task, ephemeral_id)
+            result = executor.ReWrite(
+                task, ephemeral_id, natural_voice=natural_voice,
+            )
         elif task_type == "CRITIQUE":
             # Same reasoning as ReWrite: there is nothing to critique until the
             # draft has been written, so it is written first.
             executor.Write(
                 task, ephemeral_id, concept_mode=concept_mode,
-                token_saving=token_saving,
+                token_saving=token_saving, natural_voice=natural_voice,
             )
             result = executor.Critique(task, ephemeral_id)
         elif task_type == "RESEARCH":
@@ -668,6 +671,7 @@ def _route_chat_turn(
     concept_mode: str = "reference",
     token_saving: bool = False,
     variant: str = "balanced",
+    natural_voice: bool = False,
 ) -> dict:
     """Classifies one chat turn and dispatches it to the matching task engine."""
     from utilis.model import Agent
@@ -700,6 +704,7 @@ def _route_chat_turn(
     return _chat_dispatch(
         provider, task_type, task, draft,
         concept_mode=concept_mode, token_saving=token_saving,
+        natural_voice=natural_voice,
     )
 
 
@@ -1114,6 +1119,7 @@ class Handler(BaseHTTPRequestHandler):
                 concept_mode=_concept_mode(body),
                 token_saving=bool(body.get("token_saving")),
                 variant=str(body.get("variant") or "balanced"),
+                natural_voice=bool(body.get("natural_voice")),
             )
         except Exception as exc:  # noqa: BLE001 - the reason is the whole answer
             logger.exception("api chat failed")
@@ -1168,6 +1174,8 @@ class Handler(BaseHTTPRequestHandler):
                 turn.reply = _route_chat_turn(
                     provider, transcript, draft, concept_mode=concept_mode,
                     token_saving=bool(body.get("token_saving")),
+                    variant=str(body.get("variant") or "balanced"),
+                    natural_voice=bool(body.get("natural_voice")),
                 )
             except Exception as exc:  # noqa: BLE001 - the reason is the answer
                 logger.exception("api chat stream failed")

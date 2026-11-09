@@ -690,7 +690,7 @@ function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setCo
   }
 
   return (
-    <div className="chat-box">
+    <div className="chat-box" data-ready={input.trim() || attachment?.text ? '' : undefined}>
       <textarea
         value={input}
         onChange={(event) => setInput(event.target.value)}
@@ -1205,6 +1205,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       conceptMode,
       variant,
       tokenSaving: Boolean(settings?.tokenSaving),
+      naturalVoice: Boolean(settings?.naturalVoice),
       // Each stage the sidecar reports is appended once. The sidecar already
       // drops a repeat of the stage it just emitted; this keeps a step that
       // legitimately happens twice from filling the list twice.
@@ -1361,7 +1362,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const canUseMetal = hasWebGL2() && live
 
   const plainSendButton = (
-    <motion.button className="send-button" type="button" disabled={typing || (!input.trim() && !attachment?.text)} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
+    <motion.button className="send-button" style={{ pointerEvents: 'auto' }} type="button" disabled={typing || (!input.trim() && !attachment?.text)} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
       <Icon name="send" size={15} />
     </motion.button>
   )
@@ -1369,7 +1370,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // (variant circle + innerShadow); silver at 0.62 was so quiet on the dark
   // theme it read as no effect at all (2026-11-02).
   const decoratedSendButton = canUseMetal ? (
-    <MetalFx variant="circle" preset="chromatic" theme={effectTheme} strength={1} innerShadow borderRadius={9} paused={assistantReducedMotion}>
+    <MetalFx variant="circle" preset="chromatic" theme={effectTheme} strength={1} innerShadow borderRadius={9} paused={assistantReducedMotion} style={{ pointerEvents: 'none' }}>
       {plainSendButton}
     </MetalFx>
   ) : (

@@ -172,6 +172,36 @@ chk("TaskRouter delegates Write",
     "Write" in inspect.getsource(TaskRouter.route_task))
 
 
+# --- Windows / persistence regressions ---------------------------------------
+_previous_db = os.environ.get("QUILL_DB_PATH")
+_previous_noninteractive = os.environ.get("QUILL_NONINTERACTIVE")
+try:
+    with tempfile.TemporaryDirectory() as _tmp:
+        _db_path = os.path.join(_tmp, "usage.db")
+        os.environ["QUILL_DB_PATH"] = _db_path
+        _db = SqliteDatabase()
+        chk("QUILL_DB_PATH is honored", _db.file_path == _db_path, _db.file_path)
+        _db.set("usage:2099-01-01", {"m": 1})
+        _db.close()
+        _db2 = SqliteDatabase()
+        chk("usage survives a reopen", _db2.get("usage:2099-01-01") == {"m": 1})
+        _db2.close()
+
+    os.environ["QUILL_NONINTERACTIVE"] = "1"
+    engine = R.__new__(R)
+    chk("non-interactive questionnaire returns no answers",
+        R._ask_user(engine, ["Who is the reader?"]) == {})
+finally:
+    if _previous_db is None:
+        os.environ.pop("QUILL_DB_PATH", None)
+    else:
+        os.environ["QUILL_DB_PATH"] = _previous_db
+    if _previous_noninteractive is None:
+        os.environ.pop("QUILL_NONINTERACTIVE", None)
+    else:
+        os.environ["QUILL_NONINTERACTIVE"] = _previous_noninteractive
+
+
 def main() -> int:
     passed = sum(1 for ok, _, _ in RESULTS if ok)
     for ok, label, extra in RESULTS:

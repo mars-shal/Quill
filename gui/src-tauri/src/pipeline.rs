@@ -483,6 +483,25 @@ pub async fn ensure_started(app: &tauri::AppHandle) -> Result<(), String> {
 
 /// Point a packaged run at its bundled sidecar and the app-data workspace.
 fn configure_bundled(app: &tauri::AppHandle) -> AppResult<()> {
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| AppError::Other(format!("cannot resolve the app data directory: {err}")))?;
+    let database = data.join("database");
+    std::fs::create_dir_all(&database)
+        .map_err(|err| AppError::Other(format!("cannot create {}: {err}", database.display())))?;
+
+    // Usage and session rows must live in the app-data directory, not beside
+    // the executable. On Windows the install tree is read-only or replaced on
+    // update, which is why token usage appeared to reset on every launch.
+    if std::env::var("QUILL_DB_PATH")
+        .unwrap_or_default()
+        .trim()
+        .is_empty()
+    {
+        std::env::set_var("QUILL_DB_PATH", database.join("quill.db"));
+    }
+
     let Some(binary) = sidecar::bundled_binary() else {
         return Ok(());
     };
@@ -495,12 +514,6 @@ fn configure_bundled(app: &tauri::AppHandle) -> AppResult<()> {
             std::env::set_var("QUILL_API_URL", format!("http://127.0.0.1:{port}"));
         }
     }
-    let data = app
-        .path()
-        .app_data_dir()
-        .map_err(|err| AppError::Other(format!("cannot resolve the app data directory: {err}")))?;
-    std::fs::create_dir_all(&data)
-        .map_err(|err| AppError::Other(format!("cannot create {}: {err}", data.display())))?;
     std::env::set_var("QUILL_SIDECAR_BIN", &binary);
     std::env::set_var("QUILL_PIPELINE_ROOT", &data);
     Ok(())
@@ -681,6 +694,7 @@ pub async fn api_chat(
     concept_mode: Option<String>,
     variant: Option<String>,
     token_saving: Option<bool>,
+    natural_voice: Option<bool>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -694,6 +708,7 @@ pub async fn api_chat(
         "concept_mode": concept_mode.unwrap_or_else(|| "reference".into()),
         "variant": variant.unwrap_or_else(|| "balanced".into()),
         "token_saving": token_saving.unwrap_or(false),
+        "natural_voice": natural_voice.unwrap_or(false),
     });
 
     chat_via_sidecar_or_direct(&payload).await
@@ -755,6 +770,7 @@ pub async fn api_chat_stream(
     concept_mode: Option<String>,
     variant: Option<String>,
     token_saving: Option<bool>,
+    natural_voice: Option<bool>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -768,6 +784,7 @@ pub async fn api_chat_stream(
         "concept_mode": concept_mode.unwrap_or_else(|| "reference".into()),
         "variant": variant.unwrap_or_else(|| "balanced".into()),
         "token_saving": token_saving.unwrap_or(false),
+        "natural_voice": natural_voice.unwrap_or(false),
     });
 
     match stream_chat(&app, &turn_id, &payload).await {

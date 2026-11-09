@@ -4492,3 +4492,12 @@ section#settings-assistant.settings-section {
   .verify-row { grid-template-columns: 1fr 0.6fr; }
   .verify-row > :nth-child(3), .verify-row > :nth-child(4) { display: none; }
 }
+
+/* Send button states. The MetalFx shader sits above the button, so the wrapper
+   is made click-through and the button itself keeps pointer events. */
+.send-button { pointer-events: auto; transition: filter 0.16s var(--ease), box-shadow 0.16s var(--ease), transform 0.16s var(--ease); }
+.send-button:not(:disabled):hover { filter: brightness(1.14); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-2); transform: translateY(-1px); }
+.send-button:not(:disabled):active { transform: translateY(0) scale(0.96); }
+.send-button:disabled { opacity: 0.34; cursor: not-allowed; filter: saturate(0.6); }
+.chat-box[data-ready] .send-button { box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-1); }
+.chat-box[data-ready] .send-button:not(:disabled) { filter: brightness(1.08); }

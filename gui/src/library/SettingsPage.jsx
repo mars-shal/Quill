@@ -1375,6 +1375,13 @@ function WritingPanel({ draft, update, onReplayOnboarding }) {
         onChange={(value) => update("wordCount", value)}
       />
       <ToggleRow
+        id="natural-voice"
+        label="Natural voice"
+        description="Generate plainer academic prose: shorter sentences, active voice, concrete examples and no formulaic transitions."
+        checked={draft.naturalVoice === true}
+        onChange={(value) => update("naturalVoice", value)}
+      />
+      <ToggleRow
         id="completions"
         label="Inline completions"
         description="Show a short ghost-text suggestion after a pause. Tab accepts it, Escape dismisses it."

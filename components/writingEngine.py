@@ -47,6 +47,17 @@ _HEADING_ECHO = re.compile(
 )
 
 
+NATURAL_VOICE_STYLE = """
+STYLE — write like a careful human academic, not a model:
+- Use 8-12 word sentences most of the time. Include a few 5-word sentences and two 18-22 word sentences.
+- Prefer active voice and concrete verbs. Cut nominalisations.
+- Do not open sentences with "This", "These", "It is" or "There is".
+- Avoid "Furthermore", "Moreover", "Additionally", "In conclusion", triads, and "not only ... but also".
+- Use "we" twice where it is honest. Include one concrete illustrative example with a number or named setting.
+- Keep paragraphs uneven. No bullet points.
+"""
+
+
 class WritingEngine:
     # Kept as a constant so the coherence scorer can detect the model echoing
     # these instructions back as content. The template lives in this codebase
@@ -85,8 +96,10 @@ class WritingEngine:
         words_per_section: int = 220,
         max_words_per_section: int = 320,
         dedup_threshold: float = 0.94,
+        style: str = "",
     ):
         self.model = model if model is not None else Agent()
+        self.style = style
         self.embedder = embedder if embedder is not None else Embedder.get()
         self.words_per_section = words_per_section
         self.max_words_per_section = max_words_per_section
@@ -748,6 +761,8 @@ class WritingEngine:
             prompt += f"THIS SECTION MUST ESTABLISH: {claim}\n"
         prompt += f"\nLENGTH: about {target} words. Never exceed {ceiling}.\n"
         prompt += self.RULES_TEXT
+        if self.style:
+            prompt += "\n" + self.style + "\n"
         prompt += GROUNDING_RULES
         if digests:
             listed = "\n".join(f"  - {d}" for d in digests[-6:])

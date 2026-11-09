@@ -1808,12 +1808,16 @@ Respond with JSON only:
             raise _QuestionTimeout()
 
         limit = int(os.environ.get("QUILL_QUESTION_TIMEOUT", "60") or 60)
+        # Windows has no SIGALRM. Guarding the attribute is the difference
+        # between a timeout and an AttributeError that kills the whole turn.
+        alarm_supported = hasattr(signal, "SIGALRM") and hasattr(signal, "alarm")
         prior_handler = None
-        try:
-            prior_handler = signal.signal(signal.SIGALRM, _on_alarm)
-        except (ValueError, OSError):
-            prior_handler = None
-        if prior_handler is not None:
+        if alarm_supported:
+            try:
+                prior_handler = signal.signal(signal.SIGALRM, _on_alarm)
+            except (ValueError, OSError):
+                prior_handler = None
+        if alarm_supported and prior_handler is not None:
             signal.alarm(max(1, limit))
 
         try:
@@ -1844,7 +1848,7 @@ Respond with JSON only:
             print(f"\n[QUESTIONNAIRE] Timed out after {limit}s; "
                   f"continuing with {len(answers)} answer(s).")
         finally:
-            if prior_handler is not None:
+            if alarm_supported and prior_handler is not None:
                 signal.alarm(0)
                 try:
                     signal.signal(signal.SIGALRM, prior_handler)
@@ -1856,6 +1860,13 @@ Respond with JSON only:
     @staticmethod
     def _interactive() -> bool:
         """True only when there is a real terminal to read answers from."""
+        # The desktop app launches the sidecar with no console on Windows.
+        # Without this flag, a questionnaire would block forever on stdin even
+        # though there is nobody to answer it.
+        if os.environ.get("QUILL_NONINTERACTIVE", "").strip().lower() in (
+            "1", "true", "yes",
+        ):
+            return False
         try:
             return bool(sys.stdin and sys.stdin.isatty())
         except (AttributeError, ValueError):

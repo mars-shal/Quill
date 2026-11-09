@@ -722,3 +722,22 @@ test('interview asks a questionnaire, then sends the answers with the turn', asy
     'the clarifier is one-shot',
   )
 })
+
+test('the composer marks send ready and enables it when text is present', async () => {
+  const box = root.querySelector('.chat-box')
+  const button = root.querySelector('.send-button')
+  const field = root.querySelector('.chat-box textarea')
+  assert.ok(box && button && field, 'the composer rendered')
+  assert.equal(box.hasAttribute('data-ready'), false, 'an empty composer is not ready')
+  assert.equal(button.disabled, true, 'the send button starts disabled')
+
+  await typeInto(field, 'a short question')
+  await tick(30)
+  assert.equal(box.hasAttribute('data-ready'), true, 'typing marks the composer ready')
+  assert.equal(button.disabled, false, 'typing enables the send button')
+
+  await typeInto(field, '')
+  await tick(30)
+  assert.equal(box.hasAttribute('data-ready'), false, 'clearing the field clears ready')
+  assert.equal(button.disabled, true, 'clearing the field disables send again')
+})

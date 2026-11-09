@@ -25,7 +25,13 @@ from utilis.timing import timed
 class SqliteDatabase:
     """Dict-like persistent store on SQLite (WAL, one row per key)."""
 
-    def __init__(self, file_path: str = "database/quill.db", json_fallback: str = "database/database.json"):
+    def __init__(self, file_path: str | None = None, json_fallback: str | None = None):
+        # The desktop app sets QUILL_DB_PATH to its app-data directory. A
+        # relative default put usage and session rows inside the install tree on
+        # Windows, where the next launch started from an empty (or unwritable)
+        # database.
+        file_path = file_path or os.environ.get("QUILL_DB_PATH") or "database/quill.db"
+        json_fallback = json_fallback or os.environ.get("QUILL_JSON_FALLBACK") or "database/database.json"
         self.file_path = file_path
         self.json_fallback = json_fallback
         directory = os.path.dirname(file_path)
@@ -122,6 +128,6 @@ class SqliteDatabase:
             self._conn.close()
 
 
-def open_store(file_path: str = "database/quill.db") -> SqliteDatabase:
+def open_store(file_path: str | None = None) -> SqliteDatabase:
     """Convenience factory mirroring the old ``JsonDatabase()`` construction."""
     return SqliteDatabase(file_path)

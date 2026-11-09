@@ -8,7 +8,7 @@ from components.conceptEngine import ConceptEngine
 from components.PlagiarismEngine import PlagiarismEngine
 from components.researchEngine import ResearchEngine
 from components.sessionManager import SessionManager
-from components.writingEngine import WritingEngine
+from components.writingEngine import NATURAL_VOICE_STYLE, WritingEngine
 from utilis.drift import detect_drift
 from utilis.coverage import (
     gap_research_enabled,
@@ -248,6 +248,7 @@ class Task:
     def Write(
         self, prompt: str, document_id: str, session_name: str = "",
         concept_mode: str = "reference", token_saving: bool = False,
+        natural_voice: bool = False,
     ):
         document = self.database.get(document_id) or {}
         if not document:
@@ -293,7 +294,10 @@ class Task:
         )
         research_note = _research_note(research)
         evidence = _evidence_of(research)
-        writer = WritingEngine(model=self.agent)
+        writer = WritingEngine(
+            model=self.agent,
+            style=NATURAL_VOICE_STYLE if natural_voice else "",
+        )
         written = writer.writer(plan, context, research_note, evidence=evidence)
 
         gap = None
@@ -586,7 +590,9 @@ class Task:
         return self.sessions.current()
 
     @timed("Task.ReWrite")
-    def ReWrite(self, prompt: str, document_id: str = ""):
+    def ReWrite(
+        self, prompt: str, document_id: str = "", natural_voice: bool = False,
+    ):
         document_id = document_id or self._last_document_id
         if not document_id:
             return {"error": "No document to rewrite. Run WRITE first."}
@@ -614,7 +620,10 @@ class Task:
             "quality": float(research.get("quality") or 0.0),
             "page_titles": [p.get("title", "") for p in (research.get("pages") or [])],
         }
-        written = WritingEngine(model=self.agent).writer(plan, context, evidence=evidence)
+        written = WritingEngine(
+            model=self.agent,
+            style=NATURAL_VOICE_STYLE if natural_voice else "",
+        ).writer(plan, context, evidence=evidence)
         plagiarism = PlagiarismEngine(agent=self.agent).run(
             written,
             sources=[prompt_text, research.get("corpus", "")] if research.get("corpus") else [prompt_text],

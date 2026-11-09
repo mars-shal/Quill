@@ -302,6 +302,9 @@ export const defaultSettings = {
   // Run the deterministic import tidy-up as a document is created. The editor's
   // Clean up action still exists for anything this does not catch.
   formatOnImport: true,
+  // A plain, direct academic voice for generated prose. It changes the prompt,
+  // not the model: shorter sentences, active voice, no formulaic transitions.
+  naturalVoice: true,
 }
 
 /**
@@ -825,7 +828,7 @@ export async function startRun({ prompt, documentId, sessionName, conceptMode } 
  * the first is still answering -- so the id is the only thing that stops one
  * turn's progress appearing inside another's bubble.
  */
-export async function chat({ messages, draft, conceptMode, variant, tokenSaving, onStage } = {}) {
+export async function chat({ messages, draft, conceptMode, variant, tokenSaving, naturalVoice, onStage } = {}) {
   if (!isTauri) throw new Error('The assistant needs the desktop app.')
   const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const release = typeof onStage === 'function'
@@ -843,6 +846,7 @@ export async function chat({ messages, draft, conceptMode, variant, tokenSaving,
       conceptMode: conceptMode ?? 'reference',
       variant: variant ?? 'balanced',
       tokenSaving: Boolean(tokenSaving),
+      naturalVoice: Boolean(naturalVoice),
     })
   } finally {
     release()

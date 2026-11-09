@@ -87,6 +87,9 @@ pub struct Settings {
     /// Run the deterministic import tidy-up as a document is created.
     #[serde(default = "default_true")]
     pub format_on_import: bool,
+    /// A plain, direct academic voice for generated prose.
+    #[serde(default = "default_true")]
+    pub natural_voice: bool,
 }
 
 fn default_theme() -> String {
@@ -184,6 +187,7 @@ impl Settings {
             completions: default_true(),
             completion_delay: default_completion_delay(),
             format_on_import: default_true(),
+            natural_voice: default_true(),
         }
     }
 
@@ -245,6 +249,9 @@ impl Settings {
         }
         if let Some(value) = patch.format_on_import {
             next.format_on_import = value;
+        }
+        if let Some(value) = patch.natural_voice {
+            next.natural_voice = value;
         }
         if let Some(value) = patch.texture_wash {
             // NaN is not `is_finite` and is not greater than 0.6, so a bare
@@ -315,6 +322,7 @@ pub struct SettingsPatch {
     pub completions: Option<bool>,
     pub completion_delay: Option<i64>,
     pub format_on_import: Option<bool>,
+    pub natural_voice: Option<bool>,
 }
 
 const SETTINGS_KEY: &str = "app";

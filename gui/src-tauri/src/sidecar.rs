@@ -21,6 +21,16 @@ use tokio::time::sleep;
 
 use crate::error::{AppError, AppResult};
 
+/// A GUI app must never open a console window for its own child.
+#[cfg(windows)]
+fn hide_console(cmd: &mut Command) {
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console(_cmd: &mut Command) {}
+
 /// Entry point the supervisor runs. Its presence in a directory is what marks
 /// that directory as the project root.
 const API_ENTRY: &str = "api.py";
@@ -211,8 +221,19 @@ fn spawn_python(python: &Path, root: &Path, port: &str) -> std::io::Result<Child
         .env("PYTHONPATH", root)
         // Inherited so `api.py`'s own logging reaches the terminal the app was
         // launched from. A pipe nobody drains is worse than no log at all.
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+        // No console on Windows, and no stdin anywhere: the sidecar in app
+        // mode has nobody to answer a questionnaire.
+        .stdin(Stdio::null())
+        .env("QUILL_NONINTERACTIVE", "1");
+    #[cfg(windows)]
+    {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    #[cfg(not(windows))]
+    {
+        cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    }
+    hide_console(&mut cmd);
     cmd.spawn()
 }
 
@@ -228,8 +249,19 @@ fn spawn_binary(binary: &Path, root: &Path, port: &str) -> std::io::Result<Child
         // Keep the embedding model in the app's data directory rather than in
         // whatever home cache the launching user happens to have.
         .env("FASTEMBED_CACHE_DIR", root.join("fastembed"))
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+        // No console on Windows, and no stdin anywhere: the sidecar in app
+        // mode has nobody to answer a questionnaire.
+        .stdin(Stdio::null())
+        .env("QUILL_NONINTERACTIVE", "1");
+    #[cfg(windows)]
+    {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    #[cfg(not(windows))]
+    {
+        cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    }
+    hide_console(&mut cmd);
     cmd.spawn()
 }
 

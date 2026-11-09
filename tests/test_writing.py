@@ -3,7 +3,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from components.writingEngine import WritingEngine
+from components.writingEngine import NATURAL_VOICE_STYLE, WritingEngine
 
 
 class _FakeEmbedder:
@@ -31,6 +31,14 @@ def _check(results, name, cond, detail=""):
 def main() -> int:
     results: list[bool] = []
     eng = _engine()
+    eng.words_per_section = 220
+    eng.max_words_per_section = 320
+    eng.style = NATURAL_VOICE_STYLE
+    prompt = eng._build_body_prompt("ctx", "Title", "claim", [])
+    _check(
+        results, "natural voice style reaches the body prompt",
+        "8-12 word sentences" in prompt and "No bullet points" in prompt,
+    )
 
     placeholder = eng._placeholder(
         "Section", 10, 1, 0.5,
@@ -106,7 +114,7 @@ def main() -> int:
 
     probe = (
         "import os, sys; sys.path.insert(0, os.getcwd());"
-        "from components.writingEngine import WritingEngine;"
+        "from components.writingEngine import NATURAL_VOICE_STYLE, WritingEngine;"
         "print(WritingEngine.MIN_SECTION_SUPPORT)"
     )
     proc = subprocess.run(
