@@ -45,6 +45,8 @@ pnpm-debug.log*
 yarn-error.log*
 
 # Local app data / runtime
+# A `script(1)` recording, not source.
+gui/typescript
 gui/.quill/
 .quill/
 logs/

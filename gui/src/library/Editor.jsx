@@ -28,6 +28,17 @@ import {
   sectionNumber,
 } from '../editor/outline.js'
 import { ChatPanel, FormatToolbar, HIGHLIGHT_TAGS } from './ChatPanel.jsx'
+import { cleanupImportedHtml } from './importFile.js'
+import { EditorMenuBar } from './EditorMenuBar.jsx'
+import { EditorRuler } from './EditorRuler.jsx'
+import { ShareDialog } from './ShareDialog.jsx'
+import { VersionHistoryDialog } from './VersionHistoryDialog.jsx'
+import { CommentsDialog } from './CommentsDialog.jsx'
+import { VerificationDialog } from './VerificationDialog.jsx'
+import { recordVersion } from './versionHistory.js'
+import { complete as completeText } from '../platform/store.js'
+import { ghostTextKey } from '../editor/ghostText.js'
+import { addComment } from './comments/comments.js'
 import { Mathematics } from '@tiptap/extension-mathematics'
 import { Image } from '@tiptap/extension-image'
 
@@ -41,7 +52,7 @@ import { Image } from '@tiptap/extension-image'
  */
 const ACTIVE_HEADING_OFFSET = 190
 
-function EditableTitle({ title, onRename }) {
+function EditableTitle({ title, onRename, inline = false }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
   const inputRef = useRef(null)
@@ -89,7 +100,7 @@ function EditableTitle({ title, onRename }) {
     return (
       <input
         ref={inputRef}
-        className="document-title-input"
+        className={`document-title-input${inline ? ' is-inline' : ''}`}
         value={draft}
         aria-label="Document title"
         spellCheck={false}
@@ -105,7 +116,7 @@ function EditableTitle({ title, onRename }) {
   }
 
   return (
-    <h1 className="document-title">
+    <h1 className={`document-title${inline ? ' is-inline' : ''}`}>
       <button type="button" className="document-title-button" onClick={() => setEditing(true)} title="Rename document">
         {title}
       </button>
@@ -113,7 +124,7 @@ function EditableTitle({ title, onRename }) {
   )
 }
 
-function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, onTitleChange, onBack, onPanel, leftOpen, rightOpen, zen, onZen, onDetails, onDelete, onContentSave, spring, fast, reducedMotion, assistantReducedMotion, onStatsChange, author, view, exportRequest }) {
+function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, onTitleChange, onBack, onPanel, leftOpen, rightOpen, zen, onZen, onDetails, onDelete, onContentSave, spring, fast, reducedMotion, assistantReducedMotion, onStatsChange, author, view, exportRequest, onNew, onImport }) {
   const editorRef = useRef(null)
   // The panels animate `width`, which re-runs layout each frame; a spring here
   // makes them visibly hunt as they settle.
@@ -125,10 +136,34 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
   const [bubble, setBubble] = useState(null)
   const [tagsOpen, setTagsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [mode, setMode] = useState('editing')
+  const [margins, setMargins] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('quill:page-margins') || '{}')
+      return {
+        left: Math.max(12, Math.min(45, Number(saved.left) || 22)),
+        right: Math.max(12, Math.min(45, Number(saved.right) || 22)),
+      }
+    } catch {
+      return { left: 22, right: 22 }
+    }
+  })
+  const [shareOpen, setShareOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [verifyOpen, setVerifyOpen] = useState(false)
+  const [commentRange, setCommentRange] = useState(null)
+  const [commentQuote, setCommentQuote] = useState('')
+  const completionTimer = useRef(null)
+  const completionSeq = useRef(0)
+  const lastCompletionAt = useRef(0)
   // A download requested from the library navigates here first and then opens
   // the same dialog the Export button opens. Keyed on the request counter so a
   // second download of the same document opens it again after a close.
   useEffect(() => { if (exportRequest) setExportOpen(true) }, [exportRequest])
+  useEffect(() => {
+    try { localStorage.setItem('quill:page-margins', JSON.stringify(margins)) } catch { /* local preference */ }
+  }, [margins])
   // The document body lives in a Yjs document, so the editor is collaborative
   // capable even though only local persistence is wired up so far.
   const {
@@ -376,25 +411,48 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
   const getDraft = useCallback(() => (tiptap ? tiptap.getMarkdown() : ''), [tiptap])
 
   /**
-   * Appends the assistant's document to the end of the editor.
+   * Lands the assistant's document in the editor.
    *
-   * The markdown is parsed through `@tiptap/markdown` rather than the HTML
-   * path, so the produced document becomes the same nodes a hand-typed one
-   * would. It goes at the end so a WRITE turn stands beside the draft it was
-   * asked about instead of over it.
+   * A generated document that reuses the reader's headings is a fill, not a
+   * second document: it replaces the template so the meeting notes do not end
+   * up below themselves. Anything else is appended, because a WRITE turn about
+   * a different structure should stand beside the draft, not over it.
+   *
+   * The markdown is parsed through `@tiptap/markdown` either way, so the
+   * produced document becomes the same nodes a hand-typed one would.
    */
   const appendToDocument = useCallback((markdown) => {
     const editor = tiptap
     const text = typeof markdown === 'string' ? markdown.trim() : ''
     if (!editor || !text) return false
-    const end = editor.state.doc.content.size
-    editor.commands.insertContentAt(end, text, { contentType: 'markdown' })
-    // Generated text saves the moment it lands, not400ms later: this is the
+    const headingsOf = (nodes) => (nodes || [])
+      .filter((node) => node.type === 'heading')
+      .map((node) => (node.content || []).map((child) => child.text || '').join('').trim())
+      .filter(Boolean)
+    const existing = headingsOf(editor.getJSON().content)
+    const incoming = text
+      .split('\n')
+      .map((line) => /^#{1,6}\s+(.+)$/.exec(line)?.[1]?.trim())
+      .filter(Boolean)
+    const shared = incoming.filter((heading) => existing.includes(heading))
+    const fillsTemplate = existing.length >= 2
+      && shared.length >= 2
+      && shared.length >= Math.ceil(existing.length * 0.6)
+    if (fillsTemplate) {
+      // A wholesale replacement is destructive, so keep the pre-fill state in
+      // version history rather than relying on the autosave window.
+      recordVersion(doc.id, editor.getHTML(), { force: true })
+      editor.commands.setContent(text, { emitUpdate: true, contentType: 'markdown' })
+    } else {
+      const end = editor.state.doc.content.size
+      editor.commands.insertContentAt(end, text, { contentType: 'markdown' })
+    }
+    // Generated text saves the moment it lands, not 400ms later: this is the
     // exact content a reader has just watched appear, and a refresh in that
     // window must not take it back (2026-11-01 report).
     ydoc?.flushNow().catch((error) => console.warn('Could not flush the document', error))
     return true
-  }, [tiptap, ydoc])
+  }, [doc.id, tiptap, ydoc])
 
   /**
    * Autosave: the write-back from the Yjs body into the `content` column.
@@ -428,9 +486,136 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
       console.warn('Could not read document content yet', error)
       return false
     }
+    recordVersion(doc.id, html)
     onContentSave(doc.id, { content: html, contentFormat: 'html' })
     return true
   }, [doc.id, onContentSave])
+
+  /**
+   * Tidy an imported draft without asking the assistant.
+   *
+   * Imported Word files can carry leftover `w:` markup, literal LaTeX and
+   * empty paragraphs; a reader who wants the words back should not have to
+   * write a prompt and hope the model treats it as formatting rather than a
+   * request to rewrite. The pass is deterministic and leaves the document's
+   * own structure alone.
+   */
+  const cleanupFormat = useCallback(() => {
+    const editor = tiptap
+    if (!editor || editor.isDestroyed) return
+    let before
+    try {
+      before = editor.getHTML()
+    } catch (error) {
+      console.warn('Could not read the document for cleanup', error)
+      return
+    }
+    const after = cleanupImportedHtml(before)
+    if (after === before) {
+      window.alert?.('This document is already clean.')
+      return
+    }
+    editor.commands.setContent(after, { emitUpdate: true })
+    saveContent(editor)
+  }, [saveContent, tiptap])
+
+  // Editing modes. Viewing is genuinely read-only; Suggesting marks typed text
+  // with the suggestion mark so it can be accepted as a whole.
+  useEffect(() => {
+    if (!tiptap) return
+    tiptap.setEditable(mode !== 'viewing')
+    if (tiptap.storage?.suggestionMode) {
+      tiptap.storage.suggestionMode.enabled = mode === 'suggesting'
+    }
+  }, [mode, tiptap])
+
+  const acceptSuggestions = useCallback(() => {
+    if (!tiptap) return
+    tiptap.chain().selectAll().unsetMark('suggestion').run()
+    saveContent(tiptap)
+  }, [saveContent, tiptap])
+
+  const rejectSuggestions = useCallback(() => {
+    if (!tiptap) return
+    const { state, view } = tiptap
+    const ranges = []
+    state.doc.descendants((node, pos) => {
+      if (node.isText && node.marks.some((mark) => mark.type.name === 'suggestion')) {
+        ranges.push([pos, pos + node.nodeSize])
+      }
+    })
+    if (!ranges.length) return
+    const transaction = state.tr
+    for (const [from, to] of ranges.reverse()) transaction.delete(from, to)
+    view.dispatch(transaction)
+    saveContent(tiptap)
+  }, [saveContent, tiptap])
+
+  const openComments = useCallback(() => {
+    if (!tiptap) {
+      setCommentRange(null)
+      setCommentQuote('')
+      setCommentsOpen(true)
+      return
+    }
+    const { from, to, empty } = tiptap.state.selection
+    setCommentRange(empty ? null : { from, to })
+    setCommentQuote(empty ? '' : tiptap.state.doc.textBetween(from, to, ' ').slice(0, 280))
+    setCommentsOpen(true)
+  }, [tiptap])
+
+  const submitComment = useCallback((text, quote) => {
+    if (!tiptap || !commentRange) return
+    const id = `c${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    tiptap.chain().focus().setTextSelection(commentRange).setMark('comment', { id }).run()
+    addComment(doc.id, { id, quote, text })
+    saveContent(tiptap)
+  }, [commentRange, doc.id, saveContent, tiptap])
+
+  const requestCompletion = useCallback(async (manual = false) => {
+    if (!tiptap || mode !== 'editing') return
+    if (!manual && settings.completions === false) return
+    const now = Date.now()
+    if (!manual && now - lastCompletionAt.current < 2500) return
+    lastCompletionAt.current = now
+    const { state } = tiptap
+    const { from, to, empty } = state.selection
+    if (!empty) return
+    const before = state.doc.textBetween(Math.max(0, from - 1200), from, ' ')
+    const after = state.doc.textBetween(from, Math.min(state.doc.content.size, from + 400), ' ')
+    if (!manual && (!before.trim() || !/[\s.,;:!?]$/.test(before))) return
+    const seq = ++completionSeq.current
+    const value = await completeText({ before, after })
+    if (seq !== completionSeq.current) return
+    const current = tiptap.state.selection
+    if (current.from !== from || !current.empty) return
+    let text = String(value || '').trim()
+    if (text && /[A-Za-z0-9]$/.test(before) && !/^\s/.test(String(value))) text = ` ${text}`
+    tiptap.view.dispatch(tiptap.state.tr.setMeta(ghostTextKey, { text, pos: from }))
+  }, [mode, settings.completions, tiptap])
+
+  useEffect(() => {
+    if (!tiptap || mode !== 'editing' || settings.completions === false) return undefined
+    const delay = Math.max(300, Number(settings.completionDelay) || 900)
+    const schedule = () => {
+      clearTimeout(completionTimer.current)
+      completionTimer.current = setTimeout(() => requestCompletion(false), delay)
+    }
+    tiptap.on('update', schedule)
+    tiptap.on('selectionUpdate', schedule)
+    return () => {
+      tiptap.off('update', schedule)
+      tiptap.off('selectionUpdate', schedule)
+      clearTimeout(completionTimer.current)
+    }
+  }, [mode, requestCompletion, settings.completionDelay, settings.completions, tiptap])
+
+  const restoreVersion = useCallback((html) => {
+    if (!tiptap) return
+    tiptap.commands.setContent(html, { emitUpdate: true })
+    saveContent(tiptap)
+    setHistoryOpen(false)
+  }, [saveContent, tiptap])
 
   useEffect(() => {
     if (!tiptap) return undefined
@@ -481,9 +666,9 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
     // of React's render loop entirely. Same curve, same duration.
     style={{
       '--shell-left': leftOpen ? '282px' : '0px',
-      '--shell-right': rightOpen ? '348px' : '0px',
+      '--shell-right': rightOpen ? '430px' : '0px',
     }}
-  ><aside className="editor-panel left-panel" inert={leftOpen ? undefined : ''} aria-label="Sections"><div className="panel-inner"><div className="panel-section outline-section"><div className="group-label">Sections</div><nav className="outline" aria-label="Document sections">{headings.length ? headings.map((heading, index) => { const number = heading.level === SECTION_LEVEL ? sectionNumber(headings, index) : null; return <div key={heading.id} className={`outline-item depth-${heading.level}`}><button className={`outline-row ${activeHeading === heading.id ? 'active' : ''}`} type="button" onClick={() => goToHeading(heading.id)}>{heading.level === 'h3' ? <span className="child-dot" /> : <span className="fold-spacer" />}<span>{number ? `${number}. ` : ''}{heading.text}</span></button></div> }) : <div className="empty-outline"><Icon name="file" size={18} /><p>No sections yet</p><small>Add a heading in the draft and it will appear here.</small></div>}</nav><button className="add-section" type="button" onClick={addSection}><Icon name="plus" size={14} /><span>Add section</span></button></div><div className="panel-section collaborators" hidden><div className="group-label">Collaborators</div><div className="collaborator"><span className="avatar orange">AM</span><span><strong>Ava Morgan</strong><small>Editor</small></span><i className="presence online" /></div><div className="collaborator"><span className="avatar green">JR</span><span><strong>Jon Reyes</strong><small>Writer</small></span><i className="presence away" /></div><div className="collaborator"><span className="avatar purple">SK</span><span><strong>Sora Kim</strong><small>Review</small></span><i className="presence online" /></div><button className="invite" type="button"><span><Icon name="plus" size={13} /></span>Invite people</button></div></div></aside><div className="editor-center"><header className="editor-topbar"><div className="topbar-left"><button className="icon-button" type="button" aria-label="Back to library" onClick={onBack}><Icon name="back" size={16} /></button><button className={`panel-toggle ${leftOpen ? 'on' : ''}`} type="button" aria-label="Toggle Sections panel" aria-pressed={leftOpen} onClick={() => onPanel('left', !leftOpen)}><Icon name="panel" size={15} /></button><div className="breadcrumb"><button type="button" onClick={onBack}>Library</button><span>›</span><button type="button" onClick={onBack}>{doc.cat}</button><span>›</span><strong>{doc.title}</strong><button className="details-button" type="button" aria-label="Edit document details" onClick={() => onDetails(doc.id)}><Icon name="details" size={14} /><span>Details</span></button></div></div><div className="topbar-right"><button className={`panel-toggle ${zen ? 'on' : ''}`} type="button" aria-label="Toggle Zen mode" aria-pressed={zen} onClick={onZen}><Icon name="expand" size={15} /></button><button className={`panel-toggle ${rightOpen ? 'on' : ''}`} type="button" aria-label="Toggle Conclave panel" aria-pressed={rightOpen} onClick={() => onPanel('right', !rightOpen)}><Icon name="sparkle" size={15} /></button><span className="topbar-divider" /><span className={`save-state ${settings.autosave ? '' : 'paused'}`}><Icon name="cloud" size={14} />{settings.autosave ? 'Saved' : 'Paused'}</span><button className="publish-button" type="button" onClick={() => setExportOpen(true)}><Icon name="draft" size={13} /><span>Export</span></button></div></header><div className="editor-scroll" ref={scrollRef}><div className="format-toolbar"><FormatToolbar editor={tiptap} runCommand={runCommand} defaultFont={settings.font} onFont={applyFontFamily} onSize={applyFontSize} tagsOpen={tagsOpen} onToggleTags={() => setTagsOpen((value) => !value)} applyTag={applyTag} onInsertImage={insertImage} onInsertMath={insertMath} /></div><article className="editor-page" ref={editorRef} onMouseUp={captureSelection} onKeyUp={captureSelection}><EditableTitle title={doc.title} onRename={onTitleChange} /><div className="document-meta">{doc.cat} · {stats.words.toLocaleString()} words · Edited {doc.edited}</div><DocumentEditor editor={tiptap} ready={editorReady} /></article></div><footer className="editor-status"><div>{settings.wordCount && <><span>{stats.words.toLocaleString()} words</span><span>·</span><span>{stats.chars.toLocaleString()} characters</span><span>·</span><span>{stats.paragraphs} paragraphs</span><span>·</span><span>{stats.read} min read</span><span>·</span></>}<span>{settings.autosave ? 'Saved' : 'Paused'}</span></div><div className="status-hints"><button type="button" onClick={() => onPanel('left', !leftOpen)}><kbd>⌘\</kbd> Sections</button><button type="button" onClick={() => onPanel('right', !rightOpen)}><kbd>⌘J</kbd> Assistant</button></div></footer></div><aside className="editor-panel right-panel" inert={rightOpen ? undefined : ''}><ChatPanel key={doc.id} documentId={doc.id} assistantReducedMotion={assistantReducedMotion} settings={settings} theme={theme} onSettingsChange={onSettingsChange} activeProvider={activeProvider} onSelectModel={onSelectModel} onOpenSettings={onOpenSettings} rightOpen={rightOpen} effectsActive={view === 'editor'} getDraft={getDraft} onWriteToDocument={appendToDocument} /></aside>{bubble && <div className="selection-bubble" role="toolbar" aria-label="Selected text formatting" style={{ left: bubble.left, top: bubble.top }} onMouseDown={(event) => event.preventDefault()}><button type="button" onClick={() => runCommand('toggleBold')}><strong>B</strong></button><button type="button" onClick={() => runCommand('toggleItalic')}><em>I</em></button><button type="button" onClick={() => runCommand('toggleHighlight', { color: '#fff3a3' })}><Icon name="tag" size={14} /></button><span /><button type="button" onClick={() => runCommand('undo')}><Icon name="undo" size={14} /></button></div>}{tagsOpen && <div className="tag-popover" role="menu"><div className="tag-popover-head">Highlight a thought</div>{HIGHLIGHT_TAGS.map((tag) => <button key={tag.name} type="button" role="menuitem" onClick={() => applyTag(tag.color)}><span className="tag-swatch" style={{ background: tag.color }} />{tag.name}<kbd>⌘{tag.key}</kbd></button>)}</div>}{exportOpen && <ExportDialog key="export-dialog" document={doc} getPayload={getExportPayload} author={author} onClose={() => setExportOpen(false)} reducedMotion={reducedMotion} />}</main>
+  ><aside className="editor-panel left-panel" inert={leftOpen ? undefined : ''} aria-label="Sections"><div className="panel-inner"><div className="panel-section outline-section"><div className="group-label">Sections</div><nav className="outline" aria-label="Document sections">{headings.length ? headings.map((heading, index) => { const number = heading.level === SECTION_LEVEL ? sectionNumber(headings, index) : null; return <div key={heading.id} className={`outline-item depth-${heading.level}`}><button className={`outline-row ${activeHeading === heading.id ? 'active' : ''}`} type="button" onClick={() => goToHeading(heading.id)}>{heading.level === 'h3' ? <span className="child-dot" /> : <span className="fold-spacer" />}<span>{number ? `${number}. ` : ''}{heading.text}</span></button></div> }) : <div className="empty-outline"><Icon name="file" size={18} /><p>No sections yet</p><small>Add a heading in the draft and it will appear here.</small></div>}</nav><button className="add-section" type="button" onClick={addSection}><Icon name="plus" size={14} /><span>Add section</span></button></div><div className="panel-section collaborators" hidden><div className="group-label">Collaborators</div><div className="collaborator"><span className="avatar orange">AM</span><span><strong>Ava Morgan</strong><small>Editor</small></span><i className="presence online" /></div><div className="collaborator"><span className="avatar green">JR</span><span><strong>Jon Reyes</strong><small>Writer</small></span><i className="presence away" /></div><div className="collaborator"><span className="avatar purple">SK</span><span><strong>Sora Kim</strong><small>Review</small></span><i className="presence online" /></div><button className="invite" type="button"><span><Icon name="plus" size={13} /></span>Invite people</button></div></div></aside><div className="editor-center" data-mode={mode}><header className="editor-topbar"><div className="topbar-left"><button className="icon-button" type="button" aria-label="Back to library" onClick={onBack}><Icon name="back" size={16} /></button><button className={`panel-toggle ${leftOpen ? 'on' : ''}`} type="button" aria-label="Toggle Sections panel" aria-pressed={leftOpen} onClick={() => onPanel('left', !leftOpen)}><Icon name="panel" size={15} /></button><div className="breadcrumb"><button type="button" onClick={onBack}>Library</button><span>›</span><button type="button" onClick={onBack}>{doc.cat}</button><span>›</span><span className="breadcrumb-title"><EditableTitle title={doc.title} onRename={onTitleChange} inline /></span></div></div><div className="topbar-right"><button className={`panel-toggle ${zen ? 'on' : ''}`} type="button" aria-label="Toggle Zen mode" aria-pressed={zen} onClick={onZen}><Icon name="expand" size={15} /></button><button className={`panel-toggle ${rightOpen ? 'on' : ''}`} type="button" aria-label="Toggle Conclave panel" aria-pressed={rightOpen} onClick={() => onPanel('right', !rightOpen)}><Icon name="sparkle" size={15} /></button><span className="topbar-divider" /><span className={`save-state ${settings.autosave ? '' : 'paused'}`}><Icon name="cloud" size={14} />{settings.autosave ? 'Saved' : 'Paused'}</span>{String(doc.provenance || '').startsWith('import:') && <button className="cleanup-button" type="button" title="Tidy imported formatting and math" onClick={cleanupFormat}><Icon name="sparkle" size={13} /><span>Clean up</span></button>}</div></header><EditorMenuBar mode={mode} onMode={setMode} onNew={() => onNew?.()} onOpen={onImport} onExport={() => setExportOpen(true)} onDelete={() => onDelete?.(doc.id)} onBack={onBack} onShare={() => setShareOpen(true)} onHistory={() => setHistoryOpen(true)} onComments={openComments} onVerify={() => setVerifyOpen(true)} onDetails={() => onDetails?.(doc.id)} onSettings={onOpenSettings} onCleanup={cleanupFormat} onInsertImage={insertImage} onInsertMath={insertMath} onComplete={() => requestCompletion(true)} onAcceptSuggestions={acceptSuggestions} onRejectSuggestions={rejectSuggestions} runCommand={runCommand} /><div className="editor-scroll" ref={scrollRef}><div className="format-toolbar"><FormatToolbar editor={tiptap} runCommand={runCommand} defaultFont={settings.font} onFont={applyFontFamily} onSize={applyFontSize} tagsOpen={tagsOpen} onToggleTags={() => setTagsOpen((value) => !value)} applyTag={applyTag} onInsertImage={insertImage} onInsertMath={insertMath} />{mode === 'suggesting' && <div className="editor-mode-banner" role="status">Suggesting mode: typed text is marked as a suggestion until you accept it.</div>}</div><EditorRuler left={margins.left} right={margins.right} onChange={setMargins} /><article className="editor-page" ref={editorRef} style={{ '--page-margin-left': `${margins.left}mm`, '--page-margin-right': `${margins.right}mm` }} onMouseUp={captureSelection} onKeyUp={captureSelection}><DocumentEditor editor={tiptap} ready={editorReady} /></article></div><footer className="editor-status"><div>{settings.wordCount && <><span>{stats.words.toLocaleString()} words</span><span>·</span><span>{stats.chars.toLocaleString()} characters</span><span>·</span><span>{stats.paragraphs} paragraphs</span><span>·</span><span>{stats.read} min read</span><span>·</span></>}<span>{settings.autosave ? 'Saved' : 'Paused'}</span></div><div className="status-hints"><button type="button" onClick={() => onPanel('left', !leftOpen)}><kbd>⌘\</kbd> Sections</button><button type="button" onClick={() => onPanel('right', !rightOpen)}><kbd>⌘J</kbd> Assistant</button></div></footer></div><aside className="editor-panel right-panel" inert={rightOpen ? undefined : ''}><ChatPanel key={doc.id} documentId={doc.id} assistantReducedMotion={assistantReducedMotion} settings={settings} theme={theme} onSettingsChange={onSettingsChange} activeProvider={activeProvider} onSelectModel={onSelectModel} onOpenSettings={onOpenSettings} rightOpen={rightOpen} effectsActive={view === 'editor'} getDraft={getDraft} onWriteToDocument={appendToDocument} /></aside>{bubble && <div className="selection-bubble" role="toolbar" aria-label="Selected text formatting" style={{ left: bubble.left, top: bubble.top }} onMouseDown={(event) => event.preventDefault()}><button type="button" onClick={() => runCommand('toggleBold')}><strong>B</strong></button><button type="button" onClick={() => runCommand('toggleItalic')}><em>I</em></button><button type="button" onClick={() => runCommand('toggleHighlight', { color: '#fff3a3' })}><Icon name="tag" size={14} /></button><span /><button type="button" onClick={() => runCommand('undo')}><Icon name="undo" size={14} /></button></div>}{tagsOpen && <div className="tag-popover" role="menu"><div className="tag-popover-head">Highlight a thought</div>{HIGHLIGHT_TAGS.map((tag) => <button key={tag.name} type="button" role="menuitem" onClick={() => applyTag(tag.color)}><span className="tag-swatch" style={{ background: tag.color }} />{tag.name}<kbd>⌘{tag.key}</kbd></button>)}</div>}{shareOpen && <ShareDialog key="share-dialog" title={doc.title} onClose={() => setShareOpen(false)} onExport={() => { setShareOpen(false); setExportOpen(true) }} getMarkdown={() => tiptap?.getMarkdown() || ''} getText={() => tiptap?.getText() || ''} />}{historyOpen && <VersionHistoryDialog key="version-dialog" docId={doc.id} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} getCurrent={() => tiptap?.getHTML() || ''} />}{commentsOpen && <CommentsDialog key="comments-dialog" docId={doc.id} quote={commentQuote} onClose={() => setCommentsOpen(false)} onAdd={submitComment} />}{verifyOpen && <VerificationDialog key="verify-dialog" text={tiptap?.getMarkdown() || ''} onClose={() => setVerifyOpen(false)} />}{exportOpen && <ExportDialog key="export-dialog" document={doc} getPayload={getExportPayload} author={author} onClose={() => setExportOpen(false)} reducedMotion={reducedMotion} />}</main>
 }
 
 export { Editor }

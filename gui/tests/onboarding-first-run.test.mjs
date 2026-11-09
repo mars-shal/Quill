@@ -50,11 +50,15 @@ await awaitBoot()
 const card = () => root.querySelector('.onboarding-layer')
 const next = () => root.querySelector('.onboarding-next')
 
-test('a fresh install opens on the welcome card', () => {
+test('a fresh install opens on the welcome screen', () => {
   const layer = card()
-  assert.ok(layer, 'a first run should open the onboarding card')
+  assert.ok(layer, 'a first run should open the onboarding screen')
   assert.equal(layer.getAttribute('aria-modal'), 'true', 'it is a modal surface, not a toast')
-  assert.match(layer.textContent, /Quill/, 'it should name the app')
+  assert.ok(
+    layer.querySelector('img[alt="Quill"]') || /Quill/.test(layer.getAttribute('aria-label') || ''),
+    'it should name the app',
+  )
+  assert.equal(root.querySelector('.onboarding-v2-skip'), null, 'the explicit skip button is gone')
   assert.equal(
     root.querySelectorAll('.library-layer').length > 0,
     true,
@@ -69,7 +73,7 @@ test('the second step is the theme, and picking one persists it', async () => {
   assert.ok(themes.length >= 2, 'the look step should offer the built-in themes')
 
   const before = settingsCalls.length
-  const dark = themes.find((node) => /night|dark/i.test(node.textContent))
+  const dark = themes.find((node) => /moon|night|dark/i.test(node.textContent))
   assert.ok(dark, 'a dark theme should be on offer')
   await clickAndSettle(dark)
 
@@ -78,21 +82,31 @@ test('the second step is the theme, and picking one persists it', async () => {
   assert.equal(dark.getAttribute('aria-checked'), 'true', 'the chosen theme should read as chosen')
 })
 
-test('the last step offers the detected server and adopts it without a key', async () => {
+test('the last step offers every detected model and adopts the chosen one', async () => {
   await clickAndSettle(next())
 
-  const tool = root.querySelector('.onboarding-tool')
-  assert.ok(tool, 'a running local server should be offered by name')
-  assert.match(tool.textContent, /Ollama/)
-  assert.match(tool.textContent, /2 models/, 'the count is what tells a reader it can be used')
+  const addKey = [...root.querySelectorAll('.onboarding-v2-alt-actions button')]
+    .find((node) => /Add an API key/i.test(node.textContent))
+  assert.ok(addKey, 'the model step offers an API-key path')
+  await clickAndSettle(addKey)
+  assert.ok(root.querySelector('#onboarding-api-key'), 'the key is entered in onboarding, not Settings')
+  await clickAndSettle(addKey)
 
-  await clickAndSettle(tool)
+  const tools = [...root.querySelectorAll('.onboarding-tool')]
+  assert.ok(tools.length >= 2, 'each model the server reports is a choice')
+  assert.match(tools[0].textContent, /Ollama/)
+  assert.match(tools[0].textContent, /2 models/, 'the count is what tells a reader it can be used')
+
+  const chosen = tools.find((node) => /qwen2/i.test(node.textContent))
+  assert.ok(chosen, 'the second reported model should be offered')
+  await clickAndSettle(chosen)
+  await clickAndSettle(next())
 
   const active = providerFixtures.active()
   assert.equal(active?.id, TOOL.id, 'adopting the server should make it the active provider')
   assert.equal(active?.baseUrl, TOOL.baseUrl, 'the endpoint must be the one that answered')
   assert.deepEqual(active?.models, TOOL.models, 'its real model list travels with the row')
-  assert.equal(active?.defaultModel, TOOL.models[0], 'a model must be chosen or no turn can run')
+  assert.equal(active?.defaultModel, 'qwen2:0.5b', 'the model the reader chose is the one stored')
 })
 
 test('finishing records that it happened, so it never opens again', async () => {

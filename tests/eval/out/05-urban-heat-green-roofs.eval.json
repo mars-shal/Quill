@@ -1,0 +1,164 @@
+{
+  "slug": "05-urban-heat-green-roofs",
+  "domain": "Environmental science",
+  "prompt": "Assess the effectiveness of green roofs as an urban heat island intervention. Discuss measured temperature effects, cost, maintenance and equity.",
+  "usage": {
+    "prompt_tokens": 140,
+    "completion_tokens": 1079,
+    "total_tokens": 1219
+  },
+  "finish_reason": "stop",
+  "seconds": 96.3,
+  "model": "gemma4:latest",
+  "file": "05-urban-heat-green-roofs.md",
+  "chars": 4113,
+  "words": 518,
+  "detector": {
+    "model": "MayZhou/e5-small-lora-ai-generated-detector (ONNX int8)",
+    "chunks": 3,
+    "scores": [
+      0.776,
+      0.8574,
+      0.8175
+    ],
+    "mean_ai_probability": 0.817,
+    "max_ai_probability": 0.8574,
+    "fraction_chunks_ai": 1.0,
+    "grade": "F (strongly AI-like)",
+    "stylometry": {
+      "words": 515,
+      "sentences": 37,
+      "mean_sentence_words": 13.9,
+      "sentence_length_sd": 11.9,
+      "type_token_ratio": 0.592,
+      "repeated_4grams": 0,
+      "flesch_reading_ease": 7.2
+    },
+    "note": "A detector score is not proof of authorship; use it with the citation and plagiarism checks."
+  },
+  "verification": {
+    "dois": [
+      "10.1175/jametmet.1987.26.2.235",
+      "10.1016/j.buildenv.2019.106789",
+      "10.1016/j.scs.2020.121930"
+    ],
+    "urls": [],
+    "url_checks": [],
+    "citations": [
+      {
+        "input": "10.1175/jametmet.1987.26.2.235",
+        "status": "not_found",
+        "reason": "DOI did not resolve at Crossref or OpenAlex"
+      },
+      {
+        "input": "10.1016/j.buildenv.2019.106789",
+        "status": "not_found",
+        "reason": "DOI did not resolve at Crossref or OpenAlex"
+      },
+      {
+        "input": "10.1016/j.scs.2020.121930",
+        "status": "not_found",
+        "reason": "DOI did not resolve at Crossref or OpenAlex"
+      }
+    ],
+    "reference_lines": [
+      {
+        "input": "UNESCO. (2021). *Guidelines for green infrastructure and urban cooling*. (Note: As a general guideline document, a specific DOI is not available, but the organization and topic are verifiable through the UNESCO website).",
+        "status": "unverified",
+        "similarity": 0.117,
+        "best_match": {
+          "doi": "10.1201/9780203964699.ch5",
+          "title": "Network Construction",
+          "year": 2006,
+          "venue": "UNESCO-IHE Delft Lecture Note Series"
+        },
+        "candidates": [
+          {
+            "doi": "10.1201/9780203964699.fmatt",
+            "title": "Front Matter",
+            "year": 2006,
+            "venue": "UNESCO-IHE Delft Lecture Note Series"
+          },
+          {
+            "doi": "10.1201/9780203964699.bmatt",
+            "title": "References",
+            "year": 2006,
+            "venue": "UNESCO-IHE Delft Lecture Note Series"
+          },
+          {
+            "doi": "10.1201/9780203964699.ch5",
+            "title": "Network Construction",
+            "year": 2006,
+            "venue": "UNESCO-IHE Delft Lecture Note Series"
+          }
+        ]
+      }
+    ],
+    "verified_dois": 0,
+    "plagiarism": {
+      "checked_sentences": 5,
+      "flagged_sentences": 0,
+      "matches": [
+        {
+          "sentence": "Green roofs represent a promising form of nature-based solution for mitigating the Urban Heat Island (UHI) effect, offering a localized cooling mechanism that complements traditional gray infrastructure.",
+          "query": "Green roofs represent a promising form of nature-based solution for mitigating the Urban Heat",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "Studies have consistently measured significant localized temperature reductions, particularly when comparing vegetated surfaces to conventional dark roofing materials.",
+          "query": "Studies have consistently measured significant localized temperature reductions, particularly when comparing vegetated surfaces to",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "However, the effectiveness of green roofs is not uniform and is highly dependent on design parameters.",
+          "query": "However, the effectiveness of green roofs is not uniform and is highly dependent on",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "Integrating a green roof system requires structural assessments, waterproofing layers, drainage systems, and the substrate itself, leading to a substantially higher upfront investment compared to conventional roofing materials.",
+          "query": "Integrating a green roof system requires structural assessments, waterproofing layers, drainage systems, and the",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "Beyond the physical and financial metrics, the assessment of green roofs must incorporate an equity lens.",
+          "query": "Beyond the physical and financial metrics, the assessment of green roofs must incorporate an",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        }
+      ]
+    }
+  },
+  "citation_grade": [
+    "F",
+    0.0
+  ],
+  "plagiarism_grade": [
+    "A",
+    0.0
+  ],
+  "overall": "D"
+}

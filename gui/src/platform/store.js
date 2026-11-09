@@ -71,6 +71,7 @@ export function normalizeDoc(doc) {
     contentFormat: doc.contentFormat || doc.content_format || 'html',
     status: doc.status || 'Drafts',
     kind: doc.kind || 'Draft',
+    deletedAt: doc.deletedAt || doc.deleted_at || null,
   }
 }
 
@@ -133,12 +134,42 @@ function writeLocalDocs(docs) {
 // Documents
 // ---------------------------------------------------------------------------
 
-export async function listDocuments() {
+export async function listDocuments({ includeDeleted = false } = {}) {
   if (isTauri) {
-    const rows = await (await tauriInvoke())('list_documents', { includeDeleted: false })
+    const rows = await (await tauriInvoke())('list_documents', { includeDeleted })
     return rows.map(normalizeDoc)
   }
-  return readLocalDocs()
+  const rows = readLocalDocs().map(normalizeDoc)
+  return includeDeleted ? rows : rows.filter((doc) => !doc.deletedAt)
+}
+
+/**
+ * Asks the reader for files outside the library and returns their paths.
+ *
+ * The dialog is the only filesystem grant the build takes, so the paths come
+ * back here and the shell reads exactly the files the reader chose. A cancelled
+ * dialog is an empty list, not an error.
+ */
+export async function pickImportPaths() {
+  if (!isTauri) return []
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const picked = await open({
+    title: 'Open a document',
+    multiple: true,
+    directory: false,
+    filters: [
+      { name: 'Documents', extensions: ['md', 'markdown', 'txt', 'text', 'html', 'htm', 'pdf', 'docx'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+  })
+  if (!picked) return []
+  return Array.isArray(picked) ? picked : [picked]
+}
+
+/** Reads one text file the reader chose through the shell. */
+export async function readTextFile(path) {
+  if (!isTauri) throw new Error('Opening a file requires the desktop app')
+  return (await tauriInvoke())('read_text_file', { path })
 }
 
 export async function getDocument(id) {
@@ -215,6 +246,14 @@ export async function deleteDocument(id) {
   writeLocalDocs(readLocalDocs().filter((doc) => doc.id !== id))
 }
 
+export async function purgeDocument(id) {
+  if (isTauri) {
+    await (await tauriInvoke())('purge_document', { id })
+    return
+  }
+  writeLocalDocs(readLocalDocs().filter((doc) => doc.id !== id))
+}
+
 export async function restoreDocument(id) {
   if (isTauri) {
     return normalizeDoc(await (await tauriInvoke())('restore_document', { id }))
@@ -254,6 +293,15 @@ export const defaultSettings = {
   // opencode, Codex, ...). Off means: no detection, no "On this machine" rows
   // -- the panel a reader who never wants local agents should not pay for.
   localTools: true,
+  // Token-saving mode caps the answer length and trims the draft sent to the
+  // model. It is a budget, not a separate assistant.
+  tokenSaving: false,
+  // Inline ghost-text completions, and how long typing must pause first.
+  completions: true,
+  completionDelay: 900,
+  // Run the deterministic import tidy-up as a document is created. The editor's
+  // Clean up action still exists for anything this does not catch.
+  formatOnImport: true,
 }
 
 /**
@@ -697,6 +745,17 @@ export async function usageStats() {
   }
 }
 
+/** One inline completion. Optional assist: failures resolve to empty text. */
+export async function complete({ before, after } = {}) {
+  if (!isTauri) return ''
+  try {
+    return (await (await tauriInvoke())('api_complete', { before: before ?? '', after: after ?? '' })) || ''
+  } catch (error) {
+    console.warn('Completion unavailable', error)
+    return ''
+  }
+}
+
 /** Asks Rust to bring the sidecar up. Resolves with the state it settled in. */
 export async function pipelineStart() {
   if (!isTauri) return { ...UNAVAILABLE }
@@ -766,7 +825,7 @@ export async function startRun({ prompt, documentId, sessionName, conceptMode } 
  * the first is still answering -- so the id is the only thing that stops one
  * turn's progress appearing inside another's bubble.
  */
-export async function chat({ messages, draft, onStage } = {}) {
+export async function chat({ messages, draft, conceptMode, variant, tokenSaving, onStage } = {}) {
   if (!isTauri) throw new Error('The assistant needs the desktop app.')
   const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const release = typeof onStage === 'function'
@@ -781,10 +840,44 @@ export async function chat({ messages, draft, onStage } = {}) {
       turnId,
       messages: (messages ?? []).map(({ role, content }) => ({ role, content })),
       draft: draft ?? null,
+      conceptMode: conceptMode ?? 'reference',
+      variant: variant ?? 'balanced',
+      tokenSaving: Boolean(tokenSaving),
     })
   } finally {
     release()
   }
+}
+
+/**
+ * A short clarifying questionnaire for the current request.
+ *
+ * Returns `[{ header, question, multiSelect, options }]`, or throws with the
+ * model's reason. The panel renders one card, so this is deliberately not a
+ * chat turn: it must not write to the document or run research.
+ */
+export async function questionnaire({ messages, draft, tokenSaving } = {}) {
+  if (!isTauri) throw new Error('The assistant needs the desktop app.')
+  const payload = await (await tauriInvoke())('api_questionnaire', {
+    messages: (messages ?? []).map(({ role, content }) => ({ role, content })),
+    draft: draft ?? null,
+    tokenSaving: Boolean(tokenSaving),
+  })
+  if (payload?.error) throw new Error(String(payload.error))
+  const questions = Array.isArray(payload?.questions) ? payload.questions : []
+  if (!questions.length) throw new Error('The assistant returned no questions.')
+  return questions
+}
+
+/**
+ * Resolve the citations in a draft and search open indexes for copied text.
+ *
+ * Slow and explicit: it talks to Crossref, OpenAlex, ORCID, Wikidata and
+ * Marginalia, so it is a command the reader asks for, never a background scan.
+ */
+export async function verifyText({ text } = {}) {
+  if (!isTauri) throw new Error('Verification needs the desktop app.')
+  return (await tauriInvoke())('api_verify', { text: text ?? '' })
 }
 
 export async function runStatus(runId) {

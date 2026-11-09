@@ -15,6 +15,7 @@ from utilis.store import SqliteDatabase
 from utilis.embeddings import Embedder
 from utilis.model import Agent
 from utilis.pydanticModels import OracleDecision
+from utilis.style import analyse as analyse_style
 from utilis.timing import timed
 
 _NGRAM = 8
@@ -113,6 +114,7 @@ class PlagiarismEngine:
             issues.append("Mixed section numbering schemes.")
 
         coherence = self._coherence(paragraphs, headings)
+        natural_voice = analyse_style(text)
 
         return {
             "word_count": len(words),
@@ -130,7 +132,10 @@ class PlagiarismEngine:
             "incoherent_sections": coherence["failing"],
             "refusals": coherence["refusals"],
             "coherence_detail": coherence["detail"],
-            "issues": issues + coherence["issues"],
+            "natural_voice": natural_voice,
+            "issues": issues + coherence["issues"] + [
+                f"Natural voice: {label.lower()}." for label in natural_voice["issues"]
+            ],
         }
 
     @staticmethod
@@ -209,6 +214,9 @@ class PlagiarismEngine:
             report["corrected_text"] = corrected
         report.setdefault("corrected_text", document)
         report["document_check"] = self.document_check(report.get("corrected_text") or document)
+        # Top-level alias for the review panel: the craft signal belongs beside
+        # the originality score, not only nested under document_check.
+        report["natural_voice"] = report["document_check"].get("natural_voice")
         if unique_id:
             self.db.set(f"written:{unique_id}", report)
         return report

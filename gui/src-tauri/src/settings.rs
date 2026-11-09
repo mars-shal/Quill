@@ -74,6 +74,19 @@ pub struct Settings {
     /// `backgrounds.js::DEFAULT_WASH`.
     #[serde(default)]
     pub texture_wash: Option<f64>,
+    /// Token-saving mode: a shorter draft, a capped answer and no optional
+    /// second research pass. Off by default because it trades depth for cost.
+    #[serde(default)]
+    pub token_saving: bool,
+    /// Inline ghost-text completions in the editor.
+    #[serde(default = "default_true")]
+    pub completions: bool,
+    /// Milliseconds of quiet typing before a completion is requested.
+    #[serde(default = "default_completion_delay")]
+    pub completion_delay: i64,
+    /// Run the deterministic import tidy-up as a document is created.
+    #[serde(default = "default_true")]
+    pub format_on_import: bool,
 }
 
 fn default_theme() -> String {
@@ -147,6 +160,10 @@ fn default_scrim() -> i64 {
     0
 }
 
+fn default_completion_delay() -> i64 {
+    900
+}
+
 impl Settings {
     pub fn defaults() -> Self {
         Self {
@@ -163,6 +180,10 @@ impl Settings {
             surface_alpha: default_surface_alpha(),
             scrim: default_scrim(),
             texture_wash: None,
+            token_saving: false,
+            completions: default_true(),
+            completion_delay: default_completion_delay(),
+            format_on_import: default_true(),
         }
     }
 
@@ -212,6 +233,18 @@ impl Settings {
         }
         if let Some(value) = patch.scrim {
             next.scrim = value.clamp(0, 100);
+        }
+        if let Some(value) = patch.token_saving {
+            next.token_saving = value;
+        }
+        if let Some(value) = patch.completions {
+            next.completions = value;
+        }
+        if let Some(value) = patch.completion_delay {
+            next.completion_delay = value.clamp(300, 3000);
+        }
+        if let Some(value) = patch.format_on_import {
+            next.format_on_import = value;
         }
         if let Some(value) = patch.texture_wash {
             // NaN is not `is_finite` and is not greater than 0.6, so a bare
@@ -278,6 +311,10 @@ pub struct SettingsPatch {
     /// bare `Option<f64>` could not tell "not mentioned" from "set to nothing",
     /// and this field's whole point is that nothing is a real value.
     pub texture_wash: Option<Option<f64>>,
+    pub token_saving: Option<bool>,
+    pub completions: Option<bool>,
+    pub completion_delay: Option<i64>,
+    pub format_on_import: Option<bool>,
 }
 
 const SETTINGS_KEY: &str = "app";

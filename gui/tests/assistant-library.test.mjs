@@ -193,8 +193,10 @@ test('the library cover carries no text', () => {
   assert.equal(clamp, '2', 'the label title may wrap to two lines')
   assert.equal(valueOf('.tile-copy strong', 'display'), '-webkit-box', 'the clamp needs a box display')
 
-  // The "New document" tile reads the same way as the rest of the grid.
-  assert.match(jsx, /<strong>New document<\/strong><span>Starts a blank draft<\/span>/)
+  // The new-document tile is a plus only: the placeholder has no title to
+  // repeat under its cover, so the plus is the whole invitation.
+  assert.match(jsx, /className="new-cover"[^>]*><Icon name="plus"/)
+  assert.ok(!jsx.includes('Starts a blank draft'), 'the plus-only tile has no sub-label')
 })
 
 test('list view has real styles', () => {

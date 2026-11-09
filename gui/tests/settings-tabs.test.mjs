@@ -77,6 +77,7 @@ const { window } = dom
  */
 const SECTIONS = [
   { id: 'settings-assistant', label: 'Assistant' },
+  { id: 'settings-usage', label: 'Usage' },
   { id: 'settings-appearance', label: 'Appearance' },
   { id: 'settings-writing', label: 'Writing' },
 ]
@@ -238,8 +239,8 @@ test('switching panels does not take the tab strip with it', async () => {
     assert.equal(strip.getAttribute('role'), 'tablist', `the strip is still a tablist after switching to ${target.label}`)
     assert.equal(
       strip.querySelectorAll('[role="tab"]').length,
-      3,
-      `all three tabs are still in the strip after switching to ${target.label}`,
+      SECTIONS.length,
+      `all tabs are still in the strip after switching to ${target.label}`,
     )
     assert.ok(window.document.contains(strip), `the tab strip is still in the document after switching to ${target.label}`)
     assert.ok(

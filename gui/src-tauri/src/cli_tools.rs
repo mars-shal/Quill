@@ -312,7 +312,6 @@ async fn probe_models(probes: &[&str]) -> Vec<String> {
 mod tests {
     use super::*;
 
-
     #[test]
     fn every_spec_has_a_unique_id_and_binary() {
         let mut ids: Vec<&str> = SPECS.iter().map(|spec| spec.id).collect();

@@ -52,7 +52,9 @@ node --test --test-force-exit --test-concurrency=1 \
   tests/tailwind-bridge.test.mjs \
   tests/shadcn-prefix-guard.test.mjs \
   tests/app-shell-overlay.test.mjs \
-  tests/browser-store.test.mjs || status=1
+  tests/browser-store.test.mjs \
+  tests/import-templates.test.mjs \
+  tests/chat-markdown.test.mjs || status=1
 
 echo
 echo "==> render suite (framer-motion mocked)"
@@ -69,7 +71,8 @@ node --test --test-force-exit --test-concurrency=1 \
   --test tests/custom-theme-contract.test.mjs \
   --test tests/settings-tabs.test.mjs \
   --test tests/provider-fixture.test.mjs \
-  --test tests/provider-credential.test.mjs || status=1
+  --test tests/provider-credential.test.mjs \
+  --test tests/editor-ruler.test.mjs || status=1
 
 # The same App with the real framer-motion. The mocked suite cannot see the
 # animation layer at all, and a visibly broken library grid once passed six

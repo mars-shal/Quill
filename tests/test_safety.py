@@ -8,10 +8,13 @@ from components.researchEngine import ResearchEngine as R, _is_proper_name
 from utilis.store import SqliteDatabase
 
 ok = 0
+failed = 0
 def chk(l, c, extra=""):
-    global ok
+    global ok, failed
     print(("PASS  " if c else "FAIL  ") + l + (f"   [{extra}]" if extra else ""))
     ok += bool(c)
+    if not c:
+        failed += 1
 
 for url, want in [
     ("https://es.pornhub.com/pornstars", True),
@@ -182,6 +185,12 @@ _blocked = Task._prompt_document_mismatch(_doc, "Write a thesis on the demolitio
 chk("prompt/document gate blocks an unrelated prompt", bool(_blocked), _blocked[:90])
 chk("blocked message names both subjects",
     "MOTION DETECTOR ALARM SYSTEM" in _blocked and "Refusing" in _blocked)
+chk("a formatting request is not a topic mismatch",
+    Task._prompt_document_mismatch(
+        _doc, "can u format this and use latex", "reference") == "")
+chk("a new-subject request that mentions formatting is still checked",
+    bool(Task._prompt_document_mismatch(
+        _doc, "write a thesis about the Stadio dei Marmi in LaTeX", "reference")))
 os.environ["QUILL_ALLOW_UNRELATED_PROMPT"] = "1"
 chk("prompt/document gate has an explicit escape hatch",
     Task._prompt_document_mismatch(_doc, "Write a thesis on the Nigerian Civil War", "reference") == "")
@@ -216,5 +225,5 @@ chk("quote present in corpus corroborated",
     present_quotes and present_quotes[0].signal == "corroborated",
     present_quotes[0].signal if present_quotes else "no quote claim")
 
-print(f"\n{'ALL PASS' if ok == 43 else 'FAILURES'}: {ok}/43")
-raise SystemExit(0 if ok == 43 else 1)
+print(f"\n{'ALL PASS' if not failed else 'FAILURES'}: {ok} checks, {failed} failed")
+raise SystemExit(0 if not failed else 1)

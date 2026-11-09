@@ -39,6 +39,11 @@ pulldown-cmark = { version = "0.12", default-features = false, features = ["html
 # targets build from the same lockfile.
 html-escape = "0.2"
 printpdf = { version = "0.12", default-features = false, features = ["html"] }
+# Import: text extraction from PDFs. DOCX is a zipped XML package and is read
+# with the `zip` dependency the export path already carries, then parsed as a
+# read-only DOM so tables and OMML equations can become real editor nodes.
+pdf-extract = "0.12"
+roxmltree = "0.20"
 docx-rs = "0.4"
 zip = { version = "8", default-features = false, features = ["deflate"] }
 tempfile = "3"

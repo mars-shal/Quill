@@ -370,13 +370,21 @@ Return ONLY valid JSON in this exact shape:
   ]
 }
 Rules:
-- 2-4 strategies. Each level drills one level deeper toward concrete facts.
+- 4-6 strategies. Together they MUST cover: definition/overview, historical or
+  contextual background, mechanism/how it works, evidence or quantitative data,
+  applications/impact, limitations/criticism, and recent developments. Skip a
+  facet only when it is genuinely irrelevant to the subject.
+- Each level drills one level deeper toward concrete facts. Give each strategy
+  1-2 sub-queries; do not repeat the same query in different words.
 - Queries must be specific, searchable strings. No prose, no fences."""
 
 
 class ResearchEngine:
     # Bump to invalidate every cached entity anchor when confirmation changes.
     ENTITY_CACHE_VERSION = "v2"
+    # Extra pages the rescue rounds may add beyond the normal ceiling. Bounded
+    # so a full plan can still be corrected without making the run unbounded.
+    RESCUE_PAGE_BUDGET = 16
 
     def __init__(
         self,
@@ -385,8 +393,12 @@ class ResearchEngine:
         db: SqliteDatabase | None = None,
         use_questionary: bool = True,
         max_iterations: int = 3,
-        pages_per_query: int = 3,
-        max_pages_total: int = 24,
+        pages_per_query: int = 4,
+        # A 24-page ceiling was reached by the first plan on broad subjects, and
+        # the rescue round was then skipped because the list was already full -
+        # even when the pages it held were the wrong ones. The ceiling is a
+        # cost bound, not a target, and 32 leaves room for one focused round.
+        max_pages_total: int = 32,
         relevance_threshold: float = 0.7,
         min_research_quality: float = 0.35,
         min_hit_relevance: float = 0.15,
@@ -413,6 +425,10 @@ class ResearchEngine:
         # its text cannot be re-scored; the corpus string cannot be parsed back
         # into pages without guessing.
         self.last_pages: list[dict] = []
+        # The name the planner anchored on, so later coverage queries can use
+        # the same entity without a second resolver call.
+        self.last_entity = ""
+        self.last_concept = ""
 
     @staticmethod
     def corpus_from_pages(pages: Iterable[dict]) -> str:
@@ -447,7 +463,7 @@ class ResearchEngine:
         are squarely on topic.
         """
         result = {"quality": 0.0, "mean": 0.0, "top": 0.0, "floor": 0.0,
-                  "relevant_pages": 0, "scored": 0}
+                  "relevant_pages": 0, "scored": 0, "breadth": 0.0}
         if not concept.strip():
             return result
 
@@ -482,15 +498,21 @@ class ResearchEngine:
         # was 0.5 - stricter than the corpus bar itself, so quality passed
         # (0.383 >= 0.35) while relevant_pages stayed 0 and every live run
         # was blocked by a threshold its own quality metric contradicted.
+        relevant = sum(
+            1 for s in scores if s > floor + self.min_research_quality * span
+        )
         result.update(
             {
                 "quality": round(max(0.0, min(1.0, (top_mean - floor) / span)), 3),
                 "mean": round(max(0.0, min(1.0, (mean - floor) / span)), 3),
                 "top": round(top[0], 3),
-                "relevant_pages": sum(
-                    1 for s in scores if s > floor + self.min_research_quality * span
-                ),
+                "relevant_pages": relevant,
                 "scored": len(scores),
+                # Breadth distinguishes "five good pages and twenty-seven
+                # off-topic ones" from a corpus that is relevant throughout.
+                # Top-5 quality alone cannot see that difference, and the
+                # writer feels it section by section.
+                "breadth": round(relevant / len(scores), 3),
             }
         )
         return result
@@ -503,14 +525,44 @@ class ResearchEngine:
         ``relevant_pages >= 1`` regardless of quality, so a high-quality run
         with zero relevant pages still yields an all-placeholder document.
         """
-        if int(assessment.get("relevant_pages") or 0) < 1:
+        relevant = int(assessment.get("relevant_pages") or 0)
+        if relevant < 1:
             return True
-        return float(assessment.get("quality") or 0.0) < min_quality
+        if float(assessment.get("quality") or 0.0) < min_quality:
+            return True
+        # A high top-5 score can hide a corpus where most pages are off-topic.
+        # One such corpus passed the old gate at quality=0.699 while the writer
+        # emitted ten placeholders, because only the first few pages supported
+        # the subject. Require a minimum breadth once there is enough evidence
+        # for the ratio to mean something.
+        scored = int(assessment.get("scored") or 0)
+        if scored >= 8 and relevant / scored < 0.20:
+            return True
+        return False
 
     @timed("ResearchEngine.run")
     def run(self, concept: str, unique_id: str = "", prompt: str = "") -> dict:
+        self.last_concept = concept
         plan = self.planner(concept, prompt=prompt)
         pages = self.crawl_plan(plan)
+
+        # The model's plan is the main map, but a four-strategy plan often
+        # returns four versions of the opening question. Fill the structural
+        # gaps deterministically before asking Scout whether research is done.
+        coverage_queries = self._coverage_queries(concept, pages, prompt, limit=3)
+        if coverage_queries and len(pages) < self.max_pages_total:
+            logger.info(
+                "coverage queries: {}",
+                " | ".join(_audit_text(q, 120) for q in coverage_queries),
+            )
+            remaining = max(0, self.max_pages_total - len(pages))
+            pages.extend(
+                self._crawl_within(
+                    coverage_queries,
+                    seen={p.get("url") for p in pages if p.get("url")},
+                    page_cap=remaining,
+                )
+            )
 
         status, summary, coverage, answers = "continue", "", 0.0, {}
         used_iterations = 0
@@ -574,29 +626,50 @@ class ResearchEngine:
 
         assessment = self.assess(concept, pages)
         low_research = self._needs_rescue(assessment, self.min_research_quality)
-        if low_research and len(pages) < self.max_pages_total:
-            # One reformulated round before giving up: the first pass is often
-            # keyword-matched to the wrong subject.
-            decision = self._think(
-                concept,
-                pages,
-                extra_instruction=(
+        # Two bounded rescue rounds, not one. The first reformulates with the
+        # model; the second fills the remaining structural facets without an LLM
+        # call. A full page list is no longer a reason to skip: the pages already
+        # held may be the wrong ones, and the cap is a cost bound, not a quota.
+        rescue_rounds = 0
+        while low_research and rescue_rounds < 2:
+            rescue_rounds += 1
+            seen_urls = {p.get("url") for p in pages if p.get("url")}
+            queries: list[str] = []
+            if rescue_rounds == 1:
+                pre_corpus = self.corpus_from_pages(pages)
+                pre_drift = detect_drift(concept, prompt, pre_corpus, pages)
+                instruction = (
                     "The research gathered so far is off-topic or too thin. Propose"
                     " different search phrasings, using the subject's own terminology"
                     " rather than words from the original request."
-                ),
-            )
-            queries = [q for q in (decision.next_queries or []) if q.strip()][:3]
-            if queries:
-                pages.extend(self._crawl_queries(queries))
-                assessment = self.assess(concept, pages)
-                low_research = self._needs_rescue(assessment, self.min_research_quality)
-            if low_research:
-                logger.warning(
-                    "research gate: quality={} relevant_pages={} after rescue round "
-                    "for {!r}; writer will emit placeholders for unsupported sections",
-                    assessment["quality"], assessment["relevant_pages"], concept[:80],
                 )
+                if pre_drift.get("drift_detected"):
+                    instruction += (
+                        " The current corpus drifts: "
+                        f"{pre_drift.get('summary', '')}. Re-anchor every query on the"
+                        " requested subject and period; do not search for the alien"
+                        " entities or the recent-news window."
+                    )
+                decision = self._think(concept, pages, extra_instruction=instruction)
+                queries = [q for q in (decision.next_queries or []) if q.strip()][:4]
+            if not queries:
+                queries = self._coverage_queries(concept, pages, prompt, limit=3)
+            if not queries:
+                break
+            remaining = max(
+                0,
+                self.max_pages_total + self.RESCUE_PAGE_BUDGET - len(pages),
+            )
+            added = self._crawl_within(queries, seen=seen_urls, page_cap=remaining)
+            pages.extend(added)
+            assessment = self.assess(concept, pages)
+            low_research = self._needs_rescue(assessment, self.min_research_quality)
+        if low_research:
+            logger.warning(
+                "research gate: quality={} relevant_pages={} after rescue round "
+                "for {!r}; writer will emit placeholders for unsupported sections",
+                assessment["quality"], assessment["relevant_pages"], concept[:80],
+            )
 
         corpus_text = "\n\n".join(
             f"[{p['title']}] {p['snippet']}\n{p['text']}" for p in pages
@@ -665,6 +738,8 @@ class ResearchEngine:
             "answers": answers,
             "quality": assessment["quality"],
             "relevant_pages": assessment["relevant_pages"],
+            "breadth": assessment.get("breadth", 0.0),
+            "rescue_rounds": rescue_rounds,
             "low_research": low_research,
             "iterations": used_iterations,
             "drift": drift,
@@ -934,6 +1009,51 @@ Respond with JSON only:
             return query
         return f"{query} {entity}".strip()
 
+    # Facets an academic treatment is expected to cover. The planner is told to
+    # cover them, but a model plan can still return four variations of the same
+    # opening query; this deterministic pass notices a missing facet in the
+    # corpus and buys one anchored query for it. Cost is bounded by the caller
+    # and every query still goes through the normal relevance filter.
+    _COVERAGE_FACETS: tuple[tuple[str, tuple[str, ...], str], ...] = (
+        ("background", ("history", "historical", "origin", "origins", "background", "context", "founded", "built", "established"), "history background context"),
+        ("mechanism", ("mechanism", "work", "works", "working", "process", "method", "how"), "process mechanism method"),
+        ("evidence", ("evidence", "data", "study", "studies", "research", "statistics", "measurement", "results"), "evidence data studies analysis"),
+        ("critique", ("criticism", "critique", "limitation", "limitations", "debate", "controversy", "risk", "risks", "challenge"), "criticism limitations debate"),
+        ("recent", ("recent", "current", "modern", "today", "latest", "future"), "recent developments"),
+    )
+
+    def _coverage_queries(
+        self, concept: str, pages: list[dict], prompt: str = "", limit: int = 3
+    ) -> list[str]:
+        """Anchored queries for facets the corpus does not yet mention.
+
+        This is the part of coverage that does not need an LLM call. It reads
+        the corpus only, so it is deterministic and cannot itself invent a
+        subject. ``recent`` is added only when the request is about the present;
+        a 1968 demolition asked for "recent developments" is exactly the drift
+        the entity anchor and the temporal gate exist to prevent.
+        """
+        text = " ".join(
+            f"{page.get('title', '')} {page.get('snippet', '')} {page.get('text', '')}"
+            for page in pages
+        ).lower()
+        wants_recent = bool(
+            re.search(r"\b(?:recent|current|modern|today|latest|future|20\d{2})\b", f"{concept} {prompt}", re.I)
+        )
+        queries: list[str] = []
+        for name, keywords, phrase in self._COVERAGE_FACETS:
+            if name == "recent" and not wants_recent:
+                continue
+            if any(re.search(rf"\b{re.escape(word)}\b", text) for word in keywords):
+                continue
+            query = self._anchor(f"{concept} {phrase}", getattr(self, "last_entity", ""))
+            query = query[: self.GAP_QUERY_MAX_CHARS].strip()
+            if query and query.lower() not in {q.lower() for q in queries}:
+                queries.append(query)
+            if len(queries) >= max(0, int(limit)):
+                break
+        return queries
+
     @timed("ResearchEngine.missing_terms")
     def missing_terms(self, section_text: str, corpus: str, limit: int | None = None) -> list[str]:
         """Section terms this corpus cannot support, rarest and longest first.
@@ -969,10 +1089,15 @@ Respond with JSON only:
     @timed("ResearchEngine.planner")
     def planner(self, concept: str, prompt: str = "") -> ResearchPlan:
         entity = self._resolve_entity(concept, prompt=prompt)
-        response = self.agent.model(
-            f"{concept}\n\nThe subject is: {entity}",
-            system_prompt=_PLAN_SYSTEM,
-        )
+        self.last_entity = entity
+        request = f"{concept}\n\nThe subject is: {entity}"
+        if prompt.strip():
+            # The distilled concept can drop a scope the reader actually named
+            # ("focus on the 1968 demolition", "cover the economics"). The
+            # planner sees the original request as well, so the query plan
+            # covers what was asked rather than only the summary.
+            request += f"\n\nOriginal request:\n{prompt.strip()}"
+        response = self.agent.model(request, system_prompt=_PLAN_SYSTEM)
         parsed = self._parse_json_like(response)
         if not isinstance(parsed, dict) or not isinstance(parsed.get("strategies"), list):
             return ResearchPlan(
@@ -1081,6 +1206,29 @@ Respond with JSON only:
                 continue
             seen.add(hit["url"])
             text = self._fetch(hit["url"])
+            # Anchor discipline at the page level, not only the query level.
+            # A search result can match the query's generic words and still be
+            # about a different entity; if the resolved subject is a proper
+            # name and the fetched page never mentions it, the page is the
+            # drift the run later has to apologise for.
+            entity = getattr(self, "last_entity", "")
+            concept = getattr(self, "last_concept", "")
+            # Only a genuinely resolved name is an anchor worth enforcing. A
+            # fallback returns the concept unchanged, and requiring the whole
+            # concept sentence in every page would starve an ordinary topic.
+            resolved_name = bool(
+                entity
+                and entity.strip().casefold()
+                != concept.strip().casefold()
+                and _is_proper_name(entity)
+            )
+            haystack = f"{hit.get('title', '')} {hit.get('snippet', '')} {text}"
+            if resolved_name and text and not _entity_in_text(entity, haystack):
+                logger.debug(
+                    "dropping page that never names the anchor entity '{}': {}",
+                    entity[:80], hit["url"],
+                )
+                continue
             pages.append(
                 {
                     "level": level,
@@ -1107,7 +1255,20 @@ Respond with JSON only:
             self._crawl_node(ResearchStrategy(query=query), pages, used)
         return pages
 
-    # --- gap research (writer -> research feedback loop, default OFF) ----------
+    def _crawl_within(
+        self, queries: Iterable[str], seen: set[str] | None, page_cap: int
+    ) -> list[dict]:
+        """Crawl no more than ``page_cap`` pages, without changing the ceiling."""
+        if page_cap <= 0:
+            return []
+        previous = self.max_pages_total
+        self.max_pages_total = min(previous, int(page_cap))
+        try:
+            return self._crawl_queries(queries, seen)
+        finally:
+            self.max_pages_total = previous
+
+    # --- gap research (writer -> research feedback loop, default ON) -----------
     # The writer cannot invent a section the corpus has no material for, and
     # re-rolling the same section against the same corpus at a higher
     # temperature cannot help (three such re-rolls cost three LLM calls and
@@ -1329,6 +1490,10 @@ Respond with JSON only:
     _HTTP_DEFAULT_HEADERS: dict[str, str] = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0",
         "Accept": "text/html,application/rss+xml",
+        # urllib does not decompress by default, and a proxy that returns a
+        # mislabelled gzip body otherwise fails deep in zlib. Ask for the bytes
+        # as they are.
+        "Accept-Encoding": "identity",
     }
 
     @timed("ResearchEngine._searxng")

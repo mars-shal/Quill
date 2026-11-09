@@ -23,6 +23,9 @@ import { TableKit } from '@tiptap/extension-table'
 // so the font and size pickers silently did nothing.
 import { FontFamily, FontSize } from '@tiptap/extension-text-style'
 import { TextStyleWithTracking, LineHeight } from './typography.js'
+import { CommentMark } from './commentMark.js'
+import { SuggestionMark, SuggestionMode } from './suggestionMode.js'
+import { GhostText } from './ghostText.js'
 import { LocalYDoc } from '../platform/ydoc.js'
 
 /**
@@ -59,6 +62,10 @@ export function baseExtensions() {
     }),
     TableKit.configure({ table: { resizable: true } }),
     LineHeight,
+    CommentMark,
+    SuggestionMark,
+    SuggestionMode,
+    GhostText,
   ]
 }
 

@@ -883,6 +883,9 @@ RULES:
                     temperature=0,
                 )
                 raw = response.choices[0].message.content or ""
+                from utilis.model import _estimated_usage, _record_usage, _usage_counts
+                counts = _usage_counts(response) or _estimated_usage(prompt, self._SYSTEM_PROMPT, raw)
+                _record_usage(self._llm_model, counts)
                 if response.usage is not None:
                     detail = response.usage.total_tokens - booked
                     if detail > 0:

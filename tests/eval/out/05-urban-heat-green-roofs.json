@@ -1,0 +1,16 @@
+{
+  "slug": "05-urban-heat-green-roofs",
+  "domain": "Environmental science",
+  "prompt": "Assess the effectiveness of green roofs as an urban heat island intervention. Discuss measured temperature effects, cost, maintenance and equity.",
+  "usage": {
+    "prompt_tokens": 140,
+    "completion_tokens": 1079,
+    "total_tokens": 1219
+  },
+  "finish_reason": "stop",
+  "seconds": 96.3,
+  "model": "gemma4:latest",
+  "file": "05-urban-heat-green-roofs.md",
+  "chars": 4113,
+  "words": 518
+}

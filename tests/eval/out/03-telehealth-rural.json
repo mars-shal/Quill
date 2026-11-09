@@ -1,0 +1,16 @@
+{
+  "slug": "03-telehealth-rural",
+  "domain": "Public health",
+  "prompt": "Evaluate whether telehealth expansion improves healthcare access in rural regions. Weigh access gains against broadband gaps, licensure and continuity of care.",
+  "usage": {
+    "prompt_tokens": 140,
+    "completion_tokens": 1026,
+    "total_tokens": 1166
+  },
+  "finish_reason": "stop",
+  "seconds": 90.4,
+  "model": "gemma4:latest",
+  "file": "03-telehealth-rural.md",
+  "chars": 4185,
+  "words": 553
+}

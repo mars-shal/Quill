@@ -20,6 +20,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up the Python pipeline
+        working-directory: .
+        run: |
+          uv python install 3.14
+          uv sync --frozen
+
+      - name: Python review tests
+        working-directory: .
+        run: |
+          uv run --frozen python tests/test_style.py
+          uv run --frozen python tests/test_plagiarism.py
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -46,9 +62,11 @@ jobs:
       - name: Verify build
         run: |
           $bundles = Get-ChildItem -Recurse -File -Path src-tauri/target/release/bundle -Include *.msi,*.exe -ErrorAction SilentlyContinue
-          if (-not (Test-Path src-tauri/target/release/quill.exe) -or -not $bundles) {
+          $sidecar = Get-ChildItem -File -Path src-tauri/binaries -Filter quill-sidecar-*.exe -ErrorAction SilentlyContinue
+          if (-not (Test-Path src-tauri/target/release/quill.exe) -or -not $bundles -or -not $sidecar) {
             Write-Host "❌ Windows build artefacts not found"
             Get-ChildItem -Recurse src-tauri/target/release -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { $_.FullName }
+            Get-ChildItem -File src-tauri/binaries -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
             exit 1
           }
           Write-Host "✓ Windows build artefacts verified"

@@ -1,0 +1,236 @@
+{
+  "slug": "01-tailwind-banking",
+  "domain": "Software engineering",
+  "prompt": "Argue that Just-In-Time CSS generation improves maintainability in large React banking applications. Address style collisions, auditability and component isolation.",
+  "usage": {
+    "prompt_tokens": 145,
+    "completion_tokens": 1190,
+    "total_tokens": 1335
+  },
+  "finish_reason": "stop",
+  "seconds": 98.8,
+  "model": "gemma4:latest",
+  "file": "01-tailwind-banking.md",
+  "chars": 5338,
+  "words": 699,
+  "detector": {
+    "model": "MayZhou/e5-small-lora-ai-generated-detector (ONNX int8)",
+    "chunks": 4,
+    "scores": [
+      0.7703,
+      0.3383,
+      0.8295,
+      0.7502
+    ],
+    "mean_ai_probability": 0.6721,
+    "max_ai_probability": 0.8295,
+    "fraction_chunks_ai": 0.75,
+    "grade": "D (leaning AI)",
+    "stylometry": {
+      "words": 728,
+      "sentences": 32,
+      "mean_sentence_words": 22.8,
+      "sentence_length_sd": 12.1,
+      "type_token_ratio": 0.508,
+      "repeated_4grams": 8,
+      "flesch_reading_ease": 9.0
+    },
+    "note": "A detector score is not proof of authorship; use it with the citation and plagiarism checks."
+  },
+  "verification": {
+    "dois": [
+      "10.1109/ICSE.2019.88446",
+      "10.1109/ICSE.2018.39116"
+    ],
+    "urls": [
+      "https://react.dev/learn",
+      "https://www.npmjs.com/package/styled-components"
+    ],
+    "url_checks": [
+      {
+        "url": "https://react.dev/learn",
+        "status": "reachable",
+        "title": "Quick Start – React"
+      },
+      {
+        "url": "https://www.npmjs.com/package/styled-components",
+        "status": "unreachable",
+        "title": ""
+      }
+    ],
+    "citations": [
+      {
+        "input": "10.1109/ICSE.2019.88446",
+        "status": "not_found",
+        "reason": "DOI did not resolve at Crossref or OpenAlex"
+      },
+      {
+        "input": "10.1109/ICSE.2018.39116",
+        "status": "not_found",
+        "reason": "DOI did not resolve at Crossref or OpenAlex"
+      }
+    ],
+    "reference_lines": [],
+    "verified_dois": 0,
+    "plagiarism": {
+      "checked_sentences": 5,
+      "flagged_sentences": 0,
+      "matches": [
+        {
+          "sentence": "As React applications grow in complexity, the management of presentation logic—specifically CSS—becomes a critical bottleneck.",
+          "query": "As React applications grow in complexity, the management of presentation logic—specifically CSS—becomes a critical",
+          "scholarly": [
+            {
+              "title": "CIM-CSS: A Formal Modeling Approach to Context Identification and Management for Intelligent Context-Sensitive Systems",
+              "doi": "10.1109/access.2019.2931001",
+              "url": "https://openalex.org/W2963903887",
+              "abstract": "Context modeling is often used to relate the context in which a system will operate to the entities of interest in the problem domain. It remains the case that context models are inadequate in emerging computing paradigms (e.g., smart spaces and the Internet of Things), in which the relevance of context is shaped dynamically by the changing needs of users. Formal models are required to fuse and interpret contextual information obtained from the heterogeneous sources. In this paper, we propose an integrated and formal context modeling approach for intelligent systems operating in the context-sensitive environments. We introduce a goal-driven, entity-centered identification method for determining which context elements are influential in adapting the system behavior. We then describe a four-layered framework for metamodeling the identification and management of context. First, the framework presents a formal metamodel of context. A formalization of context using the first-order logic with relational operators is then presented to specify formally the context information at different abstraction levels. The metamodel, therefore, prepares the ground for building a formal modeling language and automated support tool (https://github.com/metamodeler/CIM-CSS/). The proposed model is then evaluated using an application scenario in the smart meeting rooms domain, and the results are analyzed qualitatively."
+            },
+            {
+              "title": "An Empirical Study of CSS Code Smells in Web Frameworks",
+              "doi": "10.15368/theses.2018.105",
+              "url": "https://openalex.org/W2907945599",
+              "abstract": "Cascading Style Sheets (CSS) has become essential to front-end web development for the specification of style. But despite its simple syntax and the theoretical advantages attained through the separation of style from content and behavior, CSS authoring today is regarded as a complex task. As a result, developers are increasingly turning to CSS preprocessor languages and web frameworks to aid in development. However, previous studies show that even highly popular websites which are known to be developed with web frameworks contain CSS code smells such as duplicated rules and hard-coded values. Such code smells have the potential to cause adverse effects on websites and complicate maintenance. It is therefore important to investigate whether web frameworks may be encouraging the introduction of CSS code smells into websites. In this thesis, we investigate the prevalence of CSS code smells in websites built with different web frameworks and attempt to recognize a pattern of CSS behavior in these frameworks. We collect a dataset of several hundred websites produced by each of 19 different frameworks, collect code smells and other metrics present in the CSS code of each website, train a classifier to predict which framework the website was built with, and perform various clustering tasks to gain insight into the correlations between code smells. Our results show that CSS code smells are highly prevalent in websites built with web frameworks, we achieve an accuracy of 39% in correctly classifying the frameworks based on CSS code smells and metrics, and we find interesting correlations between code smells."
+            },
+            {
+              "title": "A Manifesto in Defense of Pain Complexity: A Critical Review of Essential Insights in Pain Neuroscience",
+              "doi": "10.3390/jcm12227080",
+              "url": "https://openalex.org/W4388660701",
+              "abstract": "Chronic pain has increasingly become a significant health challenge, not just as a symptomatic manifestation but also as a pathological condition with profound socioeconomic implications. Despite the expansion of medical interventions, the prevalence of chronic pain remains remarkably persistent, prompting a turn towards non-pharmacological treatments, such as therapeutic education, exercise, and cognitive-behavioral therapy. With the advent of cognitive neuroscience, pain is often presented as a primary output derived from the brain, aligning with Engel's Biopsychosocial Model that views disease not solely from a biological perspective but also considering psychological and social factors. This paradigm shift brings forward potential misconceptions and over-simplifications. The current review delves into the intricacies of nociception and pain perception. It questions long-standing beliefs like the cerebral-centric view of pain, the forgotten role of the peripheral nervous system in pain chronification, misconceptions around central sensitization syndromes, the controversy about the existence of a dedicated pain neuromatrix, the consciousness of the pain experience, and the possible oversight of factors beyond the nervous system. In re-evaluating these aspects, the review emphasizes the critical need for understanding the complexity of pain, urging the scientific and clinical community to move beyond reductionist perspectives and consider the multifaceted nature of this phenomenon."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "JIT CSS methodologies, which typically involve generating unique, scoped class names based on the component's actual usage, solve this problem by ensuring that styles are inherently localized.",
+          "query": "JIT CSS methodologies, which typically involve generating unique, scoped class names based on the",
+          "scholarly": [
+            {
+              "title": "War on JITs: Software-Based Attacks and Hybrid Defenses for JIT Compilers - A Comprehensive Survey",
+              "doi": "10.1145/3731598",
+              "url": "https://openalex.org/W4409591380",
+              "abstract": "Programming Language Virtual Machines (VMs) are composed of several components that together execute and manage languages efficiently. They are deployed in virtually all computing systems through modern web browsers. However, vulnerabilities in any VM component pose a significant threat to security and privacy. In this article, we present a survey of software attacks on Just-In-Time (JIT) compilers, which dynamically produce optimized code at run time. We first present an overview and categorization of software attacks and their vectors as presented in the literature, identifying three main attack classes: code injection, code-reuse, and data-only attacks. We show how each can lead to arbitrary code execution. Next, we present a comprehensive taxonomy of defenses, including diversification, strict memory permissions and capability containment. While some were integrated in modern VMs, we draw recommendations for future protections. Securing JIT compilers remains challenging due to inherent conflicts with security principles, such as W ^ X ( W ritable XOR e X ecutable), and the complexity of JIT optimizations. Finally, we examine how newer architectures, like ARMv8 and RISC-V, face similar threats. With RISC-V’s open architecture offering a promising platform for prototyping VM-specific protections and custom security instructions, we discuss hardware-assisted runtime protections and RISC-V extensions that could enhance VM security."
+            },
+            {
+              "title": "JiuJITsu: Removing Gadgets with Safe Register Allocation for JIT Code Generation",
+              "doi": "10.1145/3631526",
+              "url": "https://openalex.org/W4388281765",
+              "abstract": "Code-reuse attacks have the capability to craft malicious instructions from small code fragments, commonly referred to as “gadgets.” These gadgets are generated by JIT (Just-In-Time) engines as integral components of native instructions, with the flexibility to be embedded in various fields, including Displacement . In this article, we introduce a novel approach for potential gadget insertion, achieved through the manipulation of ModR/M and SIB bytes via JavaScript code. This manipulation influences a JIT engine’s register allocation and code generation algorithms. These newly generated gadgets do not rely on constants and thus evade existing constant blinding schemes. Furthermore, they can be combined with 1-byte constants, a combination that proves to be challenging to defend against using conventional constant blinding techniques. To showcase the feasibility of our approach, we provide proof-of-concept (POC) code for three distinct types of gadgets. Our research underscores the potential for attackers to exploit ModR/M and SIB bytes within JIT-generated native instructions. In response, we propose a practical defense mechanism to mitigate such attacks. We introduce JiuJITsu , a security-enhanced register allocation scheme designed to prevent harmful register assignments during the JIT code generation phase, thereby thwarting the generation of these malicious gadgets. We conduct a comprehensive analysis of JiuJITsu ’s effectiveness in defending against code-reuse attacks. Our findings demonstrate that it incurs a runtime overhead of under 1% when evaluated using JetStream2 benchmarks and real-world websites."
+            },
+            {
+              "title": "Meeting the RFID mandate : options for Wal-Mart suppliers and evaluation methodology",
+              "doi": "",
+              "url": "https://openalex.org/W1593133196",
+              "abstract": ""
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "This contrasts sharply with global stylesheets, which often contain vast amounts of unused or deprecated code, making manual auditing arduous and error-prone.",
+          "query": "This contrasts sharply with global stylesheets, which often contain vast amounts of unused or",
+          "scholarly": [
+            {
+              "title": "Decentralised Web Technologies: A Review with Implementation Case Study",
+              "doi": "10.31585/jbba-9-2-(6)2026",
+              "url": "https://openalex.org/W7170420642",
+              "abstract": "The World Wide Web is undergoing a paradigm shift from the centralised platforms of Web 2.0 to the user-sovereign Decentralised Web (Web 3.0). However, the current transitional phase, often termed Web 2.5, remains structurally vulnerable due to its persistent reliance on centralised infrastructure for frontend delivery and domain routing. Applying a structured selection methodology, this article presents a review of decentralised web technologies with an implementation case study, dissecting the ecosystem’s three foundational pillars: Decentralised Domain Name Systems (DNS), Hosting, and Storage. Across these three categories, we provide a comparative analysis of 20 prominent protocols, evaluating mechanisms ranging from overlay networks such as the Ethereum Name Service (ENS) to content-addressed systems such as the InterPlanetary File System (IPFS) and permanent cryptographic ledgers such as Arweave. Furthermore, to synthesise these theoretical pillars, the study investigates the emerging On-Chain Web paradigm through a detailed practical case study of the Massa DeWeb architecture. By analysing its distinct approach to natively embedding full website logic, naming registries, and data assets directly within the ledger to eliminate intermediary gateways, we demonstrate the functional viability of a fully decentralised, serverless application stack that effectively resolves the fragility of hybrid network architectures."
+            },
+            {
+              "title": "Testing reactive systems with data : enumerative methods and constraint solving",
+              "doi": "10.3990/1.9789064642739",
+              "url": "https://openalex.org/W1748515470",
+              "abstract": "Software faults are a well-known phenomenon. In most cases, they are just annoying – if the computer game does not work as expected – or expensive – if once again a space project fails due to some faulty data conversion. In critical systems, however, faults can have life-threatening consequences. It is the task of software quality assurance to avoid such faults, but this is a cumbersome, expensive and also erroneous undertaking. For this reason, research has been done over the last years in order to automate this task as much as possible. In this thesis, the connection of constraint solving techniques with formal methods is investigated. We have the goal to ��?nd faults in the models and implementations of reactive systems with data, such as automatic teller machines (ATMs). In order to do so, we ��?rst develop a translation of formal speci��?cations in the process algebra µCRL to a constraint logic program (CLP). In the course of this translation, we pay special attention on the fact that the CLP together with the constraint solver correctly simulates the underlying term rewriting system. One way to validate a system is the test whether this system conforms its speci��?cation. In this thesis, we develop a test process to automatically generate and execute test cases for the conformance test of data-oriented systems. The applicability of this process to process-oriented software systems is demonstrated in a case study with an ATM as the system under test. The applicability of the process to document-centered applications is shown by means of the open source web browser Mozilla Firefox. The test process is partially based on the tool TGV, which is an enumerative test case generator. It generates test cases from a system speci��?cation and a test purpose. An enumerative approach to the analysis of system speci��?cations always tries to enumerate all possible combinations of values for the system’s data elements, i.e. the system’s states. The states of those systems, which we regard here, are inﬂuenced by data of possibly in��?nite domains. Hence, the state space of such systems grows beyond all limits, it explodes, and cannot be handled anymore by enumerative algorithms. For this reason, the state space is limited prior to test case generation by a data abstraction. We use a chaotic abstraction here with all possible input data from a system’s environment being replaced by a single constant. In parallel, we generate a CLP from the system speci��?cation. With this CLP, we reintroduce the actual data at the time of test execution. This approach does not only limit the state space of the system, but also leads to a separation of system behavior and data. This allows to reuse test cases by only varying their data parameters. In the developed process, tests are executed by the tool BAiT. This tool has also been created in the course of this thesis. Some systems do not always show an identical behavior under the same circumstances. This phenomenon is known as nondeterminism. There are many reasons for nondeterminism. In most cases, input froma system’s environment is asynchronously processed by several components of the system, which do not always terminate in the same order. BAiT works as follows: The tool chooses a trace through the system behavior from the set of traces in the generated test cases. Then, it parameterizes this trace with data and tries to execute it. When the nondeterministic system digresses from the selected trace, BAiT tries to appropriately adapt it. If this can be done according to the system speci��?cation, the test can be executed further and a possibly false positive test verdict has been successfully avoided. The test of an implementation signi��?cantly reduces the numbers of faults in a system. However, the system is only tested against its speci��?cation. In many cases, this speci��?cation already does not completely ful��?ll a customer ’s expectations. In order to reduce the risk for faults further, the models of the system themselves also have to be veri��?ed. This happens during model checking prior to testing the software. Again, the explosion of the state space of the system must be avoided by a suitable abstraction of the models. A consequence of model abstractions in the context of model checking are so-called false negatives. Those traces are counterexamples which point out a fault in the abstracted model, but who do not exist in the concrete one. Usually, these false negatives are ignored. In this thesis, we also develop a methodology to reuse the knowledge of potential faults by abstracting the counterexamples further and deriving a violation pattern from it. Afterwards, we search for a concrete counterexample utilizing a constraint solver."
+            },
+            {
+              "title": "On the analysis of musical performance by computer",
+              "doi": "",
+              "url": "https://openalex.org/W150115026",
+              "abstract": "Existing automatic methods of analysing musical performance can generally be described as music-oriented DSP analysis. However, this merely identifies attributes, or artefacts which can be found within the performance. This information, though invaluable, is not an analysis of the performance process. The process of performance first involves an analysis of the score (whether from a printed sheet or from memory), and through this analysis, the performer decides how to perform the piece. Thus, an analysis of the performance process requires an analysis of the performance attributes and artefacts in the context of the musical score. With this type analysis it is possible to ask profound questions such as “why or when does a performer use this technique”. The work presented in this thesis provides the tools which are required to investigate these performance issues. A new computer representation, Performance Markup Language (PML) is presented which combines the domains of the musical score, performance information and analytical structures. This representation provides the framework with which information within these domains can be cross-referenced internally, and the markup of information in external files. Most importantly, the rep resentation defines the relationship between performance events and the corresponding objects within the score, thus facilitating analysis of performance information in the context of the score and analyses of the score. To evaluate the correspondences between performance notes and notes within the score, the performance must be analysed using a score-performance matching algorithm. A new score-performance matching algorithm is presented in this document which is based on Dynamic Programming. In score-performance matching there are situations where dynamic programming alone is not sufficient to accurately identify correspondences. The algorithm presented here makes use of analyses of both the score and the performance to overcome the inherent shortcomings of the DP method and to improve the accuracy and robustness of DP matching in the presence of performance errors and expressive timing. Together with the musical score and performance markup, the correspondences identified by the matching algorithm provide the minimum information required to investigate musical performance, and forms the foundation of a PML representation. The Microtonalism project investigated the issues surrounding the performance of microtonal music on conventional (i.e. non microtonal specific) instruments, namely voice. This included the automatic analysis of vocal performances to extract information regarding pitch accuracy. This was possible using tools developed using the performance representation and the matching algorithm."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "If style dependencies are global, merging these independently developed modules becomes a high-risk integration event.",
+          "query": "If style dependencies are global, merging these independently developed modules becomes a high-risk integration",
+          "scholarly": [
+            {
+              "title": "Developing concepts and methods for module and integration tests for models of reactive systems",
+              "doi": "10.17877/de290r-1179",
+              "url": "https://openalex.org/W2287892758",
+              "abstract": "Viele industrielle Systeme sind als '' reaktiv`` gekennzeichnet. Reaktive Systeme können zum großen Teil als ereignisgesteuert (engl. event­driven) charakterisiert werden, da sie ständig auf interne und externe Veränderungen reagieren müssen. Zum Beispiel die Bereiche Automobiltechnik (Sicherheits­ und Fahrwerk­Systeme und Elektronik­ und Informations­ Systeme), Kommunikationssysteme (Telefone, Mobiltelefon und Faxgeräte) sowie Medizinische Technik (Patientenüberwachungsysteme) zählen zu reaktiven Systemen. Aufgrund der enormen Folgekosten fehlerhafter und unvollständiger Systemspezifikationen und Entwürfe müssen Techniken, welche die beabsichtigte Funktionalität gewährleisten und frühzeitig Fehler erkennen, weiterentwickelt werden. Insbesondere bei der Modellierung der oben genannten Systeme besteht das Problem darin, eine Sprache zu verwenden, die das dynamische Verhalten eines Systems sowohl klar und intuitiv als auch präzise und formal beschreibt. Solche Formalismen (z. B. Statechart­Modelle) dienen nicht nur als Gegenstand der Kommunikation zwischen Auftraggebern und Entwicklern, sondern unterstützen auch das frühzeitige Testen und Analysieren eines Systems. Aus Sicht der Praxis sind effiziente Methoden und Verfahren zum Erzeugen von Tests eines spezifizierten Systems äußerst wichtig. Durch diese Verfahren werden Fehler gezielt erkannt und behoben, und das Vertrauen in das resultierende System steigt. Daher sind im Rahmen dieser Dissertation Konzepte und Verfahren, die einen Modultest und einen Integrationstest ermöglichen, entwickelt worden. Diese Tests sollen Erzeugung und Durchführung von Tests in frühen Entwurfsphasen unterstützen und die gewünschte Funktionalität höchstmöglich gewährleisten. Dazu sind entsprechende Testkriterien und heuristische Testerzeugungsmethoden für (z. B. Statechart­)Modelle entwickelt worden, die auch auf andere graphbasierte Modelle (z. B. Petri­Netze) anwendbar sind."
+            },
+            {
+              "title": "Managing Risks in Distributed Software Projects: An Integrative Framework",
+              "doi": "10.1109/tem.2009.2013827",
+              "url": "https://openalex.org/W2120032222",
+              "abstract": "Software projects are increasingly geographically distributed with limited face-to-face interaction between participants. These projects face particular challenges that need careful managerial attention. While risk management has been adopted with success to address other challenges within software development, there are currently no frameworks available for managing risks related to geographical distribution. On this background, we systematically review the literature on geographically distributed software projects. Based on the review, we synthesize what we know about risks and risk resolution techniques into an integrative framework for managing risks in distributed contexts. Subsequent implementation of a Web-based tool helped us refine the framework based on empirical evaluation of its practical usefulness. We conclude by discussing implications for both research and practice."
+            },
+            {
+              "title": "Personalized trajectory inference framework integrating driving behavior recognition and temporal dependency learning",
+              "doi": "10.1371/journal.pone.0326937",
+              "url": "https://openalex.org/W4412171777",
+              "abstract": "This study proposes a Driving style-Tri Channel Trajectory Model (DS-TCTM) to enhance vehicle trajectory prediction accuracy and driving safety. The framework operates through three rigorously designed stages: (1)Data preprocessing involving kinematics feature extraction, (2)Driving style recognition utilizing acceleration variation rate and average time headway combined with K-Means++ traffic density clustering and K-neighbor Gaussian mixture model (K-GMM) analysis to classify driving behaviors into conservative, moderate, and radical categories, and (3)Personalized trajectory prediction employing a multi-level neural architecture with dedicated sub-networks for distinct driving styles. Experimental evaluations demonstrate DS-TCTM's superior performance across multiple dimensions. The model achieves a mean RMSE of 4.46 and NLL of 3.89 across varying prediction horizons, with 35.8% error reduction attained after 100 hyperparameter optimization iterations. Comparative analysis with baseline models (LSTM, Social-LSTM, Social-Velocity-LSTM, Convolutional-Social-LSTM) reveals particularly enhanced accuracy in long-term predictions. These results confirm DS-TCTM's effectiveness in capturing driving style impacts on trajectory patterns, providing reliable prediction enhancements for vehicle safety systems. This methodology advances personalized trajectory modeling with practical intelligent transportation applications."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "In conclusion, while adopting a new CSS methodology requires initial investment, the long-term dividends in maintainability for large React banking applications are substantial.",
+          "query": "In conclusion, while adopting a new CSS methodology requires initial investment, the long-term dividends",
+          "scholarly": [
+            {
+              "title": "Asset Dividend Yield Skew Implied in Corporate Credit Spreads",
+              "doi": "",
+              "url": "https://openalex.org/W2621770600",
+              "abstract": ""
+            },
+            {
+              "title": "Mid-term policy considerations of the EU green deal",
+              "doi": "10.1016/j.esr.2023.101239",
+              "url": "https://openalex.org/W4388735763",
+              "abstract": "The European Green Deal is a comprehensive strategy to fully decarbonize the economy by 2050. A key target of this strategy is a 55%-reduction in carbon emissions by 2030. In this context, the aim of the study is to contribute to the debate around the European Green Deal providing policy insights from different dynamic stochastic general equilibrium models for the six largest European countries and the Union itself. We discuss four different policy targets which are consistent with a 55%-cut in emissions by 2030, using carbon prices as the main policy tool. This study shows that it is not easy to define a fair set of climate targets for a group of relatively heterogeneous countries, like the European ones. Straightforward approaches -like achieving the same level of CO2 emissions per capita in 2030 or the same level of emissions over GDP- lead to very different policy efforts, measured by carbon prices and welfare losses in our model. The implementation of a common set of climate policies and tools defined by the European Commission could be perceived as a fair strategy, but the impact on emissions can be very different across countries. In particular, the same carbon price has an asymmetric impact across countries in terms of emissions and welfare. Alternatively, to achieve the same reduction in carbon emissions, different countries need different carbon prices This asymmetry generates a debate around the right climate target for each country. This article tries to open a debate on this topic, not to provide a definitive answer."
+            },
+            {
+              "title": "RETRACTED ARTICLE:Development of corporate investment funds as a tool to achieve the goals of international treaties in the field of climate change",
+              "doi": "10.1007/s10784-021-09551-6",
+              "url": "https://openalex.org/W3202349449",
+              "abstract": ""
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        }
+      ]
+    }
+  },
+  "citation_grade": [
+    "F",
+    0.0
+  ],
+  "plagiarism_grade": [
+    "A",
+    0.0
+  ],
+  "overall": "C"
+}

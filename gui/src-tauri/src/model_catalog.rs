@@ -45,16 +45,18 @@ pub async fn list(pool: &sqlx::SqlitePool, provider_id: &str) -> AppResult<Vec<S
     }
     // Local servers have no key, so the credential is read after the URL: it is
     // the URL that says whether one is expected.
-    let api_key = secrets::read_for_provider(&provider.id, base).await.map_err(|_| {
-        AppError::Validation(format!(
-            "{} has no API key. Add one in Settings, then try again.",
-            if provider.label.is_empty() {
-                &provider.id
-            } else {
-                &provider.label
-            }
-        ))
-    })?;
+    let api_key = secrets::read_for_provider(&provider.id, base)
+        .await
+        .map_err(|_| {
+            AppError::Validation(format!(
+                "{} has no API key. Add one in Settings, then try again.",
+                if provider.label.is_empty() {
+                    &provider.id
+                } else {
+                    &provider.label
+                }
+            ))
+        })?;
 
     let url = format!("{base}/models");
     let client = reqwest::Client::builder()

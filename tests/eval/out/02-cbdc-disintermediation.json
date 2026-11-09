@@ -1,0 +1,16 @@
+{
+  "slug": "02-cbdc-disintermediation",
+  "domain": "Economics",
+  "prompt": "Analyse how central bank digital currencies could disintermediate commercial banks. Consider deposit substitution, payment margins and financial stability.",
+  "usage": {
+    "prompt_tokens": 139,
+    "completion_tokens": 1084,
+    "total_tokens": 1223
+  },
+  "finish_reason": "stop",
+  "seconds": 93.2,
+  "model": "gemma4:latest",
+  "file": "02-cbdc-disintermediation.md",
+  "chars": 4195,
+  "words": 557
+}

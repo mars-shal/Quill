@@ -317,6 +317,19 @@ pub async fn soft_delete(pool: &SqlitePool, id: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Removes a document and its Yjs rows permanently. Only the Trash calls this.
+pub async fn purge(pool: &SqlitePool, id: &str) -> AppResult<()> {
+    let changed = sqlx::query("DELETE FROM documents WHERE id = ?1")
+        .bind(id)
+        .execute(pool)
+        .await?
+        .rows_affected();
+    if changed == 0 {
+        return Err(AppError::NotFound(format!("document {id}")));
+    }
+    Ok(())
+}
+
 pub async fn restore(pool: &SqlitePool, id: &str) -> AppResult<Document> {
     sqlx::query(
         "UPDATE documents SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ?1",

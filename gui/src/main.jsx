@@ -9,7 +9,10 @@ import './styles.css'
 // whole app, including code-split editor chunks.
 import 'katex/dist/katex.min.css'
 import * as store from './platform/store.js'
-import { BUILT_IN_THEMES, resolveTheme, THEME_IDS } from './library/themes.js'
+import { resolveTheme, THEME_IDS } from './library/themes.js'
+import { readableInk } from './library/contrast.js'
+import { templateById } from './library/templates.js'
+import { fileToDocument } from './library/importFile.js'
 
 import { backgroundProperties } from './library/backgrounds.js'
 import { DetailsDialog, SettingsPage } from './library/SettingsPage.jsx'
@@ -20,15 +23,6 @@ import { ErrorBoundary } from './ErrorBoundary.jsx'
 import { OnboardingFlow } from './OnboardingFlow.jsx'
 import { NotFound } from './NotFound.jsx'
 import { Button } from './library/ui/button.jsx'
-
-// The onboarding theme picker shows the built-in themes, resolved once at module
-// scope: it is a static list, and mapping it inside the render body would hand
-const ONBOARDING_THEMES = THEME_IDS.map((id) => ({
-  id,
-  name: BUILT_IN_THEMES[id].name,
-  mode: BUILT_IN_THEMES[id].mode,
-  tokens: BUILT_IN_THEMES[id].tokens,
-}))
 
 const SEED_KEY = 'quill:seeded:v1'
 
@@ -196,6 +190,10 @@ function BootLayer({ bootstrapped, bootError }) {
 function App() {
   const osReducedMotion = useReducedMotion()
   const [docs, setDocs] = useState([])
+  // Soft-deleted rows, kept apart from `docs`: every existing reader of `docs`
+  // assumes a live document, and the library is the only surface that should
+  // ever see the Trash.
+  const [trashed, setTrashed] = useState([])
   const [settings, setSettingsState] = useState(store.defaultSettings)
   // The custom theme list is app state rather than a store call inside the
   // render, because both the applier and the picker need it and neither should
@@ -236,6 +234,7 @@ function App() {
   // shells out and probes two ports, so it runs when Settings is opened rather
   // than on every mount, and never blocks the first paint.
   const [localTools, setLocalTools] = useState([])
+  const [toolsLoading, setToolsLoading] = useState(false)
   const zenPrevious = useRef(null)
   // The reader's own Reduce Motion toggle and the OS setting are the same
   // request, and a reader who sets one means it. `useReducedMotion()` is only
@@ -265,6 +264,13 @@ function App() {
   // Both helpers return a fresh object literal, so without this every App render
   // handed `Library` two new props and defeated `React.memo` entirely.
   const currentDoc = docs.find((doc) => doc.id === currentId) || docs[0]
+  // Every label in use, plus the three the app shipped with, so the details
+  // dialog can offer a label that no document currently carries.
+  const labelOptions = useMemo(() => {
+    const found = new Set(['Essays', 'Chapters', 'Notes'])
+    for (const doc of docs) for (const label of doc.collections || []) found.add(label)
+    return [...found].sort((a, b) => a.localeCompare(b))
+  }, [docs])
   // Statistics are reported by the editor from the ProseMirror document, since
   // the Yjs body — not the legacy `content` column — is the source of truth.
   const [stats, setStats] = useState({ words: 0, chars: 0, paragraphs: 0, read: 1 })
@@ -285,6 +291,20 @@ function App() {
     () => resolveTheme(settings.theme, customThemes),
     [settings.theme, customThemes],
   )
+  // The onboarding picker offers the same themes Settings does: the three
+  // built-ins plus whatever the reader has saved. A first-run screen that hid
+  // custom themes made the choice look like a different, smaller list.
+  const onboardingThemes = useMemo(() => {
+    const builtIn = THEME_IDS.map((id) => {
+      const resolved = resolveTheme(id)
+      return { id, name: resolved.name, mode: resolved.mode, tokens: resolved.tokens }
+    })
+    const custom = customThemes.map((entry) => {
+      const resolved = resolveTheme(entry.theme_id, customThemes)
+      return { id: resolved.id, name: resolved.name, mode: resolved.mode, tokens: resolved.tokens }
+    })
+    return [...builtIn, ...custom.filter((entry) => !THEME_IDS.includes(entry.id))]
+  }, [customThemes])
 
   // "System" follows the operating system's light/dark preference. The switch
   // happens in memory only: the saved choice stays "system", so the next launch
@@ -321,7 +341,8 @@ function App() {
         // the two agree about what an unrecognised id means.
         setCustomThemes(await store.listCustomThemes())
 
-        let rows = await store.listDocuments()
+        let allRows = await store.listDocuments({ includeDeleted: true })
+        let rows = allRows.filter((doc) => !doc.deletedAt)
         const alreadySeeded = store.runtime.isTauri
           ? info.documentCount > 0
           : localStorage.getItem(SEED_KEY) === '1'
@@ -344,11 +365,13 @@ function App() {
             }
           }
           if (!store.runtime.isTauri) localStorage.setItem(SEED_KEY, '1')
-          rows = await store.listDocuments()
+          allRows = await store.listDocuments({ includeDeleted: true })
+          rows = allRows.filter((doc) => !doc.deletedAt)
         }
 
         if (cancelled) return
         setDocs(rows)
+        setTrashed(allRows.filter((doc) => doc.deletedAt))
         if (rows[0]?.id && !currentId) setCurrentId(rows[0].id)
         else if (rows[0]?.id && currentId && !rows.find((r) => r.id === currentId)) setCurrentId(rows[0].id)
 
@@ -443,6 +466,19 @@ function App() {
       }
     }
 
+    // Filled controls take their label from `--on-accent`, but a theme can
+    // change `--accent` without changing the ink that was chosen for the old
+    // fill -- and a custom theme that inherited the light theme's near-black
+    // label on a dark accent becomes unreadable. Measure the accent the theme
+    // actually resolved and write the legible ink over it. A value this module
+    // cannot measure (`color-mix()`, a keyword) is left to the stylesheet.
+    const accentInk = readableInk(theme.tokens['--accent'])
+    const themeInk = String(theme.tokens['--on-accent'] || '').toLowerCase()
+    if (accentInk && accentInk.toLowerCase() !== themeInk) {
+      root.style.setProperty('--on-accent', accentInk)
+      written.push('--on-accent')
+    }
+
     // Cleanup is not optional. Every property written above is removed, so
     // deleting a theme or switching back to a built-in cannot leave that theme's
     // colours on <html> for the rest of the session -- which is what the previous
@@ -472,41 +508,74 @@ function App() {
   const updateTitle = useCallback((title) => { if (!currentDoc) return; updateDoc(currentDoc.id, { title }) }, [currentDoc, updateDoc])
   const openDoc = useCallback((id) => { setCurrentId(id); setView('editor') }, [])
   const goLibrary = useCallback(() => setView('library'), [])
-  const deleteDocument = useCallback(
-    (id) => {
-      store
-        .deleteDocument(id)
-        .then(() => {
-          setDocs((current) => {
-            const next = current.filter((doc) => doc.id !== id)
-            if (currentId === id) {
-              if (next[0]?.id) {
-                setCurrentId(next[0].id)
-                setView('editor')
-              } else {
-                setCurrentId(null)
-                setView('library')
-              }
-            }
-            return next
-          })
-        })
-        .catch((error) => {
-          console.error('Failed to delete document', error)
-        })
-    },
-    [currentId],
-  )
+  const refreshTrash = useCallback(async () => {
+    try {
+      const all = await store.listDocuments({ includeDeleted: true })
+      setTrashed(all.filter((doc) => doc.deletedAt))
+      return all
+    } catch (error) {
+      console.error('Failed to read the Trash', error)
+      return null
+    }
+  }, [])
+  const deleteDocuments = useCallback(async (ids) => {
+    const list = [...new Set((ids || []).filter(Boolean))]
+    if (!list.length) return
+    try {
+      await Promise.all(list.map((id) => store.deleteDocument(id)))
+      setDocs((current) => current.filter((doc) => !list.includes(doc.id)))
+      // Deleting is not an invitation to open the next book. Keep the reader
+      // on the shelf and only clear a selection that pointed at the deleted
+      // document.
+      if (list.includes(currentId)) {
+        setCurrentId(null)
+        setView('library')
+      }
+      refreshTrash()
+    } catch (error) {
+      console.error('Failed to delete documents', error)
+    }
+  }, [currentId, refreshTrash])
+  const deleteDocument = useCallback((id) => deleteDocuments([id]), [deleteDocuments])
+
+  const restoreDocuments = useCallback(async (ids) => {
+    const list = [...new Set((ids || []).filter(Boolean))]
+    if (!list.length) return
+    try {
+      const restored = await Promise.all(list.map((id) => store.restoreDocument(id)))
+      setTrashed((current) => current.filter((doc) => !list.includes(doc.id)))
+      setDocs((current) => [...restored, ...current.filter((doc) => !list.includes(doc.id))])
+      setFilter({ type: 'all', value: 'all' })
+    } catch (error) {
+      console.error('Failed to restore documents', error)
+    }
+  }, [])
+  const restoreDocument = useCallback((id) => restoreDocuments([id]), [restoreDocuments])
+
+  const purgeDocuments = useCallback(async (ids) => {
+    const list = [...new Set((ids || []).filter(Boolean))]
+    if (!list.length) return
+    try {
+      await Promise.all(list.map((id) => store.purgeDocument(id)))
+      setTrashed((current) => current.filter((doc) => !list.includes(doc.id)))
+      if (list.includes(currentId)) setCurrentId(null)
+    } catch (error) {
+      console.error('Failed to permanently delete documents', error)
+    }
+  }, [currentId])
+  const purgeDocument = useCallback((id) => purgeDocuments([id]), [purgeDocuments])
   const downloadDoc = useCallback((id) => { setCurrentId(id); setView('editor'); setExportRequest((count) => count + 1) }, [])
-  const createDocument = useCallback(() => {
+  const createDocument = useCallback((templateId = 'blank') => {
+    const template = templateById(templateId)
     store.createDocument({
-      title: 'Untitled document',
-      kind: 'Draft',
-      collections: ['Notes'],
+      title: template.title,
+      kind: template.kind,
+      collections: template.collections,
       status: 'Drafts',
-      color: '#6a8792',
-      content: '<h2>New section</h2><p><br></p>',
+      color: template.color,
+      content: template.content,
       contentFormat: 'html',
+      provenance: `template:${template.id}`,
     }).then((doc) => {
       setDocs((current) => [doc, ...current])
       setFilter({ type: 'all', value: 'all' })
@@ -514,6 +583,36 @@ function App() {
       setView('editor')
     }).catch((error) => console.error('Failed to create document', error))
   }, [])
+  const importDocuments = useCallback(async () => {
+    try {
+      const paths = await store.pickImportPaths()
+      if (!paths.length) return
+      const created = []
+      const failures = []
+      for (const path of paths) {
+        try {
+          const file = await store.readTextFile(path)
+          created.push(await store.createDocument(fileToDocument(file, { clean: settings.formatOnImport !== false })))
+        } catch (error) {
+          console.error('Failed to open file', path, error)
+          failures.push(`${path}: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
+      if (failures.length && typeof window !== 'undefined' && window.alert) {
+        window.alert(`Quill could not open ${failures.length === 1 ? 'this file' : 'these files'}:\n\n${failures.join('\n')}`)
+      }
+      if (!created.length) return
+      setDocs((current) => [...created, ...current])
+      setFilter({ type: 'all', value: 'all' })
+      setCurrentId(created[0].id)
+      setView('editor')
+    } catch (error) {
+      console.error('Failed to open files', error)
+      if (typeof window !== 'undefined' && window.alert) {
+        window.alert(`Quill could not open that file.\n\n${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }, [settings.formatOnImport])
   const setPanel = useCallback((side, open) => { if (side === 'left') setLeftOpen(open); else setRightOpen(open) }, [])
   // Library is memoised, and a memo compares props by identity. These were
   // inline arrows, so each App render produced six new function props and the
@@ -603,16 +702,24 @@ function App() {
     // hidden by the same setting, so nothing here runs for them either.
     if (settings.localTools === false) {
       setLocalTools([])
+      setToolsLoading(false)
       return undefined
     }
     let cancelled = false
+    setToolsLoading(true)
     store
       .detectCliTools()
       .then((tools) => {
-        if (!cancelled) setLocalTools(Array.isArray(tools) ? tools : [])
+        if (!cancelled) {
+          setLocalTools(Array.isArray(tools) ? tools : [])
+          setToolsLoading(false)
+        }
       })
       .catch((error) => {
-        if (!cancelled) setLocalTools([])
+        if (!cancelled) {
+          setLocalTools([])
+          setToolsLoading(false)
+        }
         console.error('Failed to detect local tools', error)
       })
     return () => {
@@ -697,6 +804,28 @@ function App() {
       return false
     }
   }, [persistSettings, activeProvider])
+
+  /** Saves a key from onboarding without routing through Settings. */
+  const saveOnboardingKey = useCallback(async (secret, providerId = '') => {
+    const value = String(secret || '').trim()
+    if (!value) return false
+    try {
+      const provider = providerId
+        ? (await store.listProviders()).find((entry) => entry.id === providerId)
+        : activeProvider ?? (await store.getActiveProvider())
+      if (!provider) return false
+      setActiveProvider(provider)
+      await store.setProviderSecret(provider.id, value)
+      const status = await store.getProviderSecretStatus(provider.id)
+      const ready = Boolean(status.hasCredential)
+      setProviderReady(ready)
+      if (ready) setSessionApiKey(value)
+      return ready
+    } catch (error) {
+      console.error('Failed to store the onboarding key', error)
+      return false
+    }
+  }, [activeProvider])
 
   /** Forgets the key, which hands the provider back to the environment. */
   const disconnectProvider = useCallback(async () => {
@@ -803,7 +932,7 @@ function App() {
    * stands in as the picker's model name since the CLI picks its own
    * underlying model.
    */
-  const adoptTool = useCallback(async (tool) => {
+  const adoptTool = useCallback(async (tool, preferredModel = '') => {
     if (!tool?.id) return false
     if (!tool.models?.length && !tool.exec) return false
     try {
@@ -827,9 +956,14 @@ function App() {
         setProviderReady(true)
         return true
       }
-      const model = existing && tool.models.includes(existing.defaultModel)
-        ? existing.defaultModel
-        : tool.models[0]
+      // Prefer the model the reader picked on the onboarding row. Falling back
+      // to the existing default then the first model keeps Settings' one-click
+      // adoption working, but a deliberate choice is never silently replaced.
+      const model = preferredModel && tool.models.includes(preferredModel)
+        ? preferredModel
+        : existing && tool.models.includes(existing.defaultModel)
+          ? existing.defaultModel
+          : tool.models[0]
       const written = existing
         ? await store.updateProvider({ id: tool.id, baseUrl: tool.baseUrl, models: tool.models, defaultModel: model })
         : await store.createProvider({
@@ -852,6 +986,39 @@ function App() {
       return false
     }
   }, [providers])
+
+  /**
+   * Re-probes one local tool for the onboarding "Test connection" action.
+   *
+   * It asks the same detector that found the row rather than sending a prompt:
+   * a test that spends the reader's model budget before they have even finished
+   * onboarding is not a connection test, and the detector already proves the
+   * endpoint answers with the model list the next step will use.
+   */
+  const testTool = useCallback(async (tool, model = '') => {
+    if (!tool?.id) return false
+    try {
+      const found = await store.detectCliTools()
+      const current = Array.isArray(found) ? found : []
+      setLocalTools(current)
+      const match = current.find((entry) => entry.id === tool.id)
+      if (!match) return false
+      if (match.exec && !match.models?.length) return true
+      return !model || Boolean(match.models?.includes(model))
+    } catch (error) {
+      console.error('Failed to test the local tool', error)
+      return false
+    }
+  }, [])
+
+  /** Replays first-run onboarding from Settings, resetting the completion flag. */
+  const replayOnboarding = useCallback(() => {
+    setSettingsOpen(false)
+    setOnboarding(true)
+    store.writeOnboarding('completed', 'false').catch((error) =>
+      console.error('Failed to reset onboarding state', error),
+    )
+  }, [])
 
   /** Edits the active provider's default model, so the chat picker and every
    * run resolve one and the same field from the registry. */
@@ -881,26 +1048,33 @@ function App() {
   return (
     <div className={`app-shell ${leftOpen ? 'left-open' : ''} ${rightOpen ? 'right-open' : ''} ${zen ? 'zen' : ''} ${settingsOpen ? 'settings-open' : ''}`} data-theme={theme.id} data-view={view}>
       <div className="library-layer">
-        <Library docs={docs} filter={filter} onFilter={applyFilter} onOpenDoc={openDoc} onNew={createDocument} onSettings={toggleSettings} onDetails={setDetailsId} onDownload={downloadDoc} onDelete={deleteDocument} sortAscending={sortAscending} onSort={toggleSort} viewMode={viewMode} onView={setViewMode} density={density} onDensity={setDensity} loading={!bootstrapped} />
+        <Library docs={docs} trashed={trashed} filter={filter} onFilter={applyFilter} onOpenDoc={openDoc} onNew={createDocument} onImport={importDocuments} onRestore={restoreDocument} onRestoreMany={restoreDocuments} onDeleteMany={deleteDocuments} onPurgeMany={purgeDocuments} onPurge={purgeDocument} onSettings={toggleSettings} onDetails={setDetailsId} onDownload={downloadDoc} onDelete={deleteDocument} sortAscending={sortAscending} onSort={toggleSort} viewMode={viewMode} onView={setViewMode} density={density} onDensity={setDensity} loading={!bootstrapped} />
       </div>
       {currentDoc && (
         <div key={currentDoc.id} className="editor-layer" style={{ pointerEvents: view === 'editor' ? 'auto' : 'none' }}>
-          <Editor doc={currentDoc} stats={stats} settings={settings} theme={theme} onSettingsChange={updateSettings} activeProvider={activeProvider} onSelectModel={selectModel} onOpenSettings={() => setSettingsOpen(true)} onStatsChange={setStats} author={accountName} onTitleChange={updateTitle} onBack={goLibrary} onPanel={setPanel} leftOpen={leftOpen} rightOpen={rightOpen} zen={zen} onZen={toggleZen} onDetails={setDetailsId} onDelete={deleteDocument} onContentSave={updateDoc} reducedMotion={reducedMotion} assistantReducedMotion={assistantReducedMotion} view={view} exportRequest={exportRequest} />
+          <Editor doc={currentDoc} stats={stats} settings={settings} theme={theme} onSettingsChange={updateSettings} activeProvider={activeProvider} onSelectModel={selectModel} onOpenSettings={() => setSettingsOpen(true)} onStatsChange={setStats} author={accountName} onTitleChange={updateTitle} onBack={goLibrary} onNew={createDocument} onImport={importDocuments} onPanel={setPanel} leftOpen={leftOpen} rightOpen={rightOpen} zen={zen} onZen={toggleZen} onDetails={setDetailsId} onDelete={deleteDocument} onContentSave={updateDoc} reducedMotion={reducedMotion} assistantReducedMotion={assistantReducedMotion} view={view} exportRequest={exportRequest} />
         </div>
       )}
-      {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}
-      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} />}
+      {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} labels={labelOptions} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}
+      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} onReplayOnboarding={replayOnboarding} />}
       <BootLayer key="boot-layer" bootstrapped={bootstrapped} bootError={bootError} />
       {onboarding && bootstrapped && !bootError && (
         <OnboardingFlow
           key="onboarding"
-          themes={ONBOARDING_THEMES}
+          themes={onboardingThemes}
           themeId={settings.theme}
           onPickTheme={applyOnboardingTheme}
-          tools={localTools.filter((tool) => tool.models?.length)}
+          tools={localTools}
+          toolsLoading={toolsLoading}
+          providerReady={providerReady}
           onAdoptTool={adoptTool}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onTestTool={testTool}
+          onSaveKey={saveOnboardingKey}
+          onCreateProvider={createProvider}
+          activeProvider={activeProvider}
+          providers={providers}
           onFinish={finishOnboarding}
+          obscured={settingsOpen}
         />
       )}
     </div>

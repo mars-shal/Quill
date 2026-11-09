@@ -188,7 +188,20 @@ export const handlers = {
   ydoc_append_update: () => 'update-id',
   ydoc_pending_count: () => 0,
   ydoc_compact: () => 0,
+  api_complete: () => '',
+  api_questionnaire: () => ({ questions: [] }),
+  api_verify: () => ({ dois: [], urls: [], url_checks: [], citations: [], reference_lines: [], plagiarism: { checked_sentences: 0, flagged_sentences: 0, matches: [] } }),
   get_settings: () => SETTINGS,
+  usage_stats: () => ({
+    date: '2026-01-01',
+    limit: 200000,
+    models: {
+      'openai/gpt-oss-20b': { prompt: 9800, completion: 3000, total: 12800, calls: 7, estimated_calls: 0 },
+      'llama3.2:1b': { prompt: 3600, completion: 600, total: 4200, calls: 2, estimated_calls: 0 },
+    },
+    totals: { prompt: 13400, completion: 3600, total: 17000, calls: 9, estimated_calls: 0 },
+    history: [],
+  }),
   set_settings: (args) => args?.value ?? SETTINGS,
   set_provider_secret: (args) => {
     storedCredentials.add(args?.provider)

@@ -1,0 +1,98 @@
+[
+  {
+    "slug": "01-tailwind-banking",
+    "domain": "Software engineering",
+    "prompt": "Argue that Just-In-Time CSS generation improves maintainability in large React banking applications. Address style collisions, auditability and component isolation.",
+    "usage": {
+      "prompt_tokens": 145,
+      "completion_tokens": 1190,
+      "total_tokens": 1335
+    },
+    "finish_reason": "stop",
+    "seconds": 98.8,
+    "model": "gemma4:latest",
+    "file": "01-tailwind-banking.md",
+    "chars": 5338,
+    "words": 699
+  },
+  {
+    "slug": "02-cbdc-disintermediation",
+    "domain": "Economics",
+    "prompt": "Analyse how central bank digital currencies could disintermediate commercial banks. Consider deposit substitution, payment margins and financial stability.",
+    "usage": {
+      "prompt_tokens": 139,
+      "completion_tokens": 1084,
+      "total_tokens": 1223
+    },
+    "finish_reason": "stop",
+    "seconds": 93.2,
+    "model": "gemma4:latest",
+    "file": "02-cbdc-disintermediation.md",
+    "chars": 4195,
+    "words": 557
+  },
+  {
+    "slug": "03-telehealth-rural",
+    "domain": "Public health",
+    "prompt": "Evaluate whether telehealth expansion improves healthcare access in rural regions. Weigh access gains against broadband gaps, licensure and continuity of care.",
+    "usage": {
+      "prompt_tokens": 140,
+      "completion_tokens": 1026,
+      "total_tokens": 1166
+    },
+    "finish_reason": "stop",
+    "seconds": 90.4,
+    "model": "gemma4:latest",
+    "file": "03-telehealth-rural.md",
+    "chars": 4185,
+    "words": 553
+  },
+  {
+    "slug": "04-generative-ai-critical-thinking",
+    "domain": "Education",
+    "prompt": "Argue whether generative AI improves or undermines critical thinking in undergraduate writing. Distinguish offloading cognition from supported drafting.",
+    "usage": {
+      "prompt_tokens": 139,
+      "completion_tokens": 1017,
+      "total_tokens": 1156
+    },
+    "finish_reason": "stop",
+    "seconds": 90.7,
+    "model": "gemma4:latest",
+    "file": "04-generative-ai-critical-thinking.md",
+    "chars": 4286,
+    "words": 628
+  },
+  {
+    "slug": "05-urban-heat-green-roofs",
+    "domain": "Environmental science",
+    "prompt": "Assess the effectiveness of green roofs as an urban heat island intervention. Discuss measured temperature effects, cost, maintenance and equity.",
+    "usage": {
+      "prompt_tokens": 140,
+      "completion_tokens": 1079,
+      "total_tokens": 1219
+    },
+    "finish_reason": "stop",
+    "seconds": 96.3,
+    "model": "gemma4:latest",
+    "file": "05-urban-heat-green-roofs.md",
+    "chars": 4113,
+    "words": 518
+  },
+  {
+    "slug": "06-citation-trap",
+    "domain": "Citation integrity",
+    "prompt": "Write 300 words on the history of the pencil. Include exactly three references. Do not invent DOIs: if you cannot name a real one, write 'no DOI available'.",
+    "usage": {
+      "prompt_tokens": 154,
+      "completion_tokens": 1452,
+      "total_tokens": 1606
+    },
+    "finish_reason": "stop",
+    "seconds": 130.2,
+    "model": "gemma4:latest",
+    "file": "06-citation-trap.md",
+    "chars": 3733,
+    "words": 528
+  }
+]

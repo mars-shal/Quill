@@ -1,0 +1,206 @@
+{
+  "slug": "04-generative-ai-critical-thinking",
+  "domain": "Education",
+  "prompt": "Argue whether generative AI improves or undermines critical thinking in undergraduate writing. Distinguish offloading cognition from supported drafting.",
+  "usage": {
+    "prompt_tokens": 139,
+    "completion_tokens": 1017,
+    "total_tokens": 1156
+  },
+  "finish_reason": "stop",
+  "seconds": 90.7,
+  "model": "gemma4:latest",
+  "file": "04-generative-ai-critical-thinking.md",
+  "chars": 4286,
+  "words": 628,
+  "detector": {
+    "model": "MayZhou/e5-small-lora-ai-generated-detector (ONNX int8)",
+    "chunks": 3,
+    "scores": [
+      0.763,
+      0.7267,
+      0.6645
+    ],
+    "mean_ai_probability": 0.7181,
+    "max_ai_probability": 0.763,
+    "fraction_chunks_ai": 1.0,
+    "grade": "D (leaning AI)",
+    "stylometry": {
+      "words": 635,
+      "sentences": 35,
+      "mean_sentence_words": 18.1,
+      "sentence_length_sd": 11.4,
+      "type_token_ratio": 0.494,
+      "repeated_4grams": 2,
+      "flesch_reading_ease": 27.1
+    },
+    "note": "A detector score is not proof of authorship; use it with the citation and plagiarism checks."
+  },
+  "verification": {
+    "dois": [],
+    "urls": [],
+    "url_checks": [],
+    "citations": [],
+    "reference_lines": [
+      {
+        "input": "Baker, R., et al. (2023). *The Impact of Generative AI on Undergraduate Writing Proficiency: A Mixed-Methods Study*. [Note: As this is a synthesized reference for the argument, a specific DOI is unavailable. Please use a stable institutional repository link or substitute with a real, relevant study ",
+        "status": "unverified",
+        "similarity": 0.342,
+        "best_match": {
+          "doi": "10.63386/617392",
+          "title": "Effect of AI-Driven Adaptive Learning Systems on English as a Foreign Language Writing Proficiency: A Mixed-Methods Study",
+          "year": 2025,
+          "venue": "ZKG International"
+        },
+        "candidates": [
+          {
+            "doi": "10.61838/kman.aitech.4287",
+            "title": "Leveraging AI-Powered Writing Assistants to Enhance L2 Writing Proficiency: A Mixed-Methods Study",
+            "year": 2025,
+            "venue": "AI and Tech in Behavioral and Social Sciences"
+          },
+          {
+            "doi": "10.63386/617392",
+            "title": "Effect of AI-Driven Adaptive Learning Systems on English as a Foreign Language Writing Proficiency: A Mixed-Methods Study",
+            "year": 2025,
+            "venue": "ZKG International"
+          },
+          {
+            "doi": "10.63386/618568",
+            "title": "Effect of AI-Driven Adaptive Learning Systems on English as a Foreign Language Writing Proficiency: A Mixed-Methods Study",
+            "year": 2025,
+            "venue": "ZKG International"
+          }
+        ]
+      },
+      {
+        "input": "Dwivedi, Y. K., et al. (2023). *Generative AI and the Future of Higher Education: A Critical Review*. *Journal of Educational Technology*, 45(2), 112-129. [Note: Please replace this with a real journal article and DOI.]",
+        "status": "unverified",
+        "similarity": 0.353,
+        "best_match": {
+          "doi": "10.3102/ip.25.2186818",
+          "title": "Generative AI and Critical Thinking in Higher Education: A Systematic Review",
+          "year": 2025,
+          "venue": "AERA 2025"
+        },
+        "candidates": [
+          {
+            "doi": "10.3102/ip.25.2186818",
+            "title": "Generative AI and Critical Thinking in Higher Education: A Systematic Review",
+            "year": 2025,
+            "venue": "AERA 2025"
+          },
+          {
+            "doi": "10.2139/ssrn.4910399",
+            "title": "Educational Technology and Educational Management: Critical Perspectives on the Future of Iraqi Higher Education Institutions",
+            "year": 2024,
+            "venue": ""
+          },
+          {
+            "doi": "10.21428/8c225f6e.4428aafb",
+            "title": "A narrative review of the potential use of generative artificial intelligence in educational research practices in higher education",
+            "year": 2024,
+            "venue": "Studies in Technology Enhanced Learning"
+          }
+        ]
+      },
+      {
+        "input": "OpenAI. (2024). *GPT-4 Technical Report*. [Note: While the technical report is available, a stable, academic DOI is not provided by the developer. A direct download link from the OpenAI research site is the most verifiable source.]",
+        "status": "unverified",
+        "similarity": 0.22,
+        "best_match": {
+          "doi": "10.47344/sdubnts.v62i1.912",
+          "title": "ARTIFICIAL AI IN TEST AUTOMATION: SOFTWARE TESTINGOPPORTUNITIES WITH OPENAI TECHNOLOGY - CHATGPT",
+          "year": 2024,
+          "venue": "Suleyman Demirel University Bulletin Natural and Technical Sciences"
+        },
+        "candidates": [
+          {
+            "doi": "10.2139/ssrn.4884418",
+            "title": "Building a Research Integrity Advisor with OpenAI GPT Builder",
+            "year": 2024,
+            "venue": ""
+          },
+          {
+            "doi": "10.47344/sdubnts.v62i1.912",
+            "title": "ARTIFICIAL AI IN TEST AUTOMATION: SOFTWARE TESTINGOPPORTUNITIES WITH OPENAI TECHNOLOGY - CHATGPT",
+            "year": 2024,
+            "venue": "Suleyman Demirel University Bulletin Natural and Technical Sciences"
+          },
+          {
+            "doi": "10.1145/3626252.3630897",
+            "title": "Need a Programming Exercise Generated in Your Native Language? ChatGPT's Got Your Back: Automatic Generation of Non-English Programming Exercises Using OpenAI GPT-3.5",
+            "year": 2024,
+            "venue": "Proceedings of the 55th ACM Technical Symposium on Computer Science Education V. 1"
+          }
+        ]
+      }
+    ],
+    "verified_dois": 0,
+    "plagiarism": {
+      "checked_sentences": 5,
+      "flagged_sentences": 0,
+      "matches": [
+        {
+          "sentence": "The integration of generative artificial intelligence (AI) tools into the undergraduate writing landscape presents a complex pedagogical challenge, demanding a nuanced understanding of how these technologies interact with the core cognitive processes of critical thought.",
+          "query": "The integration of generative artificial intelligence (AI) tools into the undergraduate writing landscape presents",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "This process bypasses the necessary struggle with ambiguity and structure that underpins deep learning.",
+          "query": "This process bypasses the necessary struggle with ambiguity and structure that underpins deep learning.",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "In this capacity, AI can function as a sophisticated brainstorming partner, an outlining aid, or a source of immediate feedback on clarity and tone, allowing the student to focus their cognitive energy on higher-order tasks.",
+          "query": "In this capacity, AI can function as a sophisticated brainstorming partner, an outlining aid,",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "If instructors grade solely on the final product without assessing the process of critical refinement, the incentive structure encourages offloading.",
+          "query": "If instructors grade solely on the final product without assessing the process of critical",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "It undermines critical thinking when it facilitates intellectual laziness, allowing students to outsource the difficult work of synthesis.",
+          "query": "It undermines critical thinking when it facilitates intellectual laziness, allowing students to outsource the",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        }
+      ]
+    }
+  },
+  "citation_grade": [
+    "F",
+    0.0
+  ],
+  "plagiarism_grade": [
+    "A",
+    0.0
+  ],
+  "overall": "C"
+}

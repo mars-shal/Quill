@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 # Must run before importing utilis.ratelimit, which builds its budget at import.
 load_dotenv()
 
+import httpx
 import openai
 
 from utilis.pydanticModels import (
@@ -177,29 +178,73 @@ def _is_local_endpoint(base_url: str) -> bool:
     return host in {"localhost", "::1", "0.0.0.0"} or host.startswith("127.")
 
 
-def _usage_tokens(response) -> int | None:
-    """Total tokens the provider reported, or None when it reported nothing."""
+def _usage_counts(response) -> dict | None:
+    """Prompt/completion/total tokens the provider reported, or None.
+
+    Providers disagree about which fields they expose: some send only a total,
+    some send input/output aliases, and a local server may send nothing at all.
+    The normalised shape is what the usage dashboard consumes.
+    """
     usage = getattr(response, "usage", None)
     if usage is None:
         return None
-    total = getattr(usage, "total_tokens", None)
-    if total is None:
-        inp = getattr(usage, "prompt_tokens", None) or getattr(usage, "input_tokens", None) or 0
-        out = getattr(usage, "completion_tokens", None) or getattr(usage, "output_tokens", None) or 0
-        total = int(inp or 0) + int(out or 0)
-    try:
-        return int(total)
-    except (TypeError, ValueError):
+
+    def pick(*names: str) -> int | None:
+        for name in names:
+            value = getattr(usage, name, None)
+            if value is not None:
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    continue
         return None
 
+    prompt = pick("prompt_tokens", "input_tokens")
+    completion = pick("completion_tokens", "output_tokens")
+    total = pick("total_tokens")
+    if total is None:
+        if prompt is None and completion is None:
+            return None
+        total = int(prompt or 0) + int(completion or 0)
+    return {
+        "prompt": int(prompt or 0),
+        "completion": int(completion or 0),
+        "total": int(total or 0),
+        "estimated": False,
+    }
 
-def _record_usage(model: str, tokens: int) -> None:
-    """Accumulate today's token spend per model for the Settings usage table.
+
+def _estimated_usage(prompt: str, instructions: str, output: str = "") -> dict:
+    """A best-effort split when the provider reports no usage at all."""
+    prompt_tokens = estimate_tokens(prompt) + estimate_tokens(instructions)
+    completion_tokens = estimate_tokens(output) if output else 0
+    return {
+        "prompt": int(prompt_tokens),
+        "completion": int(completion_tokens),
+        "total": int(prompt_tokens + completion_tokens),
+        "estimated": True,
+    }
+
+
+def _record_usage(model: str, counts: dict | int | None) -> None:
+    """Accumulate today's usage per model for the Settings dashboard.
+
+    New rows carry the prompt/completion split and a call count. Legacy rows were
+    a bare integer total; they are read as total-only so an existing profile does
+    not lose its history when this shape changes.
 
     Telemetry: a failure here must never fail a turn, so every error is
     swallowed at debug level.
     """
-    if tokens <= 0:
+    if isinstance(counts, int):
+        counts = {"prompt": 0, "completion": 0, "total": counts, "estimated": False}
+    if not isinstance(counts, dict):
+        return
+    try:
+        total = int(counts.get("total") or 0)
+    except (TypeError, ValueError):
+        return
+    if total <= 0:
         return
     try:
         from datetime import datetime, timezone
@@ -210,7 +255,20 @@ def _record_usage(model: str, tokens: int) -> None:
         usage = db.get(key)
         if not isinstance(usage, dict):
             usage = {}
-        usage[model] = int(usage.get(model, 0)) + int(tokens)
+        previous = usage.get(model)
+        if isinstance(previous, int):
+            previous = {"prompt": 0, "completion": 0, "total": previous, "calls": 1, "estimated_calls": 0}
+        if not isinstance(previous, dict):
+            previous = {"prompt": 0, "completion": 0, "total": 0, "calls": 0, "estimated_calls": 0}
+        prompt = int(counts.get("prompt") or 0)
+        completion = int(counts.get("completion") or 0)
+        usage[model] = {
+            "prompt": int(previous.get("prompt") or 0) + prompt,
+            "completion": int(previous.get("completion") or 0) + completion,
+            "total": int(previous.get("total") or 0) + total,
+            "calls": int(previous.get("calls") or 0) + 1,
+            "estimated_calls": int(previous.get("estimated_calls") or 0) + (1 if counts.get("estimated") else 0),
+        }
         db.set(key, usage)
     except Exception:  # noqa: BLE001 - statistics, never fatal
         logger.debug("usage recording failed", exc_info=True)
@@ -249,6 +307,12 @@ class Agent:
         self._writing_model = str(
             cfg.get("writing_model") or os.environ.get("QUILL_WRITING_MODEL") or ""
         ).strip()
+        # A caller-set ceiling, used by token-saving mode. Zero means the
+        # provider's own default, which is the normal path.
+        try:
+            self.max_output_tokens = int(cfg.get("max_output_tokens") or 0)
+        except (TypeError, ValueError):
+            self.max_output_tokens = 0
 
         if self.protocol == "cli":
             # `base_url` carries the command prefix that receives the turn
@@ -289,7 +353,17 @@ class Agent:
                 "no provider credential: the GUI sends one with each request, "
                 "and OPENAI_API_KEY is not set for a standalone run"
             )
-        self.OpenAi = openai.OpenAI(api_key=api_key, base_url=base_url or None)
+        # A dedicated client, not just default_headers: httpx still advertises
+        # gzip/deflate/zstd on the transport by default, and a CDN that returns a
+        # mislabelled compressed body then fails inside zlib ("unknown
+        # compression method" / "incorrect header check"). Identity is the one
+        # header the provider cannot reinterpret.
+        self.OpenAi = openai.OpenAI(
+            api_key=api_key,
+            base_url=base_url or None,
+            http_client=httpx.Client(headers={"Accept-Encoding": "identity"}),
+            default_headers={"Accept-Encoding": "identity"},
+        )
 
     def _resolve_model(self, model_name: str | None) -> str:
         name = (model_name or self._model or "").strip()
@@ -322,30 +396,40 @@ class Agent:
 
         if self.protocol == "openai_responses":
             kwargs = {"model": name, "input": prompt, "instructions": instructions}
+            if self.max_output_tokens:
+                kwargs["max_output_tokens"] = self.max_output_tokens
             if temperature is not None:
                 kwargs["temperature"] = temperature
             kwargs.update(_reasoning_kwargs(name))
             out = self.OpenAi.responses.create(**kwargs)
-            _record_usage(
-                name,
-                _usage_tokens(out) or (estimate_tokens(prompt) + estimate_tokens(instructions)),
-            )
-            return out.output_text
+            text = out.output_text
+            counts = _usage_counts(out) or _estimated_usage(prompt, instructions, text)
+            if not counts["estimated"] and not counts["prompt"] and not counts["completion"]:
+                counts["prompt"] = estimate_tokens(prompt) + estimate_tokens(instructions)
+                counts["completion"] = max(0, counts["total"] - counts["prompt"])
+                counts["estimated"] = True
+            _record_usage(name, counts)
+            return text
 
         messages = [
             {"role": "system", "content": instructions},
             {"role": "user", "content": prompt},
         ]
         kwargs = {"model": name, "messages": messages}
+        if self.max_output_tokens:
+            kwargs["max_tokens"] = self.max_output_tokens
         if temperature is not None:
             kwargs["temperature"] = temperature
         kwargs.update(_reasoning_kwargs(name))
         resp = self.OpenAi.chat.completions.create(**kwargs)
-        _record_usage(
-            name,
-            _usage_tokens(resp) or (estimate_tokens(prompt) + estimate_tokens(instructions)),
-        )
-        return resp.choices[0].message.content
+        text = resp.choices[0].message.content
+        counts = _usage_counts(resp) or _estimated_usage(prompt, instructions, text)
+        if not counts["estimated"] and not counts["prompt"] and not counts["completion"]:
+            counts["prompt"] = estimate_tokens(prompt) + estimate_tokens(instructions)
+            counts["completion"] = max(0, counts["total"] - counts["prompt"])
+            counts["estimated"] = True
+        _record_usage(name, counts)
+        return text
 
     def _complete_cli(self, name: str, prompt: str, instructions: str) -> str:
         """Sends the turn to a CLI agent (``protocol: "cli"``).
@@ -397,13 +481,17 @@ class Agent:
             elif isinstance(obj.get("result"), str):
                 texts.append(obj["result"])
         if texts:
-            return "\n".join(texts).strip()
+            answer = "\n".join(texts).strip()
+            _record_usage(name, _estimated_usage(prompt, instructions, answer))
+            return answer
 
         # Raw fallback: strip ANSI colour, drop the CLI's own chatter lines
         # (`> build · model` and friends) that print before the answer.
         clean = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", out)
         lines = [ln for ln in clean.splitlines() if not ln.lstrip().startswith("> ")]
-        return "\n".join(lines).strip()
+        answer = "\n".join(lines).strip()
+        _record_usage(name, _estimated_usage(prompt, instructions, answer))
+        return answer
 
     _LANGUAGE_DIRECTIVE = (
         "\n\nLANGUAGE: Write every response in English only. Do not answer in"

@@ -28,6 +28,9 @@ const COLOR_MODES = [
   { id: "dark", label: "Dark mode", note: "Reduced glare and blue light." },
 ];
 import BackgroundPicker from "./BackgroundPicker.jsx";
+import { UsagePanel } from "./UsagePanel.jsx";
+import { UsageChart } from "./UsageChart.jsx";
+import { CopyButton } from "./interior/CopyButton.jsx";
 import ThemePicker from "./ThemePicker.jsx";
 import { Button } from './ui/button.jsx'
 import {
@@ -64,6 +67,13 @@ const SETTINGS_SECTIONS = [
     title: "Bring your own provider",
     note: "Use your own key for assistant actions.",
     Panel: AssistantPanel,
+  },
+  {
+    id: "settings-usage",
+    label: "Usage",
+    title: "Token usage",
+    note: "What today's writing has asked the model to do, and what it cost.",
+    Panel: UsagePanel,
   },
   {
     id: "settings-appearance",
@@ -118,15 +128,23 @@ const TOAST_HOLD = 2400;
 const TOAST_FADE = 180;
 
 
-function DetailsDialog({ doc, onClose, onSave }) {
+function DetailsDialog({ doc, labels = [], onClose, onSave }) {
   const [name, setName] = useState(doc.title);
   const [filename, setFilename] = useState(doc.filename);
   const [collections, setCollections] = useState(doc.collections);
+  const [newLabel, setNewLabel] = useState("");
   const [autoFilename, setAutoFilename] = useState(
     doc.filename === `${slugify(doc.title)}.md`,
   );
   const [kind, setKind] = useState(doc.kind);
   const [status, setStatus] = useState(doc.status);
+  const labelChoices = [...new Set(["Essays", "Chapters", "Notes", ...labels, ...collections])].sort((a, b) => a.localeCompare(b));
+  const addLabel = () => {
+    const value = newLabel.trim();
+    if (!value) return;
+    setCollections((current) => [...new Set([...current, value])]);
+    setNewLabel("");
+  };
   const nameRef = useRef(null);
   // ModalLayer traps focus and owns Escape. This only adds the select-all the
   // rename is inviting, and waits for the trap to have moved focus in first.
@@ -157,7 +175,7 @@ function DetailsDialog({ doc, onClose, onSave }) {
         <header className="dialog-head">
           <div>
             <div className="eyebrow">Document settings</div>
-            <h2 id="details-title">Name and collections</h2>
+            <h2 id="details-title">Name and labels</h2>
           </div>
           <button
             className="dialog-close"
@@ -194,9 +212,9 @@ function DetailsDialog({ doc, onClose, onSave }) {
             }}
           />
           <div className="field-group">
-            <div className="field-label">Collections</div>
+            <div className="field-label">Labels</div>
             <div className="collection-options">
-              {["Essays", "Chapters", "Notes"].map((collection) => (
+              {labelChoices.map((collection) => (
                 <label key={collection} className="collection-option">
                   <input
                     type="checkbox"
@@ -212,6 +230,21 @@ function DetailsDialog({ doc, onClose, onSave }) {
                   <span>{collection}</span>
                 </label>
               ))}
+            </div>
+            <div className="label-add">
+              <input
+                aria-label="New label"
+                placeholder="New label"
+                value={newLabel}
+                onChange={(event) => setNewLabel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addLabel();
+                  }
+                }}
+              />
+              <button className="soft-button" type="button" onClick={addLabel}>Add</button>
             </div>
           </div>
           <div className="dialog-grid">
@@ -248,7 +281,7 @@ function DetailsDialog({ doc, onClose, onSave }) {
             </div>
           </div>
           <p className="dialog-note">
-            A clear name and collection make documents easier to find later.
+            A clear name and labels make documents easier to find later.
           </p>
           <div className="dialog-actions">
             <Button className="soft-button" type="button" onClick={onClose}>
@@ -299,6 +332,7 @@ function SettingsPage({
   onAdoptTool,
   onSaveProvider,
   onCreateProvider,
+  onReplayOnboarding,
 }) {
   const [draft, setDraft] = useState(settings);
   const [apiKey, setApiKey] = useState(sessionApiKey);
@@ -313,6 +347,7 @@ function SettingsPage({
   // and focusing a select the moment it opens means the first Tab jumps to
   // *Model* while the reader is still looking at the heading.
   const pageRef = useRef(null);
+  const formRef = useRef(null);
   // One section at a time, Assistant first because it is the only one with
   // something broken about it worth finding quickly.
   //
@@ -324,6 +359,12 @@ function SettingsPage({
   // and it takes that panel's controls out of the tab order without any code.
   const [activeTab, setActiveTab] = useState(SETTINGS_SECTIONS[0].id);
   const tabRefs = useRef({});
+  // Each panel used to inherit the previous panel's scroll offset because one
+  // form is the scroll container for all of them. Switching tabs now starts at
+  // the top, which is what a reader means by choosing a different section.
+  useEffect(() => {
+    if (formRef.current) formRef.current.scrollTop = 0;
+  }, [activeTab]);
   // The confirmation that something was written, and the ref that says whether
   // the persist effect below has run yet.
   //
@@ -516,7 +557,7 @@ function SettingsPage({
             ))}
           </div>
         </div>
-        <div className="settings-form">
+        <div className="settings-form" ref={formRef}>
           {/* One object, spread into whichever panel is showing. Each panel takes
               the state it uses and ignores the rest, which reads better here than
               three hand-written prop lists that have to be kept in step with the
@@ -551,6 +592,7 @@ function SettingsPage({
               onAdoptTool,
               onSaveProvider,
               onCreateProvider,
+              onReplayOnboarding,
             };
             return SETTINGS_SECTIONS.map((section) => {
               const Panel = section.Panel;
@@ -642,6 +684,7 @@ function AssistantPanel({
   connectionState,
   setConnectionState,
   connect,
+  theme,
   activeProvider,
   providers,
   onSelectProvider,
@@ -691,10 +734,18 @@ function AssistantPanel({
       cancelled = true;
     };
   }, []);
-  const usageRows =
-    usage && usage.models
-      ? Object.entries(usage.models).sort((a, b) => Number(b[1]) - Number(a[1]))
-      : [];
+  const usageRows = usage && usage.models
+    ? Object.entries(usage.models).map(([model, value]) => {
+        const row = typeof value === "number" ? { total: value, prompt: 0, completion: 0, calls: value ? 1 : 0 } : (value || {});
+        return {
+          model,
+          total: Number(row.total) || 0,
+          prompt: Number(row.prompt) || 0,
+          completion: Number(row.completion) || 0,
+          calls: Number(row.calls) || 0,
+        };
+      }).sort((a, b) => b.total - a.total)
+    : [];
 
   useEffect(() => {
     if (!providerId) {
@@ -815,17 +866,7 @@ function AssistantPanel({
             >
               <Icon name={keyVisible ? "eye-off" : "eye"} size={17} />
             </button>
-            <button
-              type="button"
-              className="keys-iconbtn"
-              onClick={() => {
-                if (apiKey) navigator.clipboard?.writeText(apiKey);
-              }}
-              disabled={!apiKey}
-              aria-label="Copy key"
-            >
-              <Icon name="copy" size={17} />
-            </button>
+            <CopyButton value={apiKey} className="keys-iconbtn" label="Copy key" />
           </div>
           <div className="keys-actions">
             <Button className="keys-btn keys-btn-solid" type="button" onClick={connect} disabled={!activeProvider}>
@@ -990,8 +1031,7 @@ function AssistantPanel({
       </div>
       {usageRows.length > 0 && (
         <div className="usage-table" aria-label="Token usage today">
-          {usageRows.map(([model, tokens]) => {
-            const used = Number(tokens) || 0;
+          {usageRows.map(({ model, total: used, prompt, completion, calls }) => {
             const limit = Math.max(1, Number(usage?.limit) || 1);
             const pct = Math.min(100, Math.round((used / limit) * 100));
             return (
@@ -1002,11 +1042,15 @@ function AssistantPanel({
                 </span>
                 <span className="usage-tokens">
                   {used.toLocaleString()} <em>/ {limit.toLocaleString()}</em>
+                  <small>{prompt.toLocaleString()} in · {completion.toLocaleString()} out · {calls} call{calls === 1 ? "" : "s"}</small>
                 </span>
                 <span className="usage-price">{modelPrice(model)}</span>
               </div>
             );
           })}
+          <div className="usage-mini-chart">
+            <UsageChart models={usageRows} theme={theme} width={520} compact />
+          </div>
         </div>
       )}
       {/* Detection is a choice, not a fixture: off stops the probe entirely
@@ -1306,7 +1350,7 @@ function ChoiceBadge() {
   );
 }
 
-function WritingPanel({ draft, update }) {
+function WritingPanel({ draft, update, onReplayOnboarding }) {
   return (
     <>
       <ToggleRow
@@ -1331,12 +1375,56 @@ function WritingPanel({ draft, update }) {
         onChange={(value) => update("wordCount", value)}
       />
       <ToggleRow
+        id="completions"
+        label="Inline completions"
+        description="Show a short ghost-text suggestion after a pause. Tab accepts it, Escape dismisses it."
+        checked={draft.completions !== false}
+        onChange={(value) => update("completions", value)}
+      />
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <label className="settings-row-label">Completion pause</label>
+          <small>How long typing must stop before a suggestion is requested.</small>
+        </div>
+        <div className="settings-row-control">
+          <div className="settings-choice-group" role="group" aria-label="Completion pause">
+            {[600, 900, 1400].map((delay) => (
+              <button
+                key={delay}
+                type="button"
+                className={`settings-choice${Number(draft.completionDelay ?? 900) === delay ? " is-active" : ""}`}
+                aria-pressed={Number(draft.completionDelay ?? 900) === delay}
+                onClick={() => update("completionDelay", delay)}
+              >
+                {delay < 1000 ? `${delay} ms` : `${delay / 1000} s`}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <ToggleRow
+        id="format-imports"
+        label="Tidy imported formatting"
+        description="Clean Word and LaTeX leftovers as a file is imported. Clean up in the editor still works either way."
+        checked={draft.formatOnImport !== false}
+        onChange={(value) => update("formatOnImport", value)}
+      />
+      <ToggleRow
         id="reduce-motion"
         label="Reduce motion"
         description="Use quieter transitions throughout the workspace. The Conclave assistant keeps animating."
         checked={draft.reduceMotion}
         onChange={(value) => update("reduceMotion", value)}
       />
+      <div className="settings-replay">
+        <div>
+          <strong>Welcome flow</strong>
+          <p>Show the first-run screens again. Your documents and settings are untouched.</p>
+        </div>
+        <button className="soft-button" type="button" onClick={onReplayOnboarding}>
+          Replay onboarding
+        </button>
+      </div>
     </>
   );
 }
@@ -1369,4 +1457,4 @@ function ToggleRow({ id, label, description, checked, onChange }) {
   );
 }
 
-export { DetailsDialog, SettingsPage };
+export { DetailsDialog, PROVIDER_PRESETS, SettingsPage };

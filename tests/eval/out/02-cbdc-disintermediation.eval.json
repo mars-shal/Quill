@@ -1,0 +1,315 @@
+{
+  "slug": "02-cbdc-disintermediation",
+  "domain": "Economics",
+  "prompt": "Analyse how central bank digital currencies could disintermediate commercial banks. Consider deposit substitution, payment margins and financial stability.",
+  "usage": {
+    "prompt_tokens": 139,
+    "completion_tokens": 1084,
+    "total_tokens": 1223
+  },
+  "finish_reason": "stop",
+  "seconds": 93.2,
+  "model": "gemma4:latest",
+  "file": "02-cbdc-disintermediation.md",
+  "chars": 4195,
+  "words": 557,
+  "detector": {
+    "model": "MayZhou/e5-small-lora-ai-generated-detector (ONNX int8)",
+    "chunks": 3,
+    "scores": [
+      0.9361,
+      0.8665,
+      0.3549
+    ],
+    "mean_ai_probability": 0.7192,
+    "max_ai_probability": 0.9361,
+    "fraction_chunks_ai": 0.6667,
+    "grade": "D (leaning AI)",
+    "stylometry": {
+      "words": 577,
+      "sentences": 32,
+      "mean_sentence_words": 18.0,
+      "sentence_length_sd": 12.1,
+      "type_token_ratio": 0.506,
+      "repeated_4grams": 6,
+      "flesch_reading_ease": 22.3
+    },
+    "note": "A detector score is not proof of authorship; use it with the citation and plagiarism checks."
+  },
+  "verification": {
+    "dois": [],
+    "urls": [
+      "https://www.bis.org/cpds/publ/d312.htm",
+      "https://www.imf.org/en/Publications/dfsi/2020/html/index.htm"
+    ],
+    "url_checks": [
+      {
+        "url": "https://www.bis.org/cpds/publ/d312.htm",
+        "status": "unreachable",
+        "title": ""
+      },
+      {
+        "url": "https://www.imf.org/en/Publications/dfsi/2020/html/index.htm",
+        "status": "unreachable",
+        "title": ""
+      }
+    ],
+    "citations": [],
+    "reference_lines": [
+      {
+        "input": "Bank for International Settlements (BIS). (2021). *CBDC: A Review of the Global Landscape*. Available at: https://www.bis.org/cpds/publ/d312.htm (Stable URL)",
+        "status": "unverified",
+        "similarity": 0.406,
+        "best_match": {
+          "doi": "10.1093/law:epil/9780199231690/e453",
+          "title": "Bank for International Settlements (BIS)",
+          "year": 2013,
+          "venue": "Max Planck Encyclopedia of Public International Law"
+        },
+        "candidates": [
+          {
+            "doi": "10.1093/law:epil/9780199231690/e453",
+            "title": "Bank for International Settlements (BIS)",
+            "year": 2013,
+            "venue": "Max Planck Encyclopedia of Public International Law"
+          },
+          {
+            "doi": "10.4324/9781003179900-72",
+            "title": "Bank for International Settlements—BIS",
+            "year": 2021,
+            "venue": "The Europa Directory of International Organizations 2021"
+          },
+          {
+            "doi": "10.1017/9781108856522.010",
+            "title": "BIS Chronology",
+            "year": 2020,
+            "venue": "Promoting Global Monetary and Financial Stability"
+          }
+        ]
+      },
+      {
+        "input": "BIS Working Group. (2022). *CBDC Design Considerations: Deposit Substitution and Stability*. (Specific DOI not available, but this represents a core area of recent BIS research).",
+        "status": "unverified",
+        "similarity": 0.362,
+        "best_match": {
+          "doi": "10.1021/acs.inorgchem.0c02719.s001",
+          "title": "Tetrazole Ring Substitution at Carbon and Boron Sites of the Cobalt Bis(dicarbollide) Ion Available via Dipolar Cycloadditions",
+          "year": null,
+          "venue": ""
+        },
+        "candidates": [
+          {
+            "doi": "10.5194/egusphere-egu22-10982",
+            "title": "News from the GGOS DOI Working Group",
+            "year": 2022,
+            "venue": ""
+          },
+          {
+            "doi": "10.1021/acs.inorgchem.0c02719.s001",
+            "title": "Tetrazole Ring Substitution at Carbon and Boron Sites of the Cobalt Bis(dicarbollide) Ion Available via Dipolar Cycloadditions",
+            "year": null,
+            "venue": ""
+          },
+          {
+            "doi": "10.5194/egusphere-egu21-15081",
+            "title": "News from the GGOS DOI Working Group",
+            "year": 2021,
+            "venue": ""
+          }
+        ]
+      },
+      {
+        "input": "International Monetary Fund (IMF). (2020). *The Digital Economy and Financial Stability*. IMF Staff Discussion Note. Available at: https://www.imf.org/en/Publications/dfsi/2020/html/index.htm (Stable URL)",
+        "status": "unverified",
+        "similarity": 0.048,
+        "best_match": {
+          "doi": "10.5089/9781513537627.002",
+          "title": "Italy",
+          "year": 2020,
+          "venue": "IMF Staff Country Reports"
+        },
+        "candidates": [
+          {
+            "doi": "10.5089/9781513527116.002",
+            "title": "Canada",
+            "year": 2020,
+            "venue": "IMF Staff Country Reports"
+          },
+          {
+            "doi": "10.5089/9781513529844.002",
+            "title": "Guinea",
+            "year": 2020,
+            "venue": "IMF Staff Country Reports"
+          },
+          {
+            "doi": "10.5089/9781513537627.002",
+            "title": "Italy",
+            "year": 2020,
+            "venue": "IMF Staff Country Reports"
+          }
+        ]
+      }
+    ],
+    "verified_dois": 0,
+    "plagiarism": {
+      "checked_sentences": 5,
+      "flagged_sentences": 0,
+      "matches": [
+        {
+          "sentence": "Disintermediation, in this context, refers to the circumvention of traditional financial intermediaries—the commercial banks—by allowing agents to transact directly with the central bank's digital ledger.",
+          "query": "Disintermediation, in this context, refers to the circumvention of traditional financial intermediaries—the commercial banks—by",
+          "scholarly": [
+            {
+              "title": "Retail Central Bank Digital Currencies (CBDC), Disintermediation and Financial Privacy: The Case of the Bahamian Sand Dollar",
+              "doi": "10.3390/fintech1040026",
+              "url": "https://openalex.org/W4308043223",
+              "abstract": "The fast-growing, market-driven demand for cryptocurrencies worries central banks, as their monetary policy could be completely undermined. Central bank digital currencies (CBDCs) could offer a solution, yet our understanding of their design and consequences is in its infancy. This non-technical paper examines how The Bahamas has designed the Sand Dollar, the first real-world instance of a retail CBDC. It contrasts the Sand Dollar with definition-based specifications. The author then develops a scenario analysis to illustrate commercial bank risks. In this process, the central bank becomes a deposit monopolist, leading to high funding risks, disintermediation risks, and solvency risks for the commercial banking sector. This paper argues that restrictions and caps will be the new specifications of a regulatory framework for CBDCs if disintermediation in the banking sector is to be prevented. The anonymity of CBDCs is identified as a comparative disadvantage that will affect their adoption. These findings provide insight into governance problems facing central banks and coherently lead to the design of the Sand Dollar. This paper concludes by suggesting that combating cryptocurrencies is a task that cannot be solved by a CBDC."
+            },
+            {
+              "title": "The Disintermediation of Financial Markets: Direct Investing in Private Equity",
+              "doi": "10.3386/w19299",
+              "url": "https://openalex.org/W3125827858",
+              "abstract": "One of the important issues in corporate finance is the rationale for and role of financial intermediaries.In the private equity setting, institutional investors are increasingly eschewing intermediaries in favor of direct investments.To understand the trade-offs in this setting, we compile a proprietary dataset of direct investments from seven large institutional investors.We find that solo investments by institutions outperform co-investments and a wide range of benchmarks for traditional private equity partnership investments.The outperformance is driven by deals where informational problems are not too severe, such as more proximate transactions to the investor and later-stage deals, and by an ability to avoid the deleterious effects on returns often seen in periods with large inflows into the private equity market.The poor performance of co-investments, on the other hand, appears to result from fund managers' selective offering of large deals to institutions for co-investing."
+            },
+            {
+              "title": "Growth of Non-Bank Financial Intermediaries, Financial Stability, and Monetary Policy",
+              "doi": "10.2139/ssrn.5603370",
+              "url": "https://openalex.org/W4415166986",
+              "abstract": ""
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "If a CBDC offers retail users a risk-free, highly liquid alternative to commercial bank deposits, a substantial portion of the deposit base could migrate rapidly into the central bank's digital wallet.",
+          "query": "If a CBDC offers retail users a risk-free, highly liquid alternative to commercial bank",
+          "scholarly": [
+            {
+              "title": "Central Bank Digital Currency (CBDC), Bank Deposits, and Digital Payments: First Evidence from a Live Retail CBDC",
+              "doi": "10.3386/w32457",
+              "url": "https://openalex.org/W4398147575",
+              "abstract": "We present the first empirical evidence on how a live retail central bank digital currency (CBDC) affects bank funding, lending, and payments, using the rollout of India's digital rupee.Exploiting quasi-experimental variation from the Reserve Bank of India's staggered authorization of lead banks and centrally coordinated CBDC marketing campaigns at a large public-sector bank, we show that CBDC eligibility reduces retail deposits by 2.7%, concentrated in liquid savings accounts, while illiquid term deposits remain unchanged.Credit falls initially but quickly recovers, consistent with banks adjusting their funding mix.On the payments side, CBDC crowds out deposit-backed digital rails rather than cash usage.Early adoption is skewed toward wealthier, uninsured, and more educated depositors.A simple sufficient-statistics framework implies that the net welfare effect is positive, with household convenience and safety gains outweighing the costs of lost deposit franchise value, temporary credit contraction, and more expensive wholesale funding."
+            },
+            {
+              "title": "Central Bank Digital Currency (CBDC), Bank Deposits, and Digital Payments: First Evidence from a Live Retail CBDC",
+              "doi": "10.2139/ssrn.7301398",
+              "url": "https://openalex.org/W7203726840",
+              "abstract": ""
+            },
+            {
+              "title": "Tiered CBDC and the Financial System",
+              "doi": "10.2139/ssrn.3513422",
+              "url": "https://openalex.org/W2999044884",
+              "abstract": ""
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "Furthermore, CBDCs could compress the operational margins of commercial banks by altering the payment landscape.",
+          "query": "Furthermore, CBDCs could compress the operational margins of commercial banks by altering the payment",
+          "scholarly": [
+            {
+              "title": "Central Bank Digital Currency (CBDC), Bank Deposits, and Digital Payments: First Evidence from a Live Retail CBDC",
+              "doi": "10.3386/w32457",
+              "url": "https://openalex.org/W4398147575",
+              "abstract": "We present the first empirical evidence on how a live retail central bank digital currency (CBDC) affects bank funding, lending, and payments, using the rollout of India's digital rupee.Exploiting quasi-experimental variation from the Reserve Bank of India's staggered authorization of lead banks and centrally coordinated CBDC marketing campaigns at a large public-sector bank, we show that CBDC eligibility reduces retail deposits by 2.7%, concentrated in liquid savings accounts, while illiquid term deposits remain unchanged.Credit falls initially but quickly recovers, consistent with banks adjusting their funding mix.On the payments side, CBDC crowds out deposit-backed digital rails rather than cash usage.Early adoption is skewed toward wealthier, uninsured, and more educated depositors.A simple sufficient-statistics framework implies that the net welfare effect is positive, with household convenience and safety gains outweighing the costs of lost deposit franchise value, temporary credit contraction, and more expensive wholesale funding."
+            },
+            {
+              "title": "Central Bank Digital Currency (CBDC), Bank Deposits, and Digital Payments: First Evidence from a Live Retail CBDC",
+              "doi": "10.2139/ssrn.7301398",
+              "url": "https://openalex.org/W7203726840",
+              "abstract": ""
+            },
+            {
+              "title": "Money Creation in Fiat and Digital Currency Systems",
+              "doi": "10.5089/9781513521565.001",
+              "url": "https://openalex.org/W2997053349",
+              "abstract": "To support the understanding that banks’ debt issuance means money creation, while centralized nonbank financial institutions’ and decentralized bond market intermediary lending does not, the paper aims to convey two related points: First, the notion of money creation as a result of banks’ loan creation is compatible with the notion of liquid funding needs in a multi-bank system, in which liquid fund (reserve) transfers across banks happen naturally. Second, interest rate-based monetary policy has a bearing on macroeconomic dynamics precisely due to that multi-bank structure. It would lose its impact in the hypothetical case that only one (“singular”) commercial bank would exist. We link our discussion to the emergence and design of central bank digital currencies (CBDC), with a special focus on how loans would be granted in a CBDC world."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "If the central bank provides the foundational settlement layer, the need for commercial banks to act as the primary conduits for value transfer diminishes, potentially reducing their fee revenue and necessitating a fundamental reassessment of their value proposition beyond mere payment facilitation.",
+          "query": "If the central bank provides the foundational settlement layer, the need for commercial banks",
+          "scholarly": [
+            {
+              "title": "Legal Aspects of Central Bank Digital Currency: Central Bank and Monetary Law Considerations",
+              "doi": "10.2139/ssrn.3758088",
+              "url": "https://openalex.org/W3107242448",
+              "abstract": "This paper analyzes the legal foundations of central bank digital currency (CBDC) under central bank and monetary law. Absent strong legal foundations, the issuance of CBDC poses legal, financial and reputational risks for central banks. While the appropriate design of the legal framework will up to a degree depend on the design features of the CBDC, some general conclusions can be made. First, most central bank laws do not currently authorize the issuance of CBDC to the general public. Second, from a monetary law perspective, it is not evident that 'currency' status can be attributed to CBDC. While the central bank law issue can be solved through rather straithforward law reform, the monetary law issue poses fundmental legal policy challenges."
+            },
+            {
+              "title": "Blockchain and central bank digital currency",
+              "doi": "10.1016/j.icte.2021.09.014",
+              "url": "https://openalex.org/W3209757816",
+              "abstract": "With the development of blockchain and digital currencies, central banks all over the world are accelerating the process of CBDC development. However, it is still controversial on adoption of blockchain in CBDC design. In the paper, we analyze both functional and non-functional requirements of CBDC design, and make a literature review on blockchain based CBDC schemes. Analysis findings show that permissioned blockchain is more suitable for CBDC than permissionless blockchain. Besides, there are some challenges in blockchain based CBDC, such as performance, scalability, and cross-chain interoperability. Our analysis is timely and can provide guidelines for blockchain based CBDC design."
+            },
+            {
+              "title": "Credit Risk Management and Profitability in Commercial Banks in Sweden",
+              "doi": "",
+              "url": "https://openalex.org/W1506053185",
+              "abstract": "Credit risk management in banks has become more important not only because of the financial\\ncrisis that the world is experiencing nowadays but also the introduction of Basel II. Since granting\\ncredit is one of the main sources of income in commercial banks, the management of the risk\\nrelated to that credit affects the profitability of the banks. In our study, we try to find out how the\\ncredit risk management affects the profitability in banks. The main purpose of our study is to\\ndescribe the impact level of credit risk management on profitability in four commercial banks in\\nSweden. The study is limited to identifying the relationship of credit risk management and\\nprofitability of four commercial banks in Sweden. The results of the study are limited to banks in\\nthe sample and are not generalized for the all the commercial banks in Sweden. Furthermore, as\\nour study only uses the quantitative approach and focuses on the description of the outputs from\\nSPSS, the reasons behind will not be discussed and explained. The quantitative method is used in\\norder to fulfill the main purpose of our study. We have used regression model to do the empirical\\nanalysis. In the model we have defined ROE as profitability indicator while NPLR and CAR as\\ncredit risk management indicators. The data is collected from the sample banks annual reports\\n(2000-2008) and capital adequacy and risk management reports (2007-2008). The findings and\\nanalysis reveal that credit risk management has effect on profitability in all 4 banks. Among the\\ntwo credit risk management indicators, NPLR has a significant effect than CAR on profitability\\n(ROE). The analysis on each bank level shows that the impact of credit risk management on\\nprofitability is not the same. The credit risk management of Nordea and SEB has relatively similar\\nimpact on their profitability. While Handelsbanken’s results indicate that NPLR and CAR are very\\nweak or incapable of predicting ROE. In case of Swedbank NPLR and CAR explains the\\nvariances in ROE with very low probability. Basel II application has strengthened the negative\\nimpact of NPLR on ROE. Unlike effect of Basel I, CAR has positive and insignificant effect on\\nROE."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "If the central bank implements a CBDC that is too attractive or too easily accessible, it could destabilize the commercial lending model, leading to credit crunches if banks cannot secure sufficient stable funding.",
+          "query": "If the central bank implements a CBDC that is too attractive or too easily",
+          "scholarly": [
+            {
+              "title": "Central Bank Communication and CBDC Implementation",
+              "doi": "10.2139/ssrn.7077647",
+              "url": "https://openalex.org/W7167714887",
+              "abstract": ""
+            },
+            {
+              "title": "The phenomenon of central banks’ digital currencies (CBDC): key attributes and implementation perspectives",
+              "doi": "10.15407/socium2020.01.123",
+              "url": "https://openalex.org/W3034033081",
+              "abstract": "Paper dwells upon the phenomenon of the emergence of central banks’ digital currencies (CBDC). Forms of digital money as means of exchange have been identified, and differences between central banks’ digital currencies and other forms of central bank money such as physical money and reserves have been analyzed. Key causes of digital currency development by […]"
+            },
+            {
+              "title": "Tiered CBDC and the Financial System",
+              "doi": "10.2139/ssrn.3513422",
+              "url": "https://openalex.org/W2999044884",
+              "abstract": ""
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        }
+      ]
+    }
+  },
+  "citation_grade": [
+    "F",
+    0.0
+  ],
+  "plagiarism_grade": [
+    "A",
+    0.0
+  ],
+  "overall": "C"
+}

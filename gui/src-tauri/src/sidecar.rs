@@ -28,6 +28,7 @@ const OUTPUT_DIR: &str = "output-api";
 
 const ENV_PYTHON: &str = "QUILL_PIPELINE_PYTHON";
 const ENV_ROOT: &str = "QUILL_PIPELINE_ROOT";
+const ENV_BIN: &str = "QUILL_SIDECAR_BIN";
 
 /// The only interface this sidecar may be reached on.
 ///
@@ -49,10 +50,10 @@ const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 #[derive(Default)]
 struct Inner {
     child: Option<Child>,
-    /// Interpreter the live child was spawned with. Reported verbatim so the
+    /// Program the live child was spawned with. Reported verbatim so the
     /// status names the binary that is running rather than a re-resolved guess
     /// that could differ if the environment changed underneath us.
-    python: PathBuf,
+    program: PathBuf,
 }
 
 /// Managed state for the sidecar. The lock is only ever held across
@@ -83,22 +84,31 @@ impl Supervisor {
             if let Some(mut child) = inner.child.take() {
                 let _ = child.start_kill();
             }
-            inner.python = PathBuf::new();
+            inner.program = PathBuf::new();
         }
 
         if inner.child.is_none() {
             let root = pipeline_root().map_err(|err| err.to_string())?;
-            let python = python_in(&root, env_path(ENV_PYTHON));
-            let child = spawn(&python, &root, &port_of(base))
-                .map_err(|err| format!("could not start {}: {err}", python.display()))?;
-            tracing::info!(python = %python.display(), root = %root.display(), "started the pipeline sidecar");
+            let bundled = env_path(ENV_BIN).or_else(bundled_binary);
+            let (child, program) = if let Some(binary) = bundled {
+                let child = spawn_binary(&binary, &root, &port_of(base))
+                    .map_err(|err| format!("could not start {}: {err}", binary.display()))?;
+                tracing::info!(binary = %binary.display(), root = %root.display(), "started the bundled pipeline sidecar");
+                (child, binary)
+            } else {
+                let python = python_in(&root, env_path(ENV_PYTHON));
+                let child = spawn_python(&python, &root, &port_of(base))
+                    .map_err(|err| format!("could not start {}: {err}", python.display()))?;
+                tracing::info!(python = %python.display(), root = %root.display(), "started the pipeline sidecar");
+                (child, python)
+            };
             inner.child = Some(child);
-            inner.python = python;
+            inner.program = program;
         }
 
-        let python = inner.python.clone();
+        let program = inner.program.clone();
         drop(inner);
-        self.await_ready(base, &python).await
+        self.await_ready(base, &program).await
     }
 
     /// The interpreter of the live child, or `None` when nothing is running. A
@@ -107,11 +117,11 @@ impl Supervisor {
         let mut inner = self.inner.lock().await;
         let probe = inner.child.as_mut().map(|child| child.try_wait());
         match probe {
-            Some(Ok(None)) => Some(inner.python.clone()),
+            Some(Ok(None)) => Some(inner.program.clone()),
             Some(_) => {
                 tracing::info!("the pipeline sidecar is no longer running");
                 inner.child = None;
-                inner.python = PathBuf::new();
+                inner.program = PathBuf::new();
                 None
             }
             None => None,
@@ -124,7 +134,7 @@ impl Supervisor {
         let Some(mut child) = inner.child.take() else {
             return;
         };
-        inner.python = PathBuf::new();
+        inner.program = PathBuf::new();
         // `kill` sends SIGKILL *and* awaits `wait`, so the child is reaped
         // instead of lingering as a zombie that still holds the port.
         if let Err(err) = child.kill().await {
@@ -132,7 +142,7 @@ impl Supervisor {
         }
     }
 
-    async fn await_ready(&self, base: &str, python: &Path) -> Result<(), String> {
+    async fn await_ready(&self, base: &str, program: &Path) -> Result<(), String> {
         let client = reqwest::Client::new();
         let deadline = Instant::now() + READY_TIMEOUT;
         loop {
@@ -147,7 +157,7 @@ impl Supervisor {
             if Instant::now() >= deadline {
                 return Err(format!(
                     "{} did not answer /health within {}s",
-                    python.display(),
+                    program.display(),
                     READY_TIMEOUT.as_secs()
                 ));
             }
@@ -184,7 +194,7 @@ async fn health_ok(client: &reqwest::Client, base: &str) -> bool {
     matches!(probe, Ok(res) if res.status().is_success())
 }
 
-fn spawn(python: &Path, root: &Path, port: &str) -> std::io::Result<Child> {
+fn spawn_python(python: &Path, root: &Path, port: &str) -> std::io::Result<Child> {
     let mut cmd = Command::new(python);
     cmd.arg(API_ENTRY)
         .arg("--host")
@@ -204,6 +214,47 @@ fn spawn(python: &Path, root: &Path, port: &str) -> std::io::Result<Child> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     cmd.spawn()
+}
+
+fn spawn_binary(binary: &Path, root: &Path, port: &str) -> std::io::Result<Child> {
+    let mut cmd = Command::new(binary);
+    cmd.arg("--host")
+        .arg(LOOPBACK)
+        .arg("--port")
+        .arg(port)
+        .arg("--bind")
+        .arg(root.join(OUTPUT_DIR))
+        .current_dir(root)
+        // Keep the embedding model in the app's data directory rather than in
+        // whatever home cache the launching user happens to have.
+        .env("FASTEMBED_CACHE_DIR", root.join("fastembed"))
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    cmd.spawn()
+}
+
+/// The sidecar Tauri copies beside the main executable for a bundled build.
+///
+/// Development has no such file and falls through to the project venv.
+pub(crate) fn bundled_binary() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    for name in ["quill-sidecar", "quill-sidecar.exe"] {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    // Tauri renames the target-suffixed source to the bare name when it bundles,
+    // but a local `target/<profile>` next to a hand-copied build can still hold
+    // the suffixed file. Accept either spelling.
+    let entries = std::fs::read_dir(&dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("quill-sidecar-") && entry.path().is_file() {
+            return Some(entry.path());
+        }
+    }
+    None
 }
 
 /// The port the sidecar must bind, taken from the URL the client already talks

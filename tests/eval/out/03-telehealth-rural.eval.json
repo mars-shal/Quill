@@ -1,0 +1,232 @@
+{
+  "slug": "03-telehealth-rural",
+  "domain": "Public health",
+  "prompt": "Evaluate whether telehealth expansion improves healthcare access in rural regions. Weigh access gains against broadband gaps, licensure and continuity of care.",
+  "usage": {
+    "prompt_tokens": 140,
+    "completion_tokens": 1026,
+    "total_tokens": 1166
+  },
+  "finish_reason": "stop",
+  "seconds": 90.4,
+  "model": "gemma4:latest",
+  "file": "03-telehealth-rural.md",
+  "chars": 4185,
+  "words": 553,
+  "detector": {
+    "model": "MayZhou/e5-small-lora-ai-generated-detector (ONNX int8)",
+    "chunks": 3,
+    "scores": [
+      0.9418,
+      0.9264,
+      0.7921
+    ],
+    "mean_ai_probability": 0.8868,
+    "max_ai_probability": 0.9418,
+    "fraction_chunks_ai": 1.0,
+    "grade": "F (strongly AI-like)",
+    "stylometry": {
+      "words": 557,
+      "sentences": 30,
+      "mean_sentence_words": 18.6,
+      "sentence_length_sd": 12.4,
+      "type_token_ratio": 0.56,
+      "repeated_4grams": 4,
+      "flesch_reading_ease": 7.7
+    },
+    "note": "A detector score is not proof of authorship; use it with the citation and plagiarism checks."
+  },
+  "verification": {
+    "dois": [],
+    "urls": [],
+    "url_checks": [],
+    "citations": [],
+    "reference_lines": [
+      {
+        "input": "Centers for Medicare & Medicaid Services. (2021). *Telehealth Services and Rural Health*. [Note: As a general government resource, a specific DOI is not provided, but the source is verifiable via CMS publications.]",
+        "status": "unverified",
+        "similarity": 0.336,
+        "best_match": {
+          "doi": "10.4135/9781412971942.n59",
+          "title": "Centers for Medicare and Medicaid Services (CMS)",
+          "year": 2009,
+          "venue": "Encyclopedia of Health Services Research"
+        },
+        "candidates": [
+          {
+            "doi": "10.4135/9781412971942.n59",
+            "title": "Centers for Medicare and Medicaid Services (CMS)",
+            "year": 2009,
+            "venue": "Encyclopedia of Health Services Research"
+          },
+          {
+            "doi": "10.4135/9781412963855.n252",
+            "title": "Centers for Medicare and Medicaid Services (CMS)",
+            "year": 2008,
+            "venue": "Encyclopedia of Global Health"
+          },
+          {
+            "doi": "10.1007/978-1-4899-7673-4_5-1",
+            "title": "Health Services Data: The Centers for Medicare and Medicaid Services (CMS) Claims Records",
+            "year": 2015,
+            "venue": "Data and Measures in Health Services Research"
+          }
+        ]
+      },
+      {
+        "input": "Davenport, T. H., & Kalakota, R. (2019). The future of care: Telehealth and the rural health workforce. *Journal of Rural Health*, *35*(2), 120–128. [Note: A specific DOI is not available for this general citation, but the journal and topic are verifiable.]",
+        "status": "unverified",
+        "similarity": 0.337,
+        "best_match": {
+          "doi": "10.1111/ajr.12920",
+          "title": "Offsite primary care providers using telehealth to support a sustainable workforce in rural and remote general practice: A rapid review of the literature",
+          "year": 2022,
+          "venue": "Australian Journal of Rural Health"
+        },
+        "candidates": [
+          {
+            "doi": "10.1037/e314372004-007",
+            "title": "Telehealth Benefits Available for Rural Health Care.",
+            "year": 1997,
+            "venue": "PsycEXTRA Dataset"
+          },
+          {
+            "doi": "10.1111/ajr.12920",
+            "title": "Offsite primary care providers using telehealth to support a sustainable workforce in rural and remote general practice: A rapid review of the literature",
+            "year": 2022,
+            "venue": "Australian Journal of Rural Health"
+          },
+          {
+            "doi": "10.22605/rrh649",
+            "title": "University rural health clubs: nurturing the future Australian rural workforce",
+            "year": 2007,
+            "venue": "Rural and Remote Health"
+          }
+        ]
+      }
+    ],
+    "verified_dois": 0,
+    "plagiarism": {
+      "checked_sentences": 5,
+      "flagged_sentences": 0,
+      "matches": [
+        {
+          "sentence": "Proponents argue that by decoupling medical consultation from physical proximity, telehealth fundamentally enhances access, offering specialized care—such as mental health services or cardiology consultations—to populations historically underserved by centralized medical infrastructure.",
+          "query": "Proponents argue that by decoupling medical consultation from physical proximity, telehealth fundamentally enhances access,",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "This immediate and scalable access gain is arguably the most compelling argument for telehealth’s positive impact on rural health.",
+          "query": "This immediate and scalable access gain is arguably the most compelling argument for telehealth’s",
+          "scholarly": [
+            {
+              "title": "Telehealth and information society: a critical study of emerging concepts in policy and practice",
+              "doi": "",
+              "url": "https://openalex.org/W1561527587",
+              "abstract": "This thesis explores a number of interrelated factors that influence the development of telehealth. Telehealth refers to health-related services that can be provided in electronic form over various telecommunications networks, including applications beyond clinical settings and reaching out to communities and homes. As such this study encompass different disciplines and draws not only on the medical tradition but also on information systems, social theory and ideas of information society. The study is based on the fundamental claim that technology does not follow a pre-determinate path but is shaped by people, who in turn are constrained by historical conditions and current structures. The research takes into consideration a number of such defining structures, including the organisation of healthcare in Britain, the health policy process, strategies for the employment of information and communications technologies (ICTs), conflicting ethical traditions and their manifestations in evaluation processes, and visions of an information society. The theoretical position and research approach is informed by critical theory. Thus the work focuses on the different, often conflicting, interests of varied stakeholders. It also unveils factors constraining social aims to which telehealth could aspire, e.g. reducing social exclusion and supporting empowerment of patients and citizens. Insights into these concepts and their practical manifestations are explored through a set of linked case studies, which investigate a variety of telehealth projects and initiatives in the London Borough of Lewisham. The thesis' contribution is twofold - practical and theoretical. The practical contribution is aimed at those who work in and study telehealth, offering a new approach and focus that is not substantially found in other telehealth studies. In this the thesis makes a contribution to the ongoing debates about telehealth's potential implications for the healthcare process. The theoretical contribution is found in the thesis' re-affirmation of the applicability of critical theory to the development of ICT-based social and organisational innovations, re-conceptualised in the light of post-modern and information society theories."
+            },
+            {
+              "title": "Access to mobile health:Shifting rights, responsibilities, and relationships",
+              "doi": "",
+              "url": "https://openalex.org/W7154919131",
+              "abstract": "The future of healthcare is digital, according to the World Health Organisation. From wearable sensors and virtual care clinics to AI-driven diagnostics, digital health holds promise for universal health coverage. However, real challenges remain in its development and implementation, particularly in meeting the fundamental healthcare needs of vulnerable groups, including older adults, people living in remote areas and patients with chronic diseases. Grounded in the right to health under Article 12 of the International Covenant on Economic, Social and Cultural Rights and in core bioethical principles, the dissertation integrates empirical findings with theoretical frameworks to examine how mobile health shifts rights, responsibilities and relationships. The dissertation comprises two parts: case studies from China and a broader analysis of digital health challenges across different settings. Key legal and ethical dimensions examined include the right to health, justice, data privacy, and autonomy. Findings from case studies in China indicate a need to strengthen regulatory approaches to the commodification of mobile health to ensure equitable access, as well as to enhance health data governance framework that better reconcile individual fundamental rights with private and public interests. The analysis of the broader digital health context suggests a potential shift toward healthcare consumerism, with increasing emphasis on choice, efficiency and individual responsibility. This development may challenge shared decision-making and reshape relationships among patients, physicians and the broader system. The dissertation has both academic and societal significance. It contributes normative insights, arguing for a conceptual shift from an individualistic to a more relational understanding of mobile health. Access to mobile health is not an isolated individual act, but a process shaped by interpersonal relationships and social determinants of health. By developing a new framework that combines the Capability Approach with the right to health, it also offers practical guidance for policymakers to better integrate mobile health into healthcare systems. The thesis further suggests a collective approach to responsibilities in evolving digital health environments."
+            },
+            {
+              "title": "Wholesale Broadband Access and Regulatory Appeals in the Canadian Telecommunications Industry: An Institutional Analysis",
+              "doi": "",
+              "url": "https://openalex.org/W2726254606",
+              "abstract": "This thesis focuses on Canada’s federal regulatory appeal procedure, the “Petition to the Governor in Council” (GiC), and questions how it integrates with other institutional actors in the country’s telecommunications policymaking apparatus. The research applies the Institutional Analysis and Development framework methodology to a recent GiC appeal decision in favour of mandated wholesale broadband access to fibre-to-the-premises facilities. This appeal decision, the thesis suggests, helps to illustrate how Canada’s telecommunications regulator, the CRTC, has maintained its ability to shape the specifics of policy outcomes. Despite GiC jurisdiction over the direction to telecommunications regulation, as well as obstructions to CRTC policy development that can transpire as a byproduct of GiC appeal decisions, the findings show that the CRTC has nevertheless defended its status as the lead actor in the regime. The thesis also points to areas where the GiC procedure would benefit from improved transparency and strengthened conduits for regional representation."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "Where broadband gaps exist, the promise of virtual care evaporates, creating a new form of exclusion that disproportionately affects low-income and elderly populations who lack adequate home connectivity or the necessary digital literacy.",
+          "query": "Where broadband gaps exist, the promise of virtual care evaporates, creating a new form",
+          "scholarly": [
+            {
+              "title": "Playing Nature: The Virtual Ecology of Game Environments",
+              "doi": "",
+              "url": "https://openalex.org/W1856135067",
+              "abstract": "Playing Nature proposes new methods and objects for environmental inquiry through ecologically minded engagement with the imaginative worlds of contemporary gaming. The work recognizes that though some of the most sophisticated scholarship on natural representation has evolved within literary environmental criticism, as a humanistic field steeped in Romanticism, ecocriticism has tended to exclude designed landscapes and modes of mediated interaction perceived as detracting from direct experience of the natural world. At the same time, new media theorists and practitioners have generally overlooked the ways in which emerging technologies are implicated in and by natural systems. Most mainstream games, for instance, offer game environments as simplistic vehicles for graphical spectacle or extractive resource management. Rather than perpetuate the popular notion that the natural and the digital are realms inherently inimical to each other, Playing Nature contends that our experience of the natural world is not only increasingly mediated by digital technology, but also that our interactions with these technomediated natures inevitably shape our conceptions of individual and collective agency in relation to our environment. Despite the present historical moment, in which environmental movements are often stymied in their efforts to depict the scale and urgency of global environmental crisis (most notably in the case of climate change), games remain largely untapped in terms of their potential to allow players to explore manifold ecological futures. Because successful gameplay requires that players negotiate environments by discovering their operative logics, games are structurally predisposed toward creating meaningful interaction within artificially intelligent environments and modeling dynamics long at the core of ecological thinking, among them interdependence, feedback, scale, and human limitation. Games offer imagined worlds that can compress centuries of change into the matter of hours, range from microcosmic to macrocosmic extremes, and dramatize recuperation just as readily as catastrophe, virtual ecologies that are mirrors to our modernity."
+            },
+            {
+              "title": "Towards Cleaner, Greener Future: Energy Efficient Sustainable Hydrogel Composites for Solar Driven Photothermal Water Evaporation and Purification",
+              "doi": "10.26599/ecs.2026.9600032",
+              "url": "https://openalex.org/W7168291423",
+              "abstract": "Abstract This comprehensive review presents hydrogel-based water evaporators for solar desalination and purification, focusing on ecological sustainability and mechanism-driven design. Unlike conventional Interfacial Solar-Driven Evaporation (ISDE) systems that prioritize photothermal conversion efficiency, this work emphasizes fundamental thermodynamic and lifecycle considerations for long-term sustainability. We propose a mechanism-driven framework using ecological hydrogel composites derived from renewable, biodegradable, and non-toxic precursors like cellulose, alginate, and starch. A key aspect is regulating water states within hydrogel matrices, particularly forming \"intermediate water\" that reduces vaporization enthalpy and enhances evaporation rates beyond bulk water limits. We correlate material properties like porosity, thermal conductivity, and optical absorption with thermodynamic parameters including latent heat, temperature gradient, and mass flux. The review also covers molecular hydration engineering, dynamic interfacial effects, and multifunctional systems using waste-derived photothermal materials like biochar. Challenges like fouling, salt accumulation, and scalability are evaluated. By bridging molecular insights with system-scale performance, this work shifts from material-centric to mechanism-oriented design, providing a sustainable roadmap for next-generation desalination technologies that minimize environmental risks."
+            },
+            {
+              "title": "Creating Markets In Namibia : Creating Resilient and Inclusive Markets - Country Private Sector Diagnostic",
+              "doi": "10.1596/38334",
+              "url": "https://openalex.org/W4315851430",
+              "abstract": "Since achieving independence in 1990, Namibia’s remarkable growth has been fueled by foreign direct investment and enabled by prudent economic management. Since 2016, however, growth has declined steadily and the economy fell into recession, exposing the vulnerability of Namibia’s economic growth model to external and climate shocks. These challenges were exacerbated by the Coronavirus (COVID-19) pandemic, an economic slowdown in neighboring South Africa, worsening terms of trade on the back of declining global demand and commodity prices, a decline in Southern African Customs Union (SACU) revenues, and the effects of crippling droughts on agricultural and industrial production. Namibia has very high levels of poverty and inequality, which are largely driven by high levels of unemployment. The primary objective of this Country Private Sector Diagnostic (CPSD) is to identify near and medium-term reform opportunities to revitalize the private sector and help reposition Namibia’s growth on a green, resilient, and inclusive trajectory. This CPSD explores priority reform opportunities to address five cross-cutting bottlenecks: (1) enhancing the role and performance of the state-owned enterprise (SOE) sector through a more effective competition policy environment; (2) strengthening implementation of the public-private partnership (PPP) framework to expand private investments, especially in infrastructure; (3) leveraging the potential for digital transformation of the economy; (4) addressing inefficiencies in logistics and trade facilitation; and (5) tapping opportunities in the water sector for green and resilient growth. The diagnostic then looks in depth at three sectors prioritized by the Namibian government - renewable energy, climate-smart agribusiness, and housing, and provides recommendations for reducing sector-specific bottlenecks to stimulate growth potential."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "A provider licensed in one state may face legal impediments when treating a patient across state lines, even if the patient is physically located within that state.",
+          "query": "A provider licensed in one state may face legal impediments when treating a patient",
+          "scholarly": [
+            {
+              "title": "Legal Impediments to the Diffusion of Telemedicine",
+              "doi": "",
+              "url": "https://openalex.org/W1564385430",
+              "abstract": "Throughout history, as technology (including information technology) has evolved, so has the way that disease is diagnosed, treated, and managed.For close to half a century, clinicians and health services researchers have been investigating the use of telecommunication and information technology to provide access to care outside the traditional model of faceto-face encounters between providers and patients.'The use of technology to provide health care to patients where distance separates the participants is generally referred to as telemedicine.2 Although the practice is not new,"
+            },
+            {
+              "title": "The Resolution of Legal Impediments to the Manufacture and Administration of an AIDS Vaccine",
+              "doi": "",
+              "url": "https://openalex.org/W1484856070",
+              "abstract": "AIDS is the end condition of a viral infection.This opinion is held by the overwhelming majority of responsible scientists and others who are working in the field.However, there are more than two dozen cases worldwide that exhibit AIDS-like features yet exhibit no sign of the AIDS virus.David Perlman, A Race to Explain Cases of AIDS Without HIV, S.F.CHRON., June 24, 1992, at A20 (describing reports at the Eighth International Conference on AIDS in Amsterdam in July, 1992) [hereinafter Perlman, A Race].So far, laboratory analysis has shown only that the causative organism, if it exists, is not related to any of the four known human retroviruses.Id.See also David Perlman, People Who Have AIDS But Not HIV, S.F.CHRON., July 20, 1992, at Al.The AIDS agent is the Human Immunodeficiency Virus, or HIV.The HIV virus is transmitted primarily through sexual contact.Lisa M. Krieger, Longterm Survivors Defy the Statistics, S.F.CHRON., June 21, 1992, at A14.It may also be transmitted through needle-sharing by intravenous drug users, through infected blood used in transfusions, and by passage across the placental barrier from an infected mother to her fetus.Other modes of transmission, such as biting (which would inject the virus from saliva into a wound), may be possible but are highly unlikely.Id.Once a person has an HIV infection, the progression of the disease to AIDS appears to be relentless, although there are, to date, a few healthy, long-term survivors who coexist with the disease.Id.The rapidity of the onset of AIDS varies from individual to individual and may take many years.Perlman, A Race, supra, at A20."
+            },
+            {
+              "title": "SHARIAH- COMPLIANT MEDICAL TOURISM: AN EVALUATION OF THE LEGAL IMPEDIMENTS OF ITS IMPLEMENTATION IN MALAYSIA",
+              "doi": "10.31436/iiumlj.v32i1.842",
+              "url": "https://openalex.org/W4399211217",
+              "abstract": "Malaysia is one of the first countries in the world to introduce the halal standards MS1500: 2004 in its vision to become the global halal hub. With the inception of halal standards in 2004, the practical guidelines for the food industry on the production, preparation, handling and storage of halal food are now available in a more structured and convenient form. With the advancement of technology in today’s world, the focus of halal standards is no longer confined to the food industry. The initiative to introduce halal standards has now been extended to include other industries such as cosmetics, finance, fashion and healthcare. In the healthcare industry, the demand for halal products is accelerating, thanks to the growing awareness of Muslims on the obligation to consume and use halal products. The healthcare industry too has a major potential for demand since the products are also consumable, specifically pharmaceutical products such as medicines and vaccines. Nonetheless, there are legal challenges that pose impediments to further promoting shariah-compliant medical tourism in Malaysia. This study which is doctrinal in nature, analyses the existing legal framework of the healthcare system and medical tourism in Malaysia. Despite the promising demand for halal medical products, there are challenges in promoting this special segment of the industry to everyone. Uncertainty regarding the correct term to portray Islamic medical tourism, various versions of shariah-compliant medical tourism, lack of standardisation of shariah principles, the inadequacy of legal regulatory framework, and the proliferation of international halal certification bodies, will subsequently impede the growth of shariah-compliant medical tourism in Malaysia. The study attempts to discuss these aspects and provides some suggestions to promote shariah-compliant medical tourism globally."
+            }
+          ],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        },
+        {
+          "sentence": "In conclusion, while telehealth undeniably offers unprecedented gains in *initial* access to specialized medical information and routine care for rural populations, its overall success is deeply conditional.",
+          "query": "In conclusion, while telehealth undeniably offers unprecedented gains in *initial* access to specialized medical",
+          "scholarly": [],
+          "web": [],
+          "best_similarity": 0.0,
+          "best_title": "",
+          "web_phrase_found": false,
+          "flagged": false
+        }
+      ]
+    }
+  },
+  "citation_grade": [
+    "F",
+    0.0
+  ],
+  "plagiarism_grade": [
+    "A",
+    0.0
+  ],
+  "overall": "D"
+}

@@ -71,6 +71,20 @@ handlers.api_chat = (args) => {
 // would leave those overrides applying to a command nothing calls any more.
 handlers.api_chat_stream = (args) => handlers.api_chat(args)
 
+// The interview is a separate route on purpose: it must not write, research or
+// answer. This stub keeps that distinction visible in the test.
+handlers.api_questionnaire = () => ({
+  questions: [{
+    header: 'Audience',
+    question: 'Who is reading the notes?',
+    multiSelect: false,
+    options: [
+      { label: 'Engineering', description: 'The delivery team' },
+      { label: 'Leadership', description: 'Decision makers' },
+    ],
+  }],
+})
+
 await import('../src/main.jsx')
 await awaitBoot()
 restoreConsole()
@@ -493,6 +507,36 @@ test('a WRITE turn lands in the document, and the bubble says so', async () => {
   }
 })
 
+test('a REWRITE turn lands in the document too', async () => {
+  const tile = root.querySelector('.document-tile:not(.new-document-tile)')
+  await click(tile)
+  const article = root.querySelector('.editor-surface .ProseMirror')
+  assert.ok(article, 'the editor is mounted')
+
+  const working = handlers.api_chat
+  handlers.api_chat = () => ({
+    reply: '## Lando Norris\n\nThe British driver joined McLaren in 2019.',
+    transport: 'sidecar',
+    task: 'REWRITE',
+    sources: [],
+  })
+  try {
+    await send('rewrite this about Lando Norris')
+    await tick(80)
+
+    const last = [...root.querySelectorAll('.chat-message')].at(-1)
+    assert.ok(last.classList.contains('is-written'), 'the rewrite is marked as a document write')
+    assert.match(last.textContent, /written to the document/i)
+    assert.match(
+      root.querySelector('.editor-surface .ProseMirror').textContent,
+      /Lando Norris/,
+      'a rewrite is the draft after the instruction, not a chat-only answer',
+    )
+  } finally {
+    handlers.api_chat = working
+  }
+})
+
 test('a blocked WRITE keeps its notice in the bubble and leaves the document alone', async () => {
   const tile = root.querySelector('.document-tile:not(.new-document-tile)')
   await click(tile)
@@ -555,7 +599,7 @@ test('a conversation belongs to one document, not the window', async () => {
   // The reader may keep several drafts open over a day. A question about one
   // must not follow them into another, which is what the single global
   // transcript did.
-  const title = root.querySelector('.breadcrumb strong')?.textContent
+  const title = root.querySelector('.breadcrumb-title .document-title-button')?.textContent
   assert.ok(title, 'a document is open before switching')
   assert.ok(composer(), 'the assistant is mounted in the editor')
 
@@ -590,6 +634,23 @@ const pickFile = async (name, contents, type = 'text/markdown') => {
   input.dispatchEvent(new window.Event('change', { bubbles: true }))
   await tick(80)
 }
+
+test('the chosen concept mode travels with the turn', async () => {
+  const before = chatCalls.length
+  const toggle = root.querySelector('.chat-concept')
+  assert.ok(toggle, 'the composer offers a concept mode')
+  assert.match(toggle.textContent, /Reference/, 'reference is the default')
+
+  await click(toggle)
+  assert.match(root.querySelector('.chat-concept').textContent, /Survey/)
+  await send('write this up')
+  await tick(120)
+  assert.equal(chatCalls.length, before + 1, 'the turn reaches the transport')
+  assert.equal(chatCalls.at(-1).conceptMode, 'survey', 'survey is passed through')
+
+  await click(root.querySelector('.chat-concept'))
+  assert.match(root.querySelector('.chat-concept').textContent, /Reference/, 'the mode toggles back')
+})
 
 test('an attached text file travels to the provider, not just its name', async () => {
   const before = chatCalls.length
@@ -634,4 +695,30 @@ test('an unreadable file is shown with its reason instead of being sent', async 
   const dismiss = chip.querySelector('button')
   await click(dismiss)
   assert.equal(root.querySelector('.attachment-chip'), null, 'dismissing clears it')
+})
+
+
+test('interview asks a questionnaire, then sends the answers with the turn', async () => {
+  const before = chatCalls.length
+  const toggle = root.querySelector('[aria-label="Ask clarifying questions"]')
+  assert.ok(toggle, 'the assistant header offers a clarifier')
+  await click(toggle)
+
+  await send('draft the tailwind meeting notes')
+  await tick(160)
+  assert.equal(chatCalls.length, before, 'the interview does not start a chat turn')
+  const option = root.querySelector('.questionnaire-option')
+  assert.ok(option, 'the reply renders answer options')
+  await click(option)
+  await tick(320)
+
+  assert.equal(chatCalls.length, before + 1, 'the next turn reaches the chat transport')
+  const { messages } = chatCalls.at(-1)
+  assert.match(messages.at(-1).content, /Interview answers:/)
+  assert.match(messages.at(-1).content, /Audience: Engineering/)
+  assert.equal(
+    root.querySelector('[aria-label="Ask clarifying questions"]').getAttribute('aria-pressed'),
+    'false',
+    'the clarifier is one-shot',
+  )
 })

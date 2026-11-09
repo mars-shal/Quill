@@ -1,4 +1,5 @@
 import os
+import re
 
 from loguru import logger
 
@@ -13,10 +14,26 @@ from utilis.coverage import (
     gap_research_enabled,
     gap_research_pages_budget,
     gap_research_queries_budget,
+    gap_research_rounds,
     gap_research_sections_budget,
 )
 from utilis.store import SqliteDatabase
 from utilis.model import Agent
+
+# A request to tidy the current document is not a request to write a new one on
+# a different subject. Those prompts have no topic of their own to compare with
+# the document, so the relevance gate must stand down; otherwise "format this
+# and use LaTeX" is refused as an unrelated thesis request.
+_FORMAT_INTENT = re.compile(
+    r"\b(format|reformat|clean\s*up|cleanup|tidy|typeset|latex|proofread|"
+    r"line[- ]edit|copy[- ]?edit|fix\s+(?:the\s+)?formatting)\b",
+    re.IGNORECASE,
+)
+_NEW_SUBJECT_INTENT = re.compile(
+    r"\b(write|draft|compose|generate|create|produce|expand|rewrite|"
+    r"summari[sz]e|analyse|analyze|critique|review)\b",
+    re.IGNORECASE,
+)
 
 
 def _research_note(research: dict) -> str:
@@ -85,6 +102,13 @@ class Task:
             "1", "true", "yes",
         ):
             return ""
+        # "can u format this and use latex" carries no competing subject; the
+        # gate exists for prompts that ask for one. Only a formatting request
+        # without a write verb stands down, so "write a thesis about X, in
+        # LaTeX" is still checked.
+        if _FORMAT_INTENT.search(prompt) and not _NEW_SUBJECT_INTENT.search(prompt):
+            logger.info("prompt/document relevance check skipped: formatting request")
+            return ""
         floor = 0.0
         try:
             from utilis.embeddings import Embedder
@@ -140,8 +164,7 @@ class Task:
         logger.info("prompt/document relevance: similarity={:.3f}", score)
         return ""
 
-    @staticmethod
-    def _survey_guard(document: dict, concept_mode: str) -> str:
+    def _survey_guard(self, document: dict, concept_mode: str) -> str:
         """Block an accidental survey run on a large document.
 
         Survey extracts an LLM concept for *every* section, so cost scales with
@@ -167,10 +190,64 @@ class Task:
             f"reference mode."
         )
 
+    @staticmethod
+    def _source_plan(document: dict, prompt: str = "") -> dict:
+        """A writing plan built from the headings the reader already has.
+
+        The planner used to invent a fresh outline every time, which is why a
+        meeting-notes template came back as "Introduction / Historical
+        background / Mechanisms of change": useful prose, but not the document
+        the reader asked to fill. When the draft has two or more real headings,
+        those headings become the plan, in order, and the writer writes under
+        them. Placeholder headings ("New section", "Section 2") are ignored so a
+        blank template still lets the planner do its job.
+        """
+        placeholder = re.compile(
+            r"^(new section|section\s*\d+|untitled(\s+.*)?|heading\s*\d+)$",
+            re.IGNORECASE,
+        )
+
+        def text_of(section: dict) -> str:
+            parts: list[str] = []
+            for block in section.get("blocks") or []:
+                if isinstance(block, dict):
+                    value = block.get("content")
+                else:
+                    value = block
+                if value:
+                    parts.append(str(value).strip())
+            return " ".join(part for part in parts if part).strip()
+
+        def node(section: dict, level: int) -> dict | None:
+            title = str(section.get("title") or "").strip()
+            if not title or placeholder.match(title) or title.lower() == "preamble":
+                return None
+            body = text_of(section)
+            # A real sentence is a better claim than a generic one; a short
+            # template cue ("Name — role") is not, so the prompt carries the
+            # subject instead.
+            if len(body) >= 40:
+                claim = " ".join(body.split())[:240]
+            else:
+                ask = " ".join(str(prompt or "").split())[:220]
+                claim = f"Write {title} for: {ask}".strip()
+            entry: dict = {"title": title, "claim": claim}
+            children = [node(child, level + 1) for child in section.get("children") or []]
+            children = [child for child in children if child]
+            if children:
+                entry["chapters" if level == 1 else "subsections"] = children
+            return entry
+
+        sections = [node(section, 1) for section in document.get("sections") or []]
+        sections = [section for section in sections if section]
+        if len(sections) < 2:
+            return {}
+        return {"sections": sections}
+
     @timed("Task.Write")
     def Write(
         self, prompt: str, document_id: str, session_name: str = "",
-        concept_mode: str = "reference",
+        concept_mode: str = "reference", token_saving: bool = False,
     ):
         document = self.database.get(document_id) or {}
         if not document:
@@ -200,6 +277,15 @@ class Task:
         research_engine = ResearchEngine(agent=self.agent)
         research = research_engine.run(concept["concept"], document_id, prompt=prompt)
         plan = WritingEngine(model=self.agent).planner(concept["concept"])
+        # The reader's own headings win over the planner's invented ones. This
+        # is the difference between filling in a document and replacing it.
+        source_plan = self._source_plan(document, prompt)
+        if source_plan:
+            plan = source_plan
+            logger.info(
+                "writing against source structure: {} section(s)",
+                len(source_plan.get("sections") or []),
+            )
         context = (
             f"{concept['concept']}\n\nRESEARCH:\n{research['corpus']}"
             if research.get("corpus")
@@ -211,14 +297,38 @@ class Task:
         written = writer.writer(plan, context, research_note, evidence=evidence)
 
         gap = None
-        if gap_research_enabled():
-            gap = self._close_research_gaps(
-                writer, research_engine, research, concept["concept"], prompt
-            )
-            if gap.get("document") is not None:
-                written = gap["document"]
-                research = gap["research"]
-                research_note = gap["research_note"]
+        if gap_research_enabled() and not token_saving:
+            reports = []
+            for _round in range(gap_research_rounds()):
+                result = self._close_research_gaps(
+                    writer, research_engine, research, concept["concept"], prompt
+                )
+                reports.append(result["report"])
+                if result.get("document") is None:
+                    break
+                written = result["document"]
+                research = result["research"]
+                research_note = result["research_note"]
+            if reports:
+                gap = {
+                    "rounds": len(reports),
+                    "queries": [
+                        query
+                        for report in reports
+                        for query in (report.get("queries") or [])
+                    ],
+                    "pages_added": sum(
+                        int(report.get("pages_added") or 0) for report in reports
+                    ),
+                    "rewritten": sorted({
+                        title
+                        for report in reports
+                        for title in (report.get("rewritten") or [])
+                    }),
+                    "still_placeholder": reports[-1].get("still_placeholder", []),
+                    "skipped": reports[-1].get("skipped", ""),
+                    "reports": reports,
+                }
 
         plagiarism = PlagiarismEngine(agent=self.agent).run(
             written,
@@ -240,6 +350,10 @@ class Task:
             "research_relevant_pages": research.get("relevant_pages", 0),
             "low_research": bool(research.get("low_research")),
             "write_gate": writer.last_gate,
+            "source_structure": [
+                str(section.get("title") or "")
+                for section in (source_plan.get("sections") or [])
+            ] if source_plan else [],
             "plagiarism": plagiarism,
             "gap_research": gap,
         }
@@ -368,6 +482,9 @@ class Task:
             return {"document": None, "report": report}
 
         merged_pages = list(research_engine.last_pages or []) + new_pages
+        # Make the merge cumulative. A second gap round must assess the corpus
+        # produced by the first, not fall back to the original page list.
+        research_engine.last_pages = merged_pages
         merged_corpus = research_engine.corpus_from_pages(new_pages)
         if corpus:
             merged_corpus = f"{corpus}\n\n{merged_corpus}"
@@ -408,6 +525,15 @@ class Task:
             merged_note,
             evidence=_evidence_of(merged),
         )
+        # Keep the writer's own record in step with the splice. A second gap
+        # round reads `last_sections` to decide what is still a placeholder;
+        # leaving the first-pass outcome there would re-target the sections
+        # that just succeeded and silently ignore the ones that did not.
+        for index, section in enumerate(writer.last_sections):
+            key = writer._normalise(section.get("title") or section.get("claim"))
+            outcome = rewritten["outcomes"].get(key)
+            if outcome:
+                writer.last_sections[index] = {**section, **outcome}
         replacements = {
             key: outcome["block"]
             for key, outcome in rewritten["outcomes"].items()
@@ -471,6 +597,12 @@ class Task:
 
         prompt_text = concept.get("concept") or document.get("title") or prompt
         plan = WritingEngine(model=self.agent).planner(f"{prompt_text}\n\nRewrite guidance: {prompt}")
+        # A rewrite of a template is still a fill of that template. Without
+        # this the planner invents a new outline and the reader's headings --
+        # Attendees / Decisions / Action items -- disappear on the rewrite.
+        source_plan = self._source_plan(document, prompt)
+        if source_plan:
+            plan = source_plan
         context = (
             f"{prompt_text}\n\nRESEARCH:\n{research.get('corpus', '')}"
             if research.get("corpus")
@@ -495,6 +627,10 @@ class Task:
             "markdown": written,
             "concept": prompt_text,
             "research": research.get("summary", ""),
+            "source_structure": [
+                str(section.get("title") or "")
+                for section in (source_plan.get("sections") or [])
+            ] if source_plan else [],
             "plagiarism": plagiarism,
         }
         self.database.set(f"written:{document_id}", payload)

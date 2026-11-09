@@ -26,6 +26,7 @@ import { Icon } from '../Icon.jsx'
 import { hasWebGL2 } from '../platform/capabilities.js'
 import { EffectBoundary } from '../ErrorBoundary.jsx'
 import { getFastTransition, getMotionTransition } from './motion.js'
+import { renderChatMarkdown } from './chatMarkdown.js'
 import { readTableSize, resizeTable, tableSizes } from '../editor/tableSize.js'
 import {
   Select,
@@ -40,6 +41,7 @@ import {
   chat,
   describeFailure,
   listProviderModels,
+  questionnaire,
 } from '../platform/store.js'
 
 /**
@@ -72,6 +74,17 @@ const TRANSCRIPT_KEY = 'quill:chat-transcript:v1'
 const transcriptKey = (documentId) => `${TRANSCRIPT_KEY}:${documentId}`
 
 const SUGGESTIONS = ['Summarize draft', 'Tighten intro', 'Suggest three titles']
+
+/**
+ * Model variants, in the sense the model catalog uses the word: the same model
+ * asked to spend a different amount of effort. They are not different models,
+ * so the picker above still names the model; this only sets the budget.
+ */
+const VARIANTS = [
+  { id: 'fast', label: 'Fast', hint: 'Short answers, minimal research. Best for quick edits.' },
+  { id: 'balanced', label: 'Balanced', hint: 'The normal mix of research and writing.' },
+  { id: 'deep', label: 'Deep', hint: 'More reasoning and longer drafts. Uses more tokens.' },
+]
 
 /**
  * The model picker is a hand-built listbox (2026-11-01, by design request).
@@ -661,7 +674,7 @@ function attachmentPrompt(attachment) {
 }
 
 /** The message box, its controls and the send button. */
-function ChatComposer({ input, setInput, send, mode, setMode, attachment, setAttachment, fileRef, sendButton }) {
+function ChatComposer({ input, setInput, send, mode, setMode, conceptMode, setConceptMode, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, sendButton, busy = false }) {
   // The input is cleared before the read so picking the same file twice fires
   // change again; the File object itself stays valid after the reset.
   const pickFile = async (event) => {
@@ -682,8 +695,9 @@ function ChatComposer({ input, setInput, send, mode, setMode, attachment, setAtt
         value={input}
         onChange={(event) => setInput(event.target.value)}
         onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }}
-        placeholder={mode === 'Ask' ? 'Ask about this draft…' : 'Suggest a revision…'}
+        placeholder={busy ? 'Working…' : mode === 'Ask' ? 'Ask about this draft…' : 'Suggest a revision…'}
         rows="1"
+        disabled={busy}
       />
       <div className="chat-controls">
         <div className="chat-control-left">
@@ -696,6 +710,28 @@ function ChatComposer({ input, setInput, send, mode, setMode, attachment, setAtt
           />
           <button className="chat-control" type="button" aria-label="Attach a file" title="Attach a text file" onClick={() => fileRef.current?.click()}><Icon name="attach" size={15} /></button>
           <button className={`chat-mode ${mode === 'Auto' ? 'active' : ''}`} type="button" aria-pressed={mode === 'Auto'} onClick={() => setMode((value) => value === 'Ask' ? 'Edit' : 'Ask')}>{mode} <Icon name="down" size={12} /></button>
+          <button
+            className={`chat-mode chat-concept ${conceptMode === 'survey' ? 'active' : ''}`}
+            type="button"
+            title="Concept extraction: Reference follows the whole document; Survey extracts a concept for every selected section."
+            aria-label={`Concept mode: ${conceptMode === 'survey' ? 'Survey' : 'Reference'}`}
+            aria-pressed={conceptMode === 'survey'}
+            onClick={() => setConceptMode((value) => value === 'survey' ? 'reference' : 'survey')}
+          >
+            {conceptMode === 'survey' ? 'Survey' : 'Reference'} <Icon name="down" size={12} />
+          </button>
+          <button
+            className="chat-mode chat-variant"
+            type="button"
+            title={VARIANTS.find((entry) => entry.id === variant)?.hint || 'Model effort'}
+            aria-label={`Model variant: ${VARIANTS.find((entry) => entry.id === variant)?.label || 'Balanced'}`}
+            onClick={() => {
+              const at = VARIANTS.findIndex((entry) => entry.id === variant)
+              setVariant(VARIANTS[(at + 1) % VARIANTS.length].id)
+            }}
+          >
+            {VARIANTS.find((entry) => entry.id === variant)?.label || 'Balanced'} <Icon name="down" size={12} />
+          </button>
         </div>
         {sendButton}
       </div>
@@ -715,6 +751,121 @@ function describeTransport(transport, task) {
   if (!task) return 'Answered by the writing service'
   const article = /^[AEIOU]/.test(task) ? 'An' : 'A'
   return `${article} ${task.toLowerCase()} turn, answered by the writing service`
+}
+
+/** One assistant answer, rendered as Markdown instead of literal asterisks. */
+function ChatMarkdown({ text }) {
+  const html = useMemo(() => renderChatMarkdown(text), [text])
+  return <div className="message-markdown" dangerouslySetInnerHTML={{ __html: html }} />
+}
+
+/**
+ * A Claude-style clarifying questionnaire.
+ *
+ * One question at a time, with numbered answers, a free-text “something else”
+ * row and a step counter. The card is deliberately compact: it is a short
+ * interview before a write, not a form that pushes the conversation away.
+ */
+function QuestionnaireCard({ questions, answered, answers, onSubmit }) {
+  const [step, setStep] = useState(0)
+  const [chosen, setChosen] = useState({})
+  const [custom, setCustom] = useState({})
+  const total = questions.length
+  const question = questions[Math.min(step, total - 1)]
+
+  const collectedFrom = (extra = {}) => questions.map((entry, index) => {
+    const typed = String(extra[index]?.custom ?? custom[index] ?? '').trim()
+    const picked = [...(extra[index]?.chosen ?? chosen[index] ?? [])]
+    if (typed) picked.push(typed)
+    return { header: entry.header, question: entry.question, answers: picked }
+  })
+
+  const finish = (extra) => onSubmit(collectedFrom(extra))
+  const advance = (extra) => {
+    if (step + 1 < total) setStep(step + 1)
+    else finish(extra)
+  }
+
+  const choose = (label) => {
+    if (question.multiSelect) {
+      setChosen((current) => {
+        const list = current[step] || []
+        return {
+          ...current,
+          [step]: list.includes(label) ? list.filter((entry) => entry !== label) : [...list, label],
+        }
+      })
+      return
+    }
+    const nextChosen = { ...chosen, [step]: [label] }
+    setChosen(nextChosen)
+    // Let the chosen row paint before the next question replaces it.
+    window.setTimeout(() => advance({ [step]: { chosen: [label] } }), 140)
+  }
+
+  if (answered) {
+    return (
+      <div className="questionnaire is-answered">
+        <span className="questionnaire-done"><Icon name="check" size={12} /> Answers sent</span>
+        {(answers || []).filter((entry) => entry.answers.length).map((entry) => (
+          <p key={entry.header}><strong>{entry.header}</strong> {entry.answers.join('; ')}</p>
+        ))}
+      </div>
+    )
+  }
+
+  const list = chosen[step] || []
+  return (
+    <div className="questionnaire">
+      <div className="questionnaire-head">
+        <span>{question.header}</span>
+        <span className="questionnaire-progress">{step + 1} of {total}</span>
+      </div>
+      <p className="questionnaire-title">{question.question}</p>
+      <div className="questionnaire-options" role={question.multiSelect ? 'group' : 'radiogroup'}>
+        {question.options.map((option, index) => (
+          <button
+            key={option.label}
+            type="button"
+            className={`questionnaire-option${list.includes(option.label) ? ' is-chosen' : ''}`}
+            aria-pressed={list.includes(option.label)}
+            onClick={() => choose(option.label)}
+          >
+            <span className="questionnaire-index" aria-hidden="true">{index + 1}</span>
+            <span className="questionnaire-option-copy">
+              <strong>{option.label}</strong>
+              {option.description && <small>{option.description}</small>}
+            </span>
+            {list.includes(option.label) && <Icon name="check" size={13} />}
+          </button>
+        ))}
+        <label className="questionnaire-other">
+          <span className="questionnaire-index" aria-hidden="true">+</span>
+          <input
+            type="text"
+            value={custom[step] || ''}
+            placeholder="Something else"
+            onChange={(event) => setCustom((current) => ({ ...current, [step]: event.target.value }))}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              advance({ [step]: { custom: event.currentTarget.value } })
+            }}
+          />
+        </label>
+      </div>
+      <div className="questionnaire-actions">
+        <button className="questionnaire-skip" type="button" onClick={() => advance()}>
+          Skip
+        </button>
+        {question.multiSelect && (
+          <button className="questionnaire-submit" type="button" onClick={() => advance()}>
+            {step + 1 < total ? 'Next' : 'Finish'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, rightOpen, effectsActive, getDraft, onWriteToDocument }) {
@@ -814,9 +965,42 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const [typing, setTyping] = useState(false)
   // Turns typed while one is thinking are held here, in order, and dispatch
   // when the composer goes idle (see the flush effect after `send`).
-  const [queued, setQueued] = useState([])
-  const dispatchRef = useRef(null)
   const [mode, setMode] = useState('Auto')
+  // `reference` blends the prompt with the document; `survey` extracts a
+  // concept per selected section. The mode only reaches a WRITE-shaped turn;
+  // answers and research ignore it, but the choice is kept for the next one.
+  const [conceptMode, setConceptMode] = useState(() => {
+    try {
+      return localStorage.getItem('quill:concept-mode') === 'survey' ? 'survey' : 'reference'
+    } catch {
+      return 'reference'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('quill:concept-mode', conceptMode)
+    } catch {
+      // A disabled storage quota must not break the composer.
+    }
+  }, [conceptMode])
+  const [variant, setVariant] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quill:model-variant')
+      return VARIANTS.some((entry) => entry.id === saved) ? saved : 'balanced'
+    } catch {
+      return 'balanced'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('quill:model-variant', variant)
+    } catch {
+      // Storage is a convenience; a disabled quota must not break the panel.
+    }
+  }, [variant])
+  // Interview is a one-shot mode: it asks the questionnaire for the next turn,
+  // then turns itself off so the answers can be written without another round.
+  const [interview, setInterview] = useState(false)
   const [liveModels, setLiveModels] = useState([])
   const [modelsState, setModelsState] = useState('idle')
   const [modelsError, setModelsError] = useState('')
@@ -964,10 +1148,8 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   /**
    * One turn, with the composer values passed explicitly.
    *
-   * `send` reads the composer; the queue dispatches a *held* turn whose values
-   * were cleared from state when it was queued, so the core takes them as
-   * arguments and `send` stays the zero-argument callback the button and the
-   * Enter handler already use.
+   * `send` reads the composer and passes the values explicitly, so `send` stays
+   * the zero-argument callback the button and the Enter handler already use.
    */
   const dispatch = (value, att) => {
     if (!value && !att) return
@@ -1020,6 +1202,9 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     chat({
       messages: history,
       draft: typeof getDraft === 'function' ? getDraft() : '',
+      conceptMode,
+      variant,
+      tokenSaving: Boolean(settings?.tokenSaving),
       // Each stage the sidecar reports is appended once. The sidecar already
       // drops a repeat of the stage it just emitted; this keeps a step that
       // legitimately happens twice from filling the list twice.
@@ -1029,18 +1214,20 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     })
       .then(({ reply, transport, task, sources, wroteDocument }) => {
         setTyping(false)
-        // A turn that produced a document belongs in the document. WRITE is the
-        // one task whose result is the piece itself; sending it to a bubble
-        // leaves the reader with a second copy to paste by hand. REWRITE and
-        // CRITIQUE stay in the bubble: one edits a document that is not there to
-        // edit, the other is a judgement about one, neither is the piece.
+        // A turn that produced a document belongs in the document. WRITE and
+        // REWRITE both return the piece itself -- a rewrite is the draft after
+        // the reader's instruction, not a comment about it -- so sending either
+        // to a bubble leaves the reader with a second copy to paste by hand.
+        // CRITIQUE stays in the bubble: it is a judgement about a document, not
+        // the document.
         //
         // `wroteDocument` is the pipeline saying it actually wrote something.
         // A write whose evidence gate blocked every section returns a notice
         // explaining that instead of a document, and the notice stays here in
         // the bubble -- appending it would replace the reader's draft with a
         // warning. An older backend omits the flag, hence `!== false`.
-        const wrote = task === 'WRITE' && wroteDocument !== false && typeof onWriteToDocument === 'function'
+        const writesDocument = task === 'WRITE' || task === 'REWRITE'
+        const wrote = writesDocument && wroteDocument !== false && typeof onWriteToDocument === 'function'
           ? onWriteToDocument(reply)
           : false
         appendReply({
@@ -1066,31 +1253,96 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       })
   }
 
+  /**
+   * The interview turn. It asks the same history the chat would see, but the
+   * answer is a questionnaire rather than prose, so the reader settles the
+   * brief before any tokens go into a draft.
+   */
+  const askQuestions = (value, att) => {
+    const attachmentText = attachmentPrompt(att)
+    const prompt = [value, attachmentText].filter(Boolean).join('\n\n')
+    const text = [value, att ? `Attached: ${att.name}` : ''].filter(Boolean).join('\n')
+    const userId = nextMessageId('user')
+    setMessages((current) => [...current, {
+      id: userId,
+      role: 'user',
+      text,
+      prompt: prompt === text ? undefined : prompt,
+    }])
+    setInput('')
+    setAttachment(null)
+    setTyping(true)
+
+    const appendReply = (reply) => {
+      setMessages((current) => {
+        const at = current.findIndex((message) => message.id === userId)
+        if (at < 0) return [...current, reply]
+        return [...current.slice(0, at + 1), reply, ...current.slice(at + 1)]
+      })
+    }
+    const history = [
+      ...messages.filter((message) => message.id !== 'welcome' && message.role !== 'error'),
+      { id: userId, role: 'user', text, prompt: prompt === text ? undefined : prompt },
+    ].map((message) => ({
+      role: message.role === 'ai' ? 'assistant' : 'user',
+      content: message.prompt || message.text,
+    }))
+
+    questionnaire({
+      messages: history,
+      draft: typeof getDraft === 'function' ? getDraft() : '',
+      tokenSaving: Boolean(settings?.tokenSaving),
+    })
+      .then((questions) => {
+        setTyping(false)
+        appendReply({
+          id: nextMessageId('ai'),
+          role: 'ai',
+          text: 'A few decisions will change the result. Pick the closest answers, or type your own.',
+          questions,
+          status: 'Interview',
+        })
+      })
+      .catch((error) => {
+        setTyping(false)
+        appendReply({
+          id: nextMessageId('ai'),
+          role: 'error',
+          text: 'I could not prepare the questions.',
+          status: describeFailure(error),
+        })
+      })
+  }
+
+  const answerQuestionnaire = (messageId, answers) => {
+    setMessages((current) => current.map((message) => (
+      message.id === messageId ? { ...message, answered: true, answers } : message
+    )))
+    setInterview(false)
+    const lines = (answers || [])
+      .filter((entry) => entry.answers.length)
+      .map((entry) => `- ${entry.header}: ${entry.answers.join('; ')}`)
+    dispatch(
+      lines.length
+        ? ['Interview answers:', ...lines].join('\n')
+        : 'Continue with the request as written; no further details.',
+      null,
+    )
+  }
+
   const send = () => {
     const value = input.trim()
     if (!value && !attachment?.text) return
-    // A reply in flight holds the next turn instead of racing it: the queue
-    // keeps order and the transcript never interleaves two turns. The composer
-    // stays live -- typing here means "queued", and the chip above it says so.
-    if (typing) {
-      setQueued((q) => [...q, { value, attachment }])
-      setInput('')
-      setAttachment(null)
+    // One turn at a time. A second send while the assistant is working is
+    // refused rather than queued: the reader asked for a run, and racing it
+    // with another one makes both answers harder to trust.
+    if (typing) return
+    if (interview) {
+      askQuestions(value, attachment)
       return
     }
     dispatch(value, attachment)
   }
-  dispatchRef.current = dispatch
-
-  // Flush one queued turn the moment the composer goes idle; the rest follow
-  // as each turn settles, because dispatching sets `typing` again synchronously.
-  useEffect(() => {
-    if (typing) return
-    const next = queued[0]
-    if (!next) return
-    setQueued((q) => q.slice(1))
-    dispatchRef.current?.(next.value, next.attachment)
-  }, [typing, queued])
 
   // metal-fx throws during render when WebGL2 is missing, and WebKitGTK does
   // not always provide it, so the effect is only mounted when a real context is
@@ -1109,7 +1361,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const canUseMetal = hasWebGL2() && live
 
   const plainSendButton = (
-    <motion.button className="send-button" type="button" disabled={!input.trim() && !attachment?.text} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
+    <motion.button className="send-button" type="button" disabled={typing || (!input.trim() && !attachment?.text)} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
       <Icon name="send" size={15} />
     </motion.button>
   )
@@ -1124,7 +1376,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     plainSendButton
   )
 
-  const composerProps = { input, setInput, send, mode, setMode, attachment, setAttachment, fileRef }
+  const composerProps = { input, setInput, send, mode, setMode, conceptMode, setConceptMode, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, busy: typing }
 
   return (
     <aside className="assistant-panel reduce-motion-exempt" aria-label="Conclave assistant">
@@ -1158,6 +1410,16 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
             </button>
             <Icon name="down" size={12} />
           </div>
+          <button
+            className={`assistant-head-action${interview ? ' is-on' : ''}`}
+            type="button"
+            aria-label={interview ? 'Clarifying questions on' : 'Ask clarifying questions'}
+            aria-pressed={interview}
+            title="Ask a few clarifying questions before the next write"
+            onClick={() => setInterview((value) => !value)}
+          >
+            <Icon name="details" size={15} />
+          </button>
           <button className="assistant-head-action" type="button" aria-label="New chat" onClick={startNewChat}>
             <Icon name="plus" size={15} />
           </button>
@@ -1242,9 +1504,19 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
                 )}
                 <div className="message-body">
                   {message.written && <Icon name="check" size={13} />}
-                  {message.text.split('\n').map((line, index) => (
-                    <span key={`${message.id}-${index}`}>{line}{index < message.text.split('\n').length - 1 && <br />}</span>
-                  ))}
+                  {message.role === 'ai'
+                    ? <ChatMarkdown text={message.text} />
+                    : message.text.split('\n').map((line, index) => (
+                      <span key={`${message.id}-${index}`}>{line}{index < message.text.split('\n').length - 1 && <br />}</span>
+                    ))}
+                  {message.questions?.length > 0 && (
+                    <QuestionnaireCard
+                      questions={message.questions}
+                      answered={message.answered}
+                      answers={message.answers}
+                      onSubmit={(answers) => answerQuestionnaire(message.id, answers)}
+                    />
+                  )}
                 </div>
                 {message.sources?.length > 0 && (
                   <details className="message-sources">
@@ -1343,12 +1615,6 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
           </Liquid> : <SuggestionRow onPick={setInput} />}
         </EffectBoundary>
 
-        {queued.length > 0 && (
-          <div className="queued-chip" role="status">
-            <Icon name="sort" size={12} />
-            <span>{queued.length} queued — sends when this reply finishes</span>
-          </div>
-        )}
         {attachment && (
           <div className={`attachment-chip${attachment.error ? ' is-error' : ''}`} role={attachment.error ? 'alert' : undefined}>
             <Icon name="file" size={12} />

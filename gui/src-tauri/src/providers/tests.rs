@@ -505,7 +505,7 @@ async fn applying_the_migrations_twice_changes_nothing() {
             .fetch_all(&pool)
             .await
             .expect("read applied versions");
-    assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+    assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
 
     assert_eq!(list(&pool).await.expect("list").len(), 1);
 }

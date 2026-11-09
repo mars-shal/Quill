@@ -5,12 +5,11 @@ description = "Quill document import + task orchestration layer"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "markitdown>=0.1.5",
+    "markitdown[pdf]>=0.1.5",
     "openai>=1.40",
     "pydantic>=2.0",
     "json-repair>=0.42",
-    "sentence-transformers>=3.0",
-    "torch>=2.9",
+    "fastembed>=0.9.1",
     "httpx>=0.27",
     "beautifulsoup4>=4.12",
     "networkx>=3.3",
@@ -20,13 +19,6 @@ dependencies = [
 
 [project.optional-dependencies]
 scrapegraph = ["scrapegraphai>=1.0"]
-
-# torch is only used for CPU sentence embeddings - avoid the ~1.5GB of bundled
-# CUDA/nvidia libraries by pulling the CPU-only wheels from the PyTorch index.
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
+# The evaluation harness uses an ONNX detector and a Hugging Face tokenizer;
+# torch is not required for inference.
+eval = ["transformers>=4.49", "onnxruntime>=1.18", "huggingface-hub>=0.24"]

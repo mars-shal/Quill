@@ -92,6 +92,11 @@ pub async fn delete_document(state: SharedState<'_>, id: String) -> AppResult<()
 }
 
 #[tauri::command]
+pub async fn purge_document(state: SharedState<'_>, id: String) -> AppResult<()> {
+    documents::purge(&state.pool, &id).await
+}
+
+#[tauri::command]
 pub async fn restore_document(
     state: SharedState<'_>,
     id: String,
@@ -385,4 +390,46 @@ pub async fn onboarding_set(state: SharedState<'_>, key: String, value: String) 
 #[tauri::command]
 pub async fn read_image_as_data_url(path: String) -> AppResult<ImageData> {
     images::read_image_as_data_url(Path::new(&path))
+}
+
+/// Reads one document the reader chose in the Open dialog.
+///
+/// Like `read_image_as_data_url`, the path is the grant: the dialog chose it,
+/// and this command reads exactly that file and nothing else. PDF and DOCX are
+/// extracted to text in `import.rs` so the webview never receives a binary.
+#[tauri::command]
+pub async fn read_text_file(
+    app: tauri::AppHandle,
+    path: String,
+) -> AppResult<crate::import::ImportedTextFile> {
+    let extension = Path::new(&path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+
+    // MarkItDown is better than the flat-text fallback for PDF, and for a
+    // Markdown file it is the canonical parser rather than a second opinion.
+    // DOCX stays on the Rust path: that extractor keeps images as data URLs and
+    // OMML equations as LaTeX, which MarkItDown's text conversion does not.
+    if matches!(extension.as_str(), "pdf" | "md" | "markdown") {
+        if let Ok(markdown) = crate::pipeline::convert_with_sidecar(&app, &path).await {
+            if !markdown.trim().is_empty() {
+                let name = Path::new(&path)
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("Imported document")
+                    .to_string();
+                return Ok(crate::import::ImportedTextFile {
+                    name,
+                    path: path.clone(),
+                    extension,
+                    format: "markdown".into(),
+                    content: markdown,
+                });
+            }
+        }
+    }
+
+    crate::import::read_text_file(&path)
 }

@@ -184,6 +184,7 @@ _GROUNDING = re.compile(r"GROUNDING (\{.*\})")
 _WRITE_GATE = re.compile(r"write gate result: written=(\d+) placeholder=(\d+)")
 _DRIFT = re.compile(r"research gate: DRIFT \((\w+)\)")
 _ENTITY = re.compile(r"entity resolution: (.+)")
+_EMBED_STAGE = re.compile(r"^EMBEDDING_(DOWNLOAD|READY)\b")
 
 # `utilis.timing`'s own line: "DocumentParser.parse_text took 0.001s (call #1, ...)".
 _TIMING = re.compile(r"^([A-Za-z_][\w.]*) took ([\d.]+)s")
@@ -301,6 +302,13 @@ def _sink(message) -> None:
     if run is None:
         return
     text = message.record["message"]
+
+    if isinstance(run, ChatTurn) and (m := _EMBED_STAGE.match(text)):
+        stage = "Downloading resources" if m.group(1) == "DOWNLOAD" else "Loading the local model"
+        if stage != run.last_stage:
+            run.last_stage = stage
+            run.emit("stage", step=stage)
+        return
 
     # The timing wrapper's line, which is what a chat turn shows as progress.
     # Only a turn takes these: a run already reports by section, and a per-call
@@ -474,7 +482,62 @@ def _normalise_chat_answer(task_type: str, result) -> dict:
     raise RuntimeError(f"unhandled task type {task_type!r}")
 
 
-def _chat_dispatch(provider: dict, task_type: str, task: str, draft: str) -> dict:
+def _parse_questionnaire(reply) -> list[dict]:
+    """Read the questionnaire JSON, tolerating a fence or a stray preamble."""
+    text = str(reply or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        raise RuntimeError("the model did not return a questionnaire")
+    try:
+        payload = json.loads(text[start : end + 1])
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(f"the questionnaire was not valid JSON: {exc}") from exc
+    raw = payload.get("questions") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        raise RuntimeError("the model returned no questions")
+
+    questions: list[dict] = []
+    for entry in raw[:4]:
+        if not isinstance(entry, dict):
+            continue
+        question = str(entry.get("question") or "").strip()
+        if not question:
+            continue
+        options: list[dict] = []
+        for option in entry.get("options") or []:
+            if isinstance(option, str):
+                label, description = option.strip(), ""
+            elif isinstance(option, dict):
+                label = str(option.get("label") or "").strip()
+                description = str(option.get("description") or "").strip()
+            else:
+                continue
+            if label:
+                options.append({"label": label[:80], "description": description[:160]})
+        if not options:
+            continue
+        questions.append({
+            "header": str(entry.get("header") or "Question").strip()[:16],
+            "question": question[:240],
+            "multiSelect": bool(entry.get("multiSelect")),
+            "options": options[:4],
+        })
+    if not questions:
+        raise RuntimeError("the model returned no usable questions")
+    return questions
+
+
+def _chat_dispatch(
+    provider: dict,
+    task_type: str,
+    task: str,
+    draft: str,
+    concept_mode: str = "reference",
+    token_saving: bool = False,
+) -> dict:
     """Runs one classified chat turn and returns the panel's reply shape.
 
     A document task needs a document, and a chat turn has none, so the draft is
@@ -499,18 +562,27 @@ def _chat_dispatch(provider: dict, task_type: str, task: str, draft: str) -> dic
 
     try:
         if task_type == "WRITE":
-            result = executor.Write(task, ephemeral_id)
+            result = executor.Write(
+                task, ephemeral_id, concept_mode=concept_mode,
+                token_saving=token_saving,
+            )
         elif task_type == "REWRITE":
             # ReWrite reads `written:{id}`, which a fresh draft does not have. The
             # chat's "rewrite this" means "produce the document, then rewrite it",
             # so the write happens here rather than being left to a prior turn the
             # ephemeral document will never see.
-            executor.Write(task, ephemeral_id)
+            executor.Write(
+                task, ephemeral_id, concept_mode=concept_mode,
+                token_saving=token_saving,
+            )
             result = executor.ReWrite(task, ephemeral_id)
         elif task_type == "CRITIQUE":
             # Same reasoning as ReWrite: there is nothing to critique until the
             # draft has been written, so it is written first.
-            executor.Write(task, ephemeral_id)
+            executor.Write(
+                task, ephemeral_id, concept_mode=concept_mode,
+                token_saving=token_saving,
+            )
             result = executor.Critique(task, ephemeral_id)
         elif task_type == "RESEARCH":
             result = executor.Research(task)
@@ -530,13 +602,89 @@ def _chat_dispatch(provider: dict, task_type: str, task: str, draft: str) -> dic
                 executor.database.delete(key)
 
 
-def _route_chat_turn(provider: dict, transcript: list, draft: str) -> dict:
+def _usage_row(value) -> dict:
+    """Normalise one stored model entry, including the legacy integer shape."""
+    if isinstance(value, dict):
+        return {
+            "prompt": int(value.get("prompt") or 0),
+            "completion": int(value.get("completion") or 0),
+            "total": int(value.get("total") or 0),
+            "calls": int(value.get("calls") or 0),
+            "estimated_calls": int(value.get("estimated_calls") or 0),
+        }
+    try:
+        total = int(value or 0)
+    except (TypeError, ValueError):
+        total = 0
+    return {"prompt": 0, "completion": 0, "total": total, "calls": 1 if total else 0, "estimated_calls": 0}
+
+
+def _usage_totals(models: dict) -> dict:
+    totals = {"prompt": 0, "completion": 0, "total": 0, "calls": 0, "estimated_calls": 0}
+    for value in models.values():
+        row = _usage_row(value)
+        for key in totals:
+            totals[key] += row[key]
+    return totals
+
+
+_CONVERTER = None
+_CONVERTER_LOCK = threading.Lock()
+
+
+def _converter():
+    """One MarkItDown instance: its converter registry is expensive to build."""
+    global _CONVERTER
+    if _CONVERTER is None:
+        with _CONVERTER_LOCK:
+            if _CONVERTER is None:
+                from markitdown import MarkItDown
+                _CONVERTER = MarkItDown(enable_builtins=True, enable_plugins=False)
+    return _CONVERTER
+
+
+def _concept_mode(body: dict) -> str:
+    """The two modes ConceptEngine understands; anything else is reference."""
+    value = str(body.get("concept_mode") or "reference").strip().lower()
+    return value if value in ("reference", "survey") else "reference"
+
+
+_VARIANT_INSTRUCTIONS = {
+    "fast": (
+        "\n\nEFFORT: fast. Give the shortest answer that is still complete; "
+        "prefer a tight list over a long essay and skip optional context."
+    ),
+    "deep": (
+        "\n\nEFFORT: deep. Think the problem through before answering, check the "
+        "draft for specifics, and write the fuller version where it adds evidence."
+    ),
+}
+
+
+def _route_chat_turn(
+    provider: dict,
+    transcript: list,
+    draft: str,
+    concept_mode: str = "reference",
+    token_saving: bool = False,
+    variant: str = "balanced",
+) -> dict:
     """Classifies one chat turn and dispatches it to the matching task engine."""
     from utilis.model import Agent
+
+    if token_saving:
+        # Token-saving is a budget, not a different assistant: it trims the
+        # draft, caps the answer, and asks for the short version. It does not
+        # skip the classifier, because routing is the cheap part of a turn.
+        provider = {**provider, "max_output_tokens": 900}
+        draft = draft[:6000]
 
     question = transcript[-1][1]
     history = "\n\n".join(f"{role}: {text}" for role, text in transcript[:-1])
     task = f"{history}\n\nuser: {question}" if history else question
+    if token_saving:
+        task += "\n\n[Token-saving mode: answer concisely, do not repeat the draft.]"
+    task += _VARIANT_INSTRUCTIONS.get(str(variant or "balanced").lower(), "")
 
     response = Agent(provider).Nous(task)
     if not hasattr(response, "task"):
@@ -549,7 +697,10 @@ def _route_chat_turn(provider: dict, transcript: list, draft: str) -> dict:
     if task_type not in _DOCUMENT_TASKS + ("RESEARCH", "EXPLAIN", "SMALLTALK"):
         raise RuntimeError(f"unsupported task type {task_type!r}")
 
-    return _chat_dispatch(provider, task_type, task, draft)
+    return _chat_dispatch(
+        provider, task_type, task, draft,
+        concept_mode=concept_mode, token_saving=token_saving,
+    )
 
 
 def _is_local_endpoint(base_url: str) -> bool:
@@ -605,6 +756,8 @@ def _provider_config(body: dict) -> dict:
         "thinking_model": str(raw.get("thinking_model") or ""),
         "writing_model": str(raw.get("writing_model") or ""),
         "api_key": str(raw.get("api_key") or ""),
+        # 0 means "provider default". Token-saving mode lowers it per request.
+        "max_output_tokens": int(raw.get("max_output_tokens") or 0),
     }
 
 
@@ -712,18 +865,35 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/usage":
             # Today's token spend per model, accumulated by the model layer on
             # every call (provider-reported totals, estimates as fallback) --
-            # the Settings usage table reads this.
-            from datetime import datetime, timezone
+            # the Settings usage dashboard reads this. `history` is the same
+            # data for the last fortnight so the chart can show a trend instead
+            # of one day in isolation.
+            from datetime import datetime, timezone, timedelta
             from utilis.store import open_store
 
-            today = datetime.now(timezone.utc).date().isoformat()
-            models = open_store().get(f"usage:{today}")
-            if not isinstance(models, dict):
-                models = {}
+            store = open_store()
+            today = datetime.now(timezone.utc).date()
+            today_key = today.isoformat()
+            raw_models = store.get(f"usage:{today_key}")
+            if not isinstance(raw_models, dict):
+                raw_models = {}
+            models = {str(model): _usage_row(value) for model, value in raw_models.items()}
+            totals = _usage_totals(models)
+
+            history = []
+            for offset in range(13, -1, -1):
+                day = (today - timedelta(days=offset)).isoformat()
+                raw = store.get(f"usage:{day}")
+                day_models = {str(model): _usage_row(value) for model, value in raw.items()} if isinstance(raw, dict) else {}
+                day_totals = _usage_totals(day_models)
+                history.append({"date": day, **day_totals})
+
             return self._json(200, {
-                "date": today,
+                "date": today_key,
                 "limit": int(os.environ.get("QUILL_TPD", "200000")),
                 "models": models,
+                "totals": totals,
+                "history": history,
             })
         if path == "/runs":
             with _RUNS_LOCK:
@@ -765,6 +935,143 @@ class Handler(BaseHTTPRequestHandler):
             pass  # the GUI closed the tab; the run continues
 
     # -- POST --------------------------------------------------------------
+    def _complete(self, body: dict) -> None:
+        """A very short inline continuation, not a chat turn.
+
+        This is a separate route because a completion must not research, write a
+        document or classify a task. It reads the text before and after the
+        caret and asks the configured provider for the next few words only.
+        """
+        provider = _provider_config(body)
+        if provider.get("error"):
+            return self._json(400, {"error": provider["error"]})
+        before = str(body.get("before") or "")[-4000:]
+        after = str(body.get("after") or "")[-1200:]
+        if len(before.strip()) < 8:
+            return self._json(200, {"completion": ""})
+        try:
+            from utilis.model import Agent
+            prompt = (
+                "BEFORE:\n" + before + "\n\nAFTER:\n" + after +
+                "\n\nWrite only the continuation that belongs at the caret."
+            )
+            reply = Agent(provider).model(
+                prompt,
+                system_prompt=(
+                    "You continue a writer's sentence in their own voice. Return only the "
+                    "continuation, one line, at most 14 words, no quotes, no explanation. "
+                    "If no continuation is obvious, return an empty string."
+                ),
+            )
+            line = next((line.strip() for line in str(reply or "").splitlines() if line.strip()), "")
+            return self._json(200, {"completion": line[:180]})
+        except Exception as exc:  # noqa: BLE001 - completion is optional
+            logger.exception("completion failed")
+            return self._json(502, {"error": str(exc)})
+
+    def _verify(self, body: dict) -> None:
+        """Resolve citations and look for copied passages in open indexes.
+
+        This is a slow, explicit action: it talks to Crossref, OpenAlex,
+        ORCID, Wikidata and Wikipedia. It never writes to the document and it
+        does not need a model provider.
+        """
+        text = str(body.get("text") or "").strip()
+        if len(text) < 80:
+            return self._json(400, {"error": "text is too short to verify"})
+        if len(text) > 40000:
+            text = text[:40000]
+        try:
+            from utilis.verification import analyse_document
+
+            return self._json(200, analyse_document(text))
+        except Exception as exc:  # noqa: BLE001 - the reason is the result
+            logger.exception("api verification failed")
+            return self._json(502, {"error": str(exc)})
+
+    def _questionnaire(self, body: dict) -> None:
+        """Ask the model for a short, answerable interview before a write.
+
+        The hard part of a vague drafting request is not the prose, it is the
+        missing decisions: who the reader is, what must be included, and what
+        must be left out. This route turns those into a small set of
+        multiple-choice questions the panel can render as buttons, and returns
+        JSON only. The chat turn that follows carries the answers as context.
+        """
+        provider = _provider_config(body)
+        if provider.get("error"):
+            return self._json(400, {"error": provider["error"]})
+        if not provider:
+            return self._json(400, {"error": "no provider configured"})
+
+        raw = body.get("messages")
+        if not isinstance(raw, list) or not raw:
+            return self._json(400, {"error": "messages must be a non-empty list"})
+        turns = []
+        for turn in raw[-8:]:
+            if not isinstance(turn, dict):
+                continue
+            text = str(turn.get("content") or "").strip()
+            if text:
+                turns.append((str(turn.get("role") or "user"), text))
+        if not turns:
+            return self._json(400, {"error": "messages contained no text"})
+
+        draft = str(body.get("draft") or "").strip()[:6000]
+        if bool(body.get("token_saving")):
+            provider = {**provider, "max_output_tokens": 700}
+        conversation = "\n\n".join(f"{role}: {text}" for role, text in turns)
+        prompt = (
+            "A writer asked for this and the request leaves decisions open:\n\n"
+            + conversation
+            + "\n\nDRAFT (may be empty):\n" + (draft or "(empty)")
+            + "\n\nWrite the 2-4 questions that would most change the result. "
+            "Each question must be answerable by choosing one of its options. "
+            "Return JSON only, with no markdown fences:\n"
+            '{"questions":[{"header":"<=12 chars","question":"...",'
+            '"multiSelect":false,"options":[{"label":"short answer",'
+            '"description":"what choosing it means"}]}]}'
+        )
+        try:
+            from utilis.model import Agent
+
+            reply = Agent(provider).model(
+                prompt,
+                system_prompt=(
+                    "You design concise clarifying questionnaires. Return only "
+                    "valid JSON. Never ask for information already present in "
+                    "the request or the draft. Prefer 2-4 questions and 2-4 "
+                    "options per question."
+                ),
+                temperature=0.2,
+            )
+            questions = _parse_questionnaire(reply)
+            return self._json(200, {"questions": questions})
+        except Exception as exc:  # noqa: BLE001 - the panel shows the reason
+            logger.exception("api questionnaire failed")
+            return self._json(502, {"error": str(exc)})
+
+    def _convert(self, body: dict) -> None:
+        """Convert one file the desktop dialog chose into Markdown.
+
+        PDF is the reason this endpoint exists: MarkItDown's PDF converter uses
+        pdfplumber to keep tables and headings, while the Rust fallback can only
+        read a flat text layer. The sidecar is local and the path came from the
+        dialog, so this is the same one-file grant the rest of import uses.
+        """
+        path = str(body.get("path") or "").strip()
+        if not path or not os.path.isfile(path):
+            return self._json(400, {"error": f"file not found: {path}"})
+        try:
+            result = _converter().convert(path)
+            return self._json(200, {
+                "markdown": result.text_content or "",
+                "title": result.title or "",
+            })
+        except Exception as exc:  # noqa: BLE001 - the caller falls back to Rust
+            logger.exception("markitdown conversion failed")
+            return self._json(400, {"error": f"conversion failed: {exc}"})
+
     def _chat(self, body: dict) -> None:
         """One assistant turn, routed through the task pipeline.
 
@@ -802,7 +1109,12 @@ class Handler(BaseHTTPRequestHandler):
         draft = str(body.get("draft") or "").strip()[:12000]
 
         try:
-            answer = _route_chat_turn(provider, transcript, draft)
+            answer = _route_chat_turn(
+                provider, transcript, draft,
+                concept_mode=_concept_mode(body),
+                token_saving=bool(body.get("token_saving")),
+                variant=str(body.get("variant") or "balanced"),
+            )
         except Exception as exc:  # noqa: BLE001 - the reason is the whole answer
             logger.exception("api chat failed")
             return self._json(502, {"error": str(exc)})
@@ -843,6 +1155,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"error": "messages contained no text"})
 
         draft = str(body.get("draft") or "").strip()[:12000]
+        concept_mode = _concept_mode(body)
         turn = ChatTurn()
 
         def work() -> None:
@@ -852,7 +1165,10 @@ class Handler(BaseHTTPRequestHandler):
                 # Installed from inside the worker for the reason in
                 # `_install_sink`: timing reconfigures the handlers lazily.
                 _install_sink()
-                turn.reply = _route_chat_turn(provider, transcript, draft)
+                turn.reply = _route_chat_turn(
+                    provider, transcript, draft, concept_mode=concept_mode,
+                    token_saving=bool(body.get("token_saving")),
+                )
             except Exception as exc:  # noqa: BLE001 - the reason is the answer
                 logger.exception("api chat stream failed")
                 turn.error = str(exc) or exc.__class__.__name__
@@ -903,6 +1219,14 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             return self._json(400, {"error": "body must be JSON"})
 
+        if route == "/convert":
+            return self._convert(body)
+        if route == "/complete":
+            return self._complete(body)
+        if route == "/questionnaire":
+            return self._questionnaire(body)
+        if route == "/verify":
+            return self._verify(body)
         if route == "/chat":
             return self._chat(body)
         if route == "/chat/stream":

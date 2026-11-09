@@ -10,8 +10,12 @@ provider credentials directly.
 - Rust 1.88+ — <https://rustup.rs>. Installed via rustup, which puts `cargo` in
   `~/.cargo/bin`. If `cargo --version` is not found, add this to your shell
   profile: `[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"`
+- [uv](https://docs.astral.sh/uv/) for the Python sidecar
 - Linux only: `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`,
   `librsvg2-dev` (macOS and Windows need nothing extra)
+
+Run `uv sync` at the repository root before the first dev build; it creates the
+Python 3.14 environment the sidecar uses.
 
 ## Run a dev build
 
@@ -36,7 +40,9 @@ npm run check            # build + JS tests + rust fmt/clippy/test + integration
 npm test                 # JS unit tests
 npm run check:rust       # rustfmt, clippy -D warnings, cargo test
 npm run verify           # persistence, legacy-import and export integration
-npm run tauri:build      # platform installers (needs each OS to bundle)
+npm run sidecar:build    # PyInstaller sidecar for the current target
+npm run build:desktop    # frontend + sidecar (used by tauri:build)
+npm run tauri:build      # platform installers with the sidecar bundled
 npm run tauri:build:fast # compile the binary only, skip installer packaging
 npm run icon             # regenerate app icons from the brand mark
 ```
@@ -52,6 +58,15 @@ runners that do not load your shell profile.
 - Windows: `%APPDATA%\app.quill.workspace\quill.db`
 
 To start from scratch, delete that directory.
+
+## Sidecar packaging
+
+`npm run sidecar:build` runs PyInstaller through `uv` and writes
+`src-tauri/binaries/quill-sidecar-<target-triple>`. Tauri's `externalBin` copies
+it beside the app executable; `sidecar.rs` looks for it there before falling
+back to the project `.venv` for development. The app-data directory holds the
+run output and the `fastembed` model cache, so a packaged install never writes
+into the install directory.
 
 ## Architecture
 

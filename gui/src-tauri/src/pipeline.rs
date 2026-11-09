@@ -77,6 +77,9 @@ const SIDECAR_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_s
 /// request timed out.
 const SIDECAR_CHAT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1800);
 
+/// A document conversion is CPU work in the sidecar, not a model call.
+const SIDECAR_CONVERT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(180);
+
 /// Maps a failed sidecar request for a chat turn.
 ///
 /// A connection failure means the sidecar is not running, which is the one
@@ -180,6 +183,7 @@ pub async fn pipeline_start(
     app: tauri::AppHandle,
     state: State<'_, Supervisor>,
 ) -> AppResult<PipelineStatus> {
+    configure_bundled(&app)?;
     let base = base_url();
     let status = match state.start(&base).await {
         Ok(()) => {
@@ -459,20 +463,237 @@ struct SidecarReply {
 /// answered with a refusal has already decided the turn failed, and re-asking
 /// the provider directly would replace that reason with an ungrounded answer --
 /// the exact silent success this path exists to stop.
+/// Start the sidecar unless it is already answering.
+///
+/// Chat is the one path that can be reached without the old thesis-run card, so
+/// it is also the one that must not silently fall through to the direct provider
+/// just because nobody remembered to press Start. A missing or broken sidecar is
+/// still allowed to fall back; this only gives it the chance to be used.
+pub async fn ensure_started(app: &tauri::AppHandle) -> Result<(), String> {
+    // Configure first: a bundled app claims a fresh loopback port so an
+    // orphaned sidecar from an older build cannot be mistaken for this one.
+    configure_bundled(app).map_err(|err| err.to_string())?;
+    let base = base_url();
+    if sidecar::serving(&base).await {
+        return Ok(());
+    }
+    let supervisor = app.state::<Supervisor>();
+    supervisor.start(&base).await
+}
+
+/// Point a packaged run at its bundled sidecar and the app-data workspace.
+fn configure_bundled(app: &tauri::AppHandle) -> AppResult<()> {
+    let Some(binary) = sidecar::bundled_binary() else {
+        return Ok(());
+    };
+    // A port that survives a crash is also a port the next build can inherit.
+    // The packaged app owns a fresh loopback port for its own sidecar; dev
+    // keeps the conventional 8000 and may still adopt an external sidecar.
+    let configured = std::env::var("QUILL_API_URL").unwrap_or_default();
+    if configured.trim().is_empty() {
+        if let Some(port) = free_loopback_port() {
+            std::env::set_var("QUILL_API_URL", format!("http://127.0.0.1:{port}"));
+        }
+    }
+    let data = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| AppError::Other(format!("cannot resolve the app data directory: {err}")))?;
+    std::fs::create_dir_all(&data)
+        .map_err(|err| AppError::Other(format!("cannot create {}: {err}", data.display())))?;
+    std::env::set_var("QUILL_SIDECAR_BIN", &binary);
+    std::env::set_var("QUILL_PIPELINE_ROOT", &data);
+    Ok(())
+}
+
+fn free_loopback_port() -> Option<u16> {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).ok()?;
+    listener.local_addr().ok().map(|address| address.port())
+}
+
+/// Converts one imported file through MarkItDown in the sidecar.
+///
+/// PDF is the format that needs it: MarkItDown's PDF path uses pdfplumber to
+/// keep tables and headings, while the Rust fallback can only read a flat text
+/// layer. The command falls back to `import.rs` when the sidecar is absent or
+/// too old to know `/convert`.
+pub async fn convert_with_sidecar(app: &tauri::AppHandle, path: &str) -> Result<String, String> {
+    let _ = ensure_started(app).await;
+    let client = reqwest::Client::builder()
+        .connect_timeout(SIDECAR_CONNECT_TIMEOUT)
+        .timeout(SIDECAR_CONVERT_TIMEOUT)
+        .build()
+        .map_err(|error| error.to_string())?;
+    let response = client
+        .post(format!("{}/convert", base_url()))
+        .json(&serde_json::json!({ "path": path }))
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("conversion failed ({status}): {body}"));
+    }
+    let payload: serde_json::Value = response.json().await.map_err(|error| error.to_string())?;
+    let markdown = payload
+        .get("markdown")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    if markdown.trim().is_empty() {
+        return Err("conversion produced no text".into());
+    }
+    Ok(markdown)
+}
+
+/// One short inline continuation. Failure is an empty string, not an error:
+/// ghost text is an optional assist and must never interrupt typing.
 #[tauri::command]
-pub async fn api_chat(
+pub async fn api_complete(
+    app: tauri::AppHandle,
+    state: crate::commands::SharedState<'_>,
+    before: String,
+    after: Option<String>,
+) -> AppResult<String> {
+    if before.trim().len() < 8 {
+        return Ok(String::new());
+    }
+    let _ = ensure_started(&app).await;
+    let provider = resolve_provider(&state.pool).await?;
+    let client = reqwest::Client::builder()
+        .connect_timeout(SIDECAR_CONNECT_TIMEOUT)
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(map_transport)?;
+    let response = client
+        .post(format!("{}/complete", base_url()))
+        .json(&serde_json::json!({
+            "provider": provider,
+            "before": before,
+            "after": after.unwrap_or_default(),
+        }))
+        .send()
+        .await
+        .map_err(|_| AppError::Offline)?;
+    if !response.status().is_success() {
+        return Ok(String::new());
+    }
+    let payload: serde_json::Value = match response.json().await {
+        Ok(value) => value,
+        Err(_) => return Ok(String::new()),
+    };
+    Ok(payload
+        .get("completion")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string())
+}
+
+/// Resolve citations and search open indexes for copied passages.
+#[tauri::command]
+pub async fn api_verify(
+    app: tauri::AppHandle,
+    state: crate::commands::SharedState<'_>,
+    text: String,
+) -> AppResult<serde_json::Value> {
+    if text.trim().len() < 80 {
+        return Err(AppError::Validation("text is too short to verify".into()));
+    }
+    let _ = ensure_started(&app).await;
+    let _ = state;
+    let client = reqwest::Client::builder()
+        .connect_timeout(SIDECAR_CONNECT_TIMEOUT)
+        .timeout(std::time::Duration::from_secs(180))
+        .build()
+        .map_err(map_transport)?;
+    let response = client
+        .post(format!("{}/verify", base_url()))
+        .json(&serde_json::json!({ "text": text }))
+        .send()
+        .await
+        .map_err(|_| AppError::Offline)?;
+    let status = response.status();
+    let payload: serde_json::Value = response.json().await.map_err(map_transport)?;
+    if !status.is_success() {
+        let message = payload
+            .get("error")
+            .and_then(|value| value.as_str())
+            .unwrap_or("verification could not be completed");
+        return Err(AppError::Validation(message.into()));
+    }
+    Ok(payload)
+}
+
+/// A small clarifying questionnaire, returned as JSON the panel can render.
+#[tauri::command]
+pub async fn api_questionnaire(
+    app: tauri::AppHandle,
     state: crate::commands::SharedState<'_>,
     messages: Vec<ChatTurn>,
     draft: Option<String>,
+    token_saving: Option<bool>,
+) -> AppResult<serde_json::Value> {
+    if messages.is_empty() {
+        return Err(AppError::Validation(
+            "no messages to interview about".into(),
+        ));
+    }
+    let _ = ensure_started(&app).await;
+    let provider = resolve_provider(&state.pool).await?;
+    let client = reqwest::Client::builder()
+        .connect_timeout(SIDECAR_CONNECT_TIMEOUT)
+        .timeout(std::time::Duration::from_secs(90))
+        .build()
+        .map_err(map_transport)?;
+    let response = client
+        .post(format!("{}/questionnaire", base_url()))
+        .json(&serde_json::json!({
+            "provider": provider,
+            "messages": messages,
+            "draft": draft.unwrap_or_default(),
+            "token_saving": token_saving.unwrap_or(false),
+        }))
+        .send()
+        .await
+        .map_err(|_| AppError::Offline)?;
+    let status = response.status();
+    let payload: serde_json::Value = response.json().await.map_err(map_transport)?;
+    if !status.is_success() {
+        let message = payload
+            .get("error")
+            .and_then(|value| value.as_str())
+            .unwrap_or("the questionnaire could not be prepared");
+        return Err(AppError::Validation(message.into()));
+    }
+    Ok(payload)
+}
+
+// The command signature mirrors the JS call one field at a time; grouping it
+// into a struct would only move the same argument list behind `serde`.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn api_chat(
+    app: tauri::AppHandle,
+    state: crate::commands::SharedState<'_>,
+    messages: Vec<ChatTurn>,
+    draft: Option<String>,
+    concept_mode: Option<String>,
+    variant: Option<String>,
+    token_saving: Option<bool>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
     }
+    let _ = ensure_started(&app).await;
     let provider = resolve_provider(&state.pool).await?;
     let payload = serde_json::json!({
         "provider": provider,
         "messages": messages,
         "draft": draft.unwrap_or_default(),
+        "concept_mode": concept_mode.unwrap_or_else(|| "reference".into()),
+        "variant": variant.unwrap_or_else(|| "balanced".into()),
+        "token_saving": token_saving.unwrap_or(false),
     });
 
     chat_via_sidecar_or_direct(&payload).await
@@ -523,6 +744,7 @@ async fn chat_via_sidecar_or_direct(payload: &serde_json::Value) -> AppResult<Ch
 /// A sidecar too old to know `/chat/stream` answers 404, and an absent one fails
 /// the connection; both fall back to the ordinary path rather than failing a turn
 /// this app is otherwise able to answer.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn api_chat_stream(
     app: tauri::AppHandle,
@@ -530,15 +752,22 @@ pub async fn api_chat_stream(
     turn_id: String,
     messages: Vec<ChatTurn>,
     draft: Option<String>,
+    concept_mode: Option<String>,
+    variant: Option<String>,
+    token_saving: Option<bool>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
     }
+    let _ = ensure_started(&app).await;
     let provider = resolve_provider(&state.pool).await?;
     let payload = serde_json::json!({
         "provider": provider,
         "messages": messages,
         "draft": draft.unwrap_or_default(),
+        "concept_mode": concept_mode.unwrap_or_else(|| "reference".into()),
+        "variant": variant.unwrap_or_else(|| "balanced".into()),
+        "token_saving": token_saving.unwrap_or(false),
     });
 
     match stream_chat(&app, &turn_id, &payload).await {
@@ -673,7 +902,10 @@ async fn stream_chat(
             .unwrap_or("")
             .to_string(),
         sources: serde_json::from_value(
-            value.get("sources").cloned().unwrap_or(serde_json::Value::Null),
+            value
+                .get("sources")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
         )
         .unwrap_or_default(),
         wrote_document: value
@@ -793,11 +1025,7 @@ async fn chat_direct(payload: &serde_json::Value) -> AppResult<String> {
     } else {
         request.bearer_auth(&api_key)
     };
-    let res = request
-        .json(&body)
-        .send()
-        .await
-        .map_err(map_transport)?;
+    let res = request.json(&body).send().await.map_err(map_transport)?;
 
     if !res.status().is_success() {
         return Err(refused(res).await);

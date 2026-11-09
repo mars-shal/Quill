@@ -235,6 +235,12 @@ class SessionManager:
             text = plagiarism if isinstance(plagiarism, str) else str(plagiarism)
             with open(f"{base}.plagiarism.md", "w", encoding="utf-8") as fh:
                 fh.write(text)
+            if isinstance(plagiarism, dict):
+                voice = (plagiarism.get("document_check") or {}).get("natural_voice")
+                if voice:
+                    from utilis.style import to_markdown
+                    with open(f"{base}.style.md", "w", encoding="utf-8") as fh:
+                        fh.write(to_markdown(voice))
 
         session["output_path"] = f"{stem}.md"
         session["updated_at"] = self._now()

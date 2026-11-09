@@ -1,26 +1,42 @@
-"""Local sentence-embedding utility (sentence-transformers backend).
+"""Local sentence-embedding utility (fastembed / ONNX backend).
 
-Lazy-loads a single sentence-transformers model (default all-MiniLM-L6-v2,
-override via the EMBEDDING_MODEL env var) and exposes batched embedding plus
-cosine similarity ops used across the engines (concept dedup, semantic
-plagiarism checks, knowledge-graph querying).
+Lazy-loads one ONNX embedding model and exposes batched embeddings plus cosine
+similarity. The default is the same all-MiniLM-L6-v2 model the PyTorch stack
+used, so the concept, research and plagiarism thresholds keep their meaning.
+Override via ``EMBEDDING_MODEL``; point ``FASTEMBED_CACHE_DIR`` at a bundled or
+app-data directory when the model should not live in the user's home cache.
 """
 
 import os
+import sys
+from pathlib import Path
 from typing import Iterable, Sequence
+
+from loguru import logger
 
 from utilis.timing import timed
 
-_SENTENCE_MAX_LEN = 512
+_DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+# The directory name fastembed/huggingface_hub uses for the default ONNX repo.
+# It is what the installer build copies next to the sidecar so the first turn
+# does not have to download 87 MB before it can answer.
+_BUNDLED_MODEL_DIR = "models--Qdrant--all-MiniLM-L6-v2-onnx"
+
+
+def _bundled_cache_dir() -> str | None:
+    """The model cache shipped inside the one-file sidecar, when there is one."""
+    if not getattr(sys, "frozen", False):
+        return None
+    base = Path(getattr(sys, "_MEIPASS", "")) / "fastembed"
+    return str(base) if (base / _BUNDLED_MODEL_DIR).is_dir() else None
 
 
 class Embedder:
     _instance: "Embedder | None" = None
 
     def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or os.environ.get(
-            "EMBEDDING_MODEL", "all-MiniLM-L6-v2"
-        )
+        self.model_name = model_name or os.environ.get("EMBEDDING_MODEL", _DEFAULT_MODEL)
         self._model = None
 
     @classmethod
@@ -33,13 +49,29 @@ class Embedder:
         if self._model is not None:
             return self._model
         try:
-            from sentence_transformers import SentenceTransformer
+            from fastembed import TextEmbedding
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError(
-                "sentence-transformers is not installed. Run `uv sync` and verify "
-                "torch/sentence-transformers installed cleanly on your Python version."
+                "fastembed is not installed. Run `uv sync` and verify the ONNX "
+                "embedding dependencies installed on this Python version."
             ) from exc
-        self._model = SentenceTransformer(self.model_name)
+        cache_dir = os.environ.get("FASTEMBED_CACHE_DIR") or None
+        bundled = _bundled_cache_dir()
+        if bundled and self.model_name == _DEFAULT_MODEL:
+            # The installer already carries this model. Prefer it over the
+            # app-data cache: even an empty app-data directory would otherwise
+            # send fastembed to the network on the first turn.
+            cache_dir = bundled
+            logger.info("EMBEDDING_READY bundled resources")
+        else:
+            # A first load may download the ONNX model. The API tap turns these
+            # two lines into a named stage, so a long first turn says what it is
+            # waiting for instead of showing an indefinite "Thinking".
+            logger.info("EMBEDDING_DOWNLOAD downloading resources")
+        self._model = TextEmbedding(model_name=self.model_name, cache_dir=cache_dir)
+        if not bundled:
+            logger.info("EMBEDDING_READY resources ready")
+        logger.info("EMBEDDING_READY resources ready")
         return self._model
 
     @timed("Embedder.embed")
@@ -49,12 +81,7 @@ class Embedder:
         if not items:
             return []
         model = self._load()
-        vectors = model.encode(
-            items,
-            batch_size=batch_size,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
+        vectors = model.embed(items, batch_size=batch_size)
         return [vec.tolist() for vec in vectors]
 
     @timed("Embedder.embed_one")

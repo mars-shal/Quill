@@ -20,6 +20,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up the Python pipeline
+        working-directory: .
+        run: |
+          uv python install 3.14
+          uv sync --frozen
+
+      - name: Python review tests
+        working-directory: .
+        run: |
+          uv run --frozen python tests/test_style.py
+          uv run --frozen python tests/test_plagiarism.py
 
       # Tauri v2 links against webkit2gtk-4.1 and GTK at build time and the
       # runner image ships none of the -dev packages.
@@ -63,9 +79,15 @@ jobs:
         run: |
           shopt -s globstar nullglob
           bundles=(src-tauri/target/release/bundle/**/*.deb src-tauri/target/release/bundle/**/*.rpm src-tauri/target/release/bundle/**/*.AppImage)
-          if [ ! -x src-tauri/target/release/quill ] || [ ${#bundles[@]} -eq 0 ]; then
+          sidecars=(src-tauri/binaries/quill-sidecar-*)
+          if [ ! -x src-tauri/target/release/quill ] || [ ${#bundles[@]} -eq 0 ] || [ ${#sidecars[@]} -eq 0 ]; then
             echo "❌ Linux build artefacts not found"
             find src-tauri/target/release -maxdepth 3 -type f 2>/dev/null | head -20 || true
+            find src-tauri/binaries -maxdepth 1 -type f 2>/dev/null || true
+            exit 1
+          fi
+          if ! dpkg-deb -c "${bundles[0]}" | grep -q 'usr/bin/quill-sidecar'; then
+            echo "❌ the deb does not contain the pipeline sidecar"
             exit 1
           fi
           echo "✓ Linux build artefacts verified"

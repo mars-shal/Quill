@@ -56,6 +56,7 @@ __all__ = [
     "gap_research_enabled",
     "gap_research_pages_budget",
     "gap_research_queries_budget",
+    "gap_research_rounds",
     "gap_research_sections_budget",
     "page_blocks",
     "ranked_missing_terms",
@@ -115,9 +116,6 @@ _FRAME_TERMS = frozenset(
     }
 )
 
-_TRUE_VALUES = frozenset({"1", "true", "yes", "on", "enabled"})
-
-
 def _flag(name: str, default: str = "") -> str:
     """Env value read at CALL time, never at import time.
 
@@ -132,12 +130,14 @@ def _flag(name: str, default: str = "") -> str:
 def gap_research_enabled() -> bool:
     """Whether the writer->research feedback loop may run at all.
 
-    Default OFF. The loop exists because a placeholder section costs a wasted
-    write; turning it on costs extra LLM calls (one per re-written section,
-    see artifacts/gap-research/cost-model.md), and an operator has to be able
-    to see that cost before paying it.
+    Default ON: the loop is bounded (three queries, eight pages and a few
+    rewritten sections) and it is the only path that repairs a placeholder
+    instead of shipping it. Set ``QUILL_GAP_RESEARCH=0`` to turn it off; any
+    unrecognised value keeps the safe default rather than silently disabling
+    the repair.
     """
-    return _flag("QUILL_GAP_RESEARCH").strip().lower() in _TRUE_VALUES
+    value = _flag("QUILL_GAP_RESEARCH", "1").strip().lower()
+    return value not in {"0", "false", "no", "off", "disabled", "none"}
 
 
 def _budget(name: str, default: int, hard_max: int) -> int:
@@ -155,23 +155,33 @@ def _budget(name: str, default: int, hard_max: int) -> int:
     return max(1, min(value, hard_max))
 
 
-def gap_research_queries_budget(default: int = 3, hard_max: int = 3) -> int:
+def gap_research_queries_budget(default: int = 4, hard_max: int = 5) -> int:
     """Hard cap on queries issued by one targeted research round."""
     return _budget("QUILL_GAP_RESEARCH_QUERIES", default, hard_max)
 
 
-def gap_research_pages_budget(default: int = 6, hard_max: int = 6) -> int:
+def gap_research_pages_budget(default: int = 10, hard_max: int = 12) -> int:
     """Hard cap on pages a single targeted research round may add."""
     return _budget("QUILL_GAP_RESEARCH_PAGES", default, hard_max)
 
 
-def gap_research_sections_budget(default: int = 3, hard_max: int = 5) -> int:
+def gap_research_sections_budget(default: int = 5, hard_max: int = 8) -> int:
     """Hard cap on sections a single gap round may re-write.
 
     This is the only part of the loop that costs LLM tokens (see
     ``cost-model.md``), so it is the one that needs the hardest ceiling.
     """
     return _budget("QUILL_GAP_RESEARCH_SECTIONS", default, hard_max)
+
+
+def gap_research_rounds(default: int = 2, hard_max: int = 3) -> int:
+    """How many batches of failed sections may be repaired in one run.
+
+    One round repairs up to ``gap_research_sections_budget`` sections. Two
+    rounds let a document with more placeholders than one batch can hold keep
+    going without letting a pathological run loop forever.
+    """
+    return _budget("QUILL_GAP_RESEARCH_ROUNDS", default, hard_max)
 
 
 def content_tokens(text: str) -> set[str]:

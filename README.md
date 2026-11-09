@@ -45,6 +45,10 @@ still a perfectly good offline editor when no model is connected.
 - **Small details.** A skeleton shelf that decodes in through
   [`ascii-reveal`](https://github.com/mars-shal/ascii-reveal), a branded
   onboarding card, a real 404, and reduced-motion support throughout.
+- **Natural-voice review.** The originality report includes a craft signal for
+  flat rhythm, repeated openings, stock transitions and uniform paragraphs. It
+  is a readability report, not an authorship probability or a detector score.
+  Pipeline runs write it beside the draft as `output/<session>.style.md`.
 
 ## A look at the shelf
 
@@ -70,10 +74,12 @@ Requirements:
 
 - Node.js 20+ and npm
 - Rust 1.88+ ([rustup](https://rustup.rs))
+- [uv](https://docs.astral.sh/uv/) for the Python pipeline sidecar
 - Linux only: `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`,
   `librsvg2-dev`
 
 ```bash
+uv sync                  # Python 3.14 + pipeline dependencies
 cd gui
 npm install
 npm run tauri:dev
@@ -91,11 +97,24 @@ Useful commands:
 
 ```bash
 npm run build            # production frontend build
+npm run sidecar:build    # package the Python pipeline as a sidecar binary
+npm run build:desktop    # frontend + sidecar, the packaged-build path
 npm test                 # unit + mocked + real-motion JS suites
 npm run check:contrast   # theme and cover contrast gate
 npm run check:rust       # rustfmt, clippy and cargo tests
-npm run tauri:build      # platform installers
+npm run tauri:build      # platform installers, sidecar included
 ```
+
+## The sidecar
+
+The assistant and the long-form pipeline run behind `api.py`. Packaged builds
+carry it as a PyInstaller sidecar (`quill-sidecar-<target-triple>`) through
+Tauri's `externalBin`; the Rust supervisor starts it with the app's data
+directory as its workspace. Chat starts it on first use if it is not already
+answering, so the assistant does not silently fall through to the direct
+provider. Embeddings run locally through `fastembed`/ONNX,
+using the same `all-MiniLM-L6-v2` model as before. The model is fetched once
+into the app-data `fastembed` cache, then all inference stays on the machine.
 
 ## Repository map
 

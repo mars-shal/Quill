@@ -57,6 +57,12 @@ const iconPaths = {
   // Table editing: remove a row or a column (the two ways to shrink a grid),
   // and remove the whole table.
   trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+  // Library navigation and import. These names have no registry file yet, so
+  // the first-party paths are what the sidebar draws.
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  home: '<path d="m4 10 8-6.5 8 6.5"/><path d="M6 9v10h12V9"/><path d="M10 19v-5h4v5"/>',
+  upload: '<path d="M12 16V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M5 16v3h14v-3"/>',
+  folder: '<path d="M3.5 6.5h6l2 2h9v10h-17z"/>',
 }
 
 // --- Registry icons (the app's icon set) ---------------------------------

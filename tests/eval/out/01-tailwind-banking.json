@@ -1,0 +1,16 @@
+{
+  "slug": "01-tailwind-banking",
+  "domain": "Software engineering",
+  "prompt": "Argue that Just-In-Time CSS generation improves maintainability in large React banking applications. Address style collisions, auditability and component isolation.",
+  "usage": {
+    "prompt_tokens": 145,
+    "completion_tokens": 1190,
+    "total_tokens": 1335
+  },
+  "finish_reason": "stop",
+  "seconds": 98.8,
+  "model": "gemma4:latest",
+  "file": "01-tailwind-banking.md",
+  "chars": 5338,
+  "words": 699
+}

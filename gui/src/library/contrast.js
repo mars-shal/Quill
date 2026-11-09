@@ -104,6 +104,25 @@ export function contrast(foreground, background) {
 }
 
 /**
+ * The more legible of two inks on a filled surface.
+ *
+ * Filled controls used to assume `--on-accent` was correct for every theme.
+ * When a custom theme changed `--accent` but inherited the light theme's ink,
+ * the label could become black on a dark accent -- or vanish into the surface
+ * the button was drawn on. This chooses by measured contrast, so the label
+ * follows the fill rather than the theme's mode.
+ *
+ * Returns null when the fill cannot be measured (a `color-mix()`, a bare
+ * keyword), which lets the caller keep the theme's own token.
+ */
+export function readableInk(background, dark = '#0F0F0F', light = '#F9F9F9') {
+  const darkRatio = contrast(dark, background)
+  const lightRatio = contrast(light, background)
+  if (darkRatio === null || lightRatio === null) return null
+  return darkRatio >= lightRatio ? dark : light
+}
+
+/**
  * Flattens a translucent colour over an opaque one.
  *
  * The palette uses translucent tokens heavily (`--border`, `--hover`,

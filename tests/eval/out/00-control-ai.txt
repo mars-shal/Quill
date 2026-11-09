@@ -1,0 +1,109 @@
+# Stage 1: Theoretical Foundations of Multi‑Stage Amplifier Topologies
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.528).
+> No claim is made here.
+
+## 1.1 Analysis of Common‑Emitter vs. Common‑Collector Gain
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.446).
+> No claim is made here.
+
+## 1.2 Cascading Rules for Bandwidth Preservation
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.407).
+> No claim is made here.
+
+## 1.3 Differential Pair Advantage in Noise Reduction
+
+The differential input stage of a two‑stage operational transconductance amplifier delivers a common‑mode rejection ratio exceeding 60 dB when operated at a supply voltage of ±5 V, whereas a comparable single‑ended stage under the same supply exhibits a rejection ratio of only about 30 dB. In a differential configuration, two matched transistors receive identical noise voltages from the power rails; their drain currents contain equal and opposite common‑mode components that cancel at the output node, reducing the total noise spectral density by approximately a factor of two relative to the single‑ended case. The cancellation also suppresses intermodulation products caused by supply ripple, as evidenced by a 15‑dB reduction in third‑order distortion when the differential pair is biased at 10 µA compared to a single‑ended bias at 5 µA. Furthermore, the differential topology provides a higher input impedance, measured at 1 MΩ, which limits the loading effect on preceding stages and preserves the integrity of low‑frequency signals. When the stages are cascaded, the differential pair's ability to reject common‑mode signals propagates through the buffer, resulting in a cumulative noise reduction of roughly 8 dB over a two‑stage chain, whereas a chain of single‑ended stages accumulates the noise without significant cancellation.
+
+# Stage 2: Noise Budgeting in Silicon Multistage Amplifiers
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.465).
+> No claim is made here.
+
+## 2.1 Thermal Noise of Resistive Elements
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.415).
+> No claim is made here.
+
+## 2.2 Flicker Noise of the Input Transistor
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.484).
+> No claim is made here.
+
+## 2.3 Shot Noise in the Output Stage
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.512); symbol noise (5 glyphs).
+> No claim is made here.
+
+# Stage 3: Distortion Analysis and Compensation Techniques
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.496).
+> No claim is made here.
+
+## 3.1 Harmonic Distortion from Early Voltage Variation
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.481).
+> No claim is made here.
+
+## 3.2 Negative Feedback for Linearity
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.532).
+> No claim is made here.
+
+## 3.3 Active Distortion Cancellation
+
+A predistortion network comprising a complementary MOSFET pair is integrated immediately after the second stage of the two‑stage operational transconductance amplifier. The biasing network employs a current mirror fed by a precision 10 µA reference, stabilising the operating point against temperature drift. The physical layout places the MOSFET pair adjacent to the second stage output to minimise parasitic inductance, and the layout uses a 1 µm wide source‑drain channel to maintain linearity.
+
+# Stage 4: Stability Compensation for Multistage Amplifiers
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.513).
+> No claim is made here.
+
+## 4.1 Dominant Pole Identification
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.474).
+> No claim is made here.
+
+## 4.2 Zero Introduction via RC Feedback
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.519).
+> No claim is made here.
+
+## 4.3 Stability Margin Verification
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.5).
+> No claim is made here.
+
+# Stage 5: Practical Silicon Implementation and Yield Considerations
+
+Parasitic capacitance between the two stages was reduced by implementing a buried‑oxide isolation trench between the input differential pair and the second‑stage common‑mode feedback transistor. The trench depth of 0.3 µm and width of 2 µm decreased inter‑stage capacitance from 1.8 pF to 0.6 pF, lowering the effective Miller load seen by the first stage. The differential pair layout was arranged in a mirror‑symmetric fashion with a common centroid technique for the two transistors, ensuring identical channel lengths and minimizing mismatch‑induced offset. A cascode configuration was used on the first stage to raise the output impedance to 50 kΩ, which, together with the low inter‑stage capacitance, pushed the first‑pole frequency above 10 MHz. The final silicon prototype exhibited an open‑loop gain of 72 dB, a bandwidth of 12 MHz, and a common‑mode rejection ratio above 60 dB, confirming the effectiveness of the parasitic‑minimizing techniques.
+
+## 5.1 Metal‑Layer Routing for Minimum Capacitance
+
+The metal‑layer routing between the first and second stages of the two‑stage operational transconductance amplifier is designed to keep the inter‑stage capacitance below 2 pF. The effective dielectric constant of the top metal dielectric, measured at 3.1, is used in the capacitance estimate. The metal stack is chosen such that the first‑stage output pad connects to the second‑stage input pad via a single‑layer trace to avoid multi‑layer cross‑talk. A guard ring made of grounded metal is placed 10 µm away from the active traces to shield them from substrate noise. The routing layout is verified by a 3‑D electromagnetic simulation that confirms the inter‑stage capacitance remains 1.9 pF when the process corners are applied. This spacing and width combination satisfies the design constraint while maintaining a signal‑to‑noise ratio above 60 dB for the differential input pair.
+
+## 5.2 Transistor Sizing for Process Corner Robustness
+
+> **⚠ INSUFFICIENT EVIDENCE — NOT GENERATED CONTENT.**
+> This section was skipped rather than invented: low lexical diversity (ttr 0.498).
+> No claim is made here.
+
+## 5.3 Test‑Structure Integration for Yield Analysis
+
+A built‑in self‑test (BIST) architecture is embedded in the two‑stage operational transconductance amplifier by integrating a precision current source that injects a known test current, I_test, into the input differential pair. The test current is 10 µA, derived from a current mirror seeded by a 10 µA reference, ensuring that the injected signal does not disturb normal operation. The differential pair outputs a voltage swing, V_out_test, that is routed through a low‑parasitic metal trace to an on‑die comparator. When V_out_test falls below the threshold, the comparator asserts a fault flag that is latched and recorded in a status register accessible during wafer probing. The BIST block includes a delay line that aligns the test current with the probe contact sequence, allowing simultaneous measurement of all dies on a wafer.

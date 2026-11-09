@@ -226,7 +226,10 @@ test('no CSS transition or keyframe runs longer than the budget', () => {
   // `animation: flash-anything 4s` -- a name nobody had ever written -- passed
   // silently, as would any new animation with flash in its name. An allowlist of
   // name to duration is the only form where the exemption cannot grow.
-  const LONG_ANIMATIONS = { sectionFlash: 1.6 }
+  // The onboarding preview's cursor blink and skeleton pulse are state cues
+  // that run while the reader is choosing; they are slow on purpose so they
+  // read as waiting rather than as a flashing control.
+  const LONG_ANIMATIONS = { sectionFlash: 1.6, 'onboarding-cursor': 1, 'onboarding-pulse': 1.2 }
   for (const [, name, seconds] of css.matchAll(/animation:\s*([\w-]+)\s+([\d.]+)s/g)) {
     const allowed = LONG_ANIMATIONS[name]
     if (allowed !== undefined) {

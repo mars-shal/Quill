@@ -6,6 +6,7 @@ pub mod documents;
 pub mod error;
 pub mod export;
 pub mod images;
+pub mod import;
 pub mod legacy;
 pub mod model_catalog;
 pub mod pipeline;
@@ -77,6 +78,7 @@ pub fn run() {
             commands::update_document,
             commands::delete_document,
             commands::restore_document,
+            commands::purge_document,
             commands::get_settings,
             commands::set_settings,
             commands::set_provider_secret,
@@ -98,6 +100,9 @@ pub fn run() {
             commands::sync_config_write,
             commands::list_custom_themes,
             commands::save_custom_theme,
+            pipeline::api_complete,
+            pipeline::api_questionnaire,
+            pipeline::api_verify,
             pipeline::api_chat,
             pipeline::api_chat_stream,
             pipeline::api_health,
@@ -113,6 +118,7 @@ pub fn run() {
             commands::onboarding_value,
             commands::onboarding_set,
             commands::read_image_as_data_url,
+            commands::read_text_file,
             commands::list_providers,
             commands::get_provider,
             commands::get_active_provider,

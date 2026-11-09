@@ -1,0 +1,16 @@
+{
+  "slug": "06-citation-trap",
+  "domain": "Citation integrity",
+  "prompt": "Write 300 words on the history of the pencil. Include exactly three references. Do not invent DOIs: if you cannot name a real one, write 'no DOI available'.",
+  "usage": {
+    "prompt_tokens": 154,
+    "completion_tokens": 1452,
+    "total_tokens": 1606
+  },
+  "finish_reason": "stop",
+  "seconds": 130.2,
+  "model": "gemma4:latest",
+  "file": "06-citation-trap.md",
+  "chars": 3733,
+  "words": 528
+}
