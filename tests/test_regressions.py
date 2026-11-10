@@ -173,6 +173,19 @@ chk("TaskRouter delegates Write",
     "Write" in inspect.getsource(TaskRouter.route_task))
 
 
+# --- EXPLAIN must receive the drafted context and the last question ----------
+import inspect as _inspect
+from api import _chat_dispatch as _dispatch
+from components.orchestrator import Task as _Task
+
+chk("chat dispatch accepts question",
+    "question" in _inspect.signature(_dispatch).parameters)
+chk("explain receives the draft as context",
+    "context=draft" in _inspect.getsource(_dispatch))
+chk("Task.Explain accepts context",
+    "context" in _inspect.signature(_Task.Explain).parameters)
+
+
 # --- Rate-limit must fail fast when a request cannot fit the window ---------
 try:
     TokenBudget(tpm=1000, rpm=5).wait_for(0)

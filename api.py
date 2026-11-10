@@ -548,6 +548,7 @@ def _chat_dispatch(
     token_saving: bool = False,
     natural_voice: bool = False,
     writing_profile: str = "",
+    question: str = "",
 ) -> dict:
     """Runs one classified chat turn and returns the panel's reply shape.
 
@@ -604,7 +605,9 @@ def _chat_dispatch(
         elif task_type == "RESEARCH":
             result = executor.Research(task)
         elif task_type == "EXPLAIN":
-            result = executor.Explain(task)
+            # Explain the open draft when there is one; only search when the
+            # turn has no document context. The full history is not a subject.
+            result = executor.Explain(question or task, context=draft)
         elif task_type == "SMALLTALK":
             # Spelled out rather than derived: `"SMALLTALK".capitalize()` is
             # "Smalltalk", which is not the method's name, and the AttributeError
