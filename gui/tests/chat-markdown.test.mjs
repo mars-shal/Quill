@@ -42,9 +42,15 @@ test('assistant tables and LaTeX render', () => {
     'The gain is $A_v = g_m R_C$.',
   ].join('\n'))
 
-  assert.match(html, /<table><tbody><tr><th>Stage<\/th><th>Gain<\/th><\/tr>/)
+  assert.match(html, /<div class="message-table-wrap"><table><tbody><tr><th>Stage<\/th><th>Gain<\/th><\/tr>/)
   assert.match(html, /<tr><td>First<\/td><td>40<\/td><\/tr>/)
   assert.match(html, /class="katex"/)
+})
+
+test('literal br tags in cells become line breaks, not text', () => {
+  const html = renderChatMarkdown('| Section | Key points |\n| --- | --- |\n| A | one<br>two<br>three |')
+  assert.match(html, /one<br>two<br>three/)
+  assert.doesNotMatch(html, /&lt;br/)
 })
 
 test('raw HTML is escaped and unsafe links stay text', () => {
