@@ -86,17 +86,6 @@ const SUGGESTIONS = ['Summarize draft', 'Tighten intro', 'Suggest three titles']
  * asked to spend a different amount of effort. They are not different models,
  * so the picker above still names the model; this only sets the budget.
  */
-const TASKS = [
-  { value: 'rewrite', label: 'Rewrite' },
-  { value: 'auto', label: 'Auto' },
-  { value: 'write', label: 'Write' },
-  { value: 'research', label: 'Research' },
-  { value: 'critique', label: 'Critique' },
-  { value: 'explain', label: 'Explain' },
-  { value: 'search', label: 'Search & pull' },
-  { value: 'survey', label: 'Survey' },
-]
-
 const VARIANTS = [
   { id: 'fast', label: 'Fast', hint: 'Short answers, minimal research. Best for quick edits.' },
   { id: 'balanced', label: 'Balanced', hint: 'The normal mix of research and writing.' },
@@ -691,7 +680,7 @@ function attachmentPrompt(attachment) {
 }
 
 /** The message box, its controls and the send button. */
-function ChatComposer({ input, setInput, send, mode, setMode, task, setTask, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
+function ChatComposer({ input, setInput, send, mode, setMode, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
   // The desktop picker goes through MarkItDown, which covers PDF, DOCX,
   // PPTX, XLSX, HTML and more. The hidden input remains the browser fallback.
   const pickDocument = async () => {
@@ -767,16 +756,6 @@ function ChatComposer({ input, setInput, send, mode, setMode, task, setTask, var
               {voiceState === 'recording' ? 'Listening…' : voiceState === 'transcribing' ? 'Transcribing…' : voiceError || 'Microphone'}
             </span>
           )}
-          <ToolbarSelect
-            label="Orchestrator task"
-            value={(TASKS.find((entry) => entry.value === task) || TASKS[0]).label}
-            placeholder="Auto"
-            options={TASKS.map((entry) => ({ value: entry.label, label: entry.label }))}
-            onChange={(label) => {
-              const found = TASKS.find((entry) => entry.label === label)
-              if (found) setTask(found.value)
-            }}
-          />
           <button
             className="chat-mode chat-variant"
             type="button"
@@ -1058,7 +1037,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // Interview is a one-shot mode: it asks the questionnaire for the next turn,
   // then turns itself off so the answers can be written without another round.
   const [interview, setInterview] = useState(false)
-  const [task, setTask] = useState('rewrite')
+  const task = 'auto'
   const [liveModels, setLiveModels] = useState([])
   const [modelsState, setModelsState] = useState('idle')
   const [modelsError, setModelsError] = useState('')
@@ -1278,7 +1257,12 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // millisecond used to share a `Date.now()` id, and these ids are React keys --
   // a collision reconciles the wrong node and leaves the transcript out of order.
   const messageSeq = useRef(0)
-  const nextMessageId = (role) => `m${(messageSeq.current += 1)}-${role}`
+  // Restored transcripts already contain ids like `m1-user`. A fresh mount must
+  // not restart the counter at 1 and collide with them, or React reconciles the
+  // wrong message and AnimatePresence warns about duplicate keys.
+  const nextMessageId = (role) => (
+    `m${(messageSeq.current += 1)}-${role}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  )
 
   /**
    * One turn, with the composer values passed explicitly.
@@ -1525,7 +1509,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
 
   const composerProps = {
     input, setInput, send, mode, setMode, conceptMode, setConceptMode,
-    task, setTask, variant, setVariant, interview, setInterview,
+    variant, setVariant, interview, setInterview,
     attachment, setAttachment,
     fileRef, busy: typing, voiceState, voiceError, onVoiceStart: startVoice,
     onVoiceStop: stopVoice,

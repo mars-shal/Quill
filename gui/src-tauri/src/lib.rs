@@ -19,6 +19,27 @@ pub mod ydoc;
 
 use tauri::Manager;
 
+/// WebKitGTK's default is to leave media requests undecided. The voice note is
+/// an explicit click in our own UI, so the host can grant the user-media
+/// request instead of letting the webview deny it silently.
+#[cfg(target_os = "linux")]
+fn allow_microphone(window: &tauri::WebviewWindow) {
+    use webkit2gtk::glib::ObjectExt;
+    use webkit2gtk::{PermissionRequestExt, UserMediaPermissionRequest, WebViewExt};
+
+    let _ = window.with_webview(|webview| {
+        let view = webview.inner();
+        let _ = view.connect_permission_request(|_, request| {
+            if request.is::<UserMediaPermissionRequest>() {
+                request.allow();
+                true
+            } else {
+                false
+            }
+        });
+    });
+}
+
 /// Managed application state held by the Tauri core process.
 pub struct AppState {
     pub pool: sqlx::SqlitePool,
@@ -68,6 +89,10 @@ pub fn run() {
             }
             app.manage(AppState { pool });
             app.manage(pipeline::Supervisor::default());
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                allow_microphone(&window);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
