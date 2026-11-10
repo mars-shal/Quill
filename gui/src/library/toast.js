@@ -8,9 +8,14 @@
 const listeners = new Set()
 let sequence = 0
 
+// WebGL effects already have a plain fallback (EffectBoundary + hasWebGL2).
+// Their "no context" message is expected on WebKitGTK/headless machines, not a
+// failure the reader can act on, so it must not become a toast.
+const EXPECTED_EFFECT_NOISE = /metal-fx: WebGL2 not supported|WebGL2 not supported|WebGL context (?:lost|creation)|ResizeObserver loop/i
+
 export function notify(message, { kind = 'error', timeout = 6000 } = {}) {
   const text = String(message || '').trim()
-  if (!text) return 0
+  if (!text || EXPECTED_EFFECT_NOISE.test(text)) return 0
   const item = { id: ++sequence, message: text, kind, timeout }
   for (const listener of listeners) listener(item)
   return item.id
