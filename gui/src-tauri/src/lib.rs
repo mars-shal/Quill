@@ -132,6 +132,7 @@ pub fn run() {
             pipeline::api_transcribe,
             pipeline::api_chat,
             pipeline::api_chat_stream,
+            pipeline::api_cancel_chat,
             pipeline::api_health,
             pipeline::api_start_run,
             pipeline::api_run_status,

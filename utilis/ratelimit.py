@@ -54,6 +54,14 @@ class TokenBudget:
         here because billed usage includes the model's answer.
         """
         need = max(1, int(tokens)) + OUTPUT_TOKEN_RESERVE
+        # A request larger than the whole window can never fit. Waiting for it
+        # is an infinite loop -- exactly what an EXPLAIN turn with a 39k-token
+        # prompt did in the 2026-11-10 log. Fail with the actionable reason.
+        if need > self.tpm:
+            raise RateLimitError(
+                f"request needs {need:,} tokens but the budget is "
+                f"{self.tpm:,} TPM; shorten the context or raise QUILL_TPM"
+            )
         if OUTPUT_TOKEN_RESERVE:
             logger.debug(
                 f"[ratelimit] reserving {need} tokens "

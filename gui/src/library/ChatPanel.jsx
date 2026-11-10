@@ -44,6 +44,7 @@ import {
   describeFailure,
   listProviderModels,
   questionnaire,
+  cancelChat,
   transcribeAudio,
   pickDocumentPaths,
   convertDocument,
@@ -1257,6 +1258,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // millisecond used to share a `Date.now()` id, and these ids are React keys --
   // a collision reconciles the wrong node and leaves the transcript out of order.
   const messageSeq = useRef(0)
+  const turnSeq = useRef(0)
   // Restored transcripts already contain ids like `m1-user`. A fresh mount must
   // not restart the counter at 1 and collide with them, or React reconciles the
   // wrong message and AnimatePresence warns about duplicate keys.
@@ -1275,6 +1277,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     const attachmentText = attachmentPrompt(att)
     const prompt = [value, attachmentText].filter(Boolean).join('\n\n')
     const text = [value, att ? `Attached: ${att.name}` : ''].filter(Boolean).join('\n')
+    const turn = ++turnSeq.current
     const userId = nextMessageId('user')
     setMessages((current) => [...current, {
       id: userId,
@@ -1341,6 +1344,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       )),
     })
       .then(({ reply, transport, task, sources, wroteDocument }) => {
+        if (turn !== turnSeq.current) return
         setTyping(false)
         // A turn that produced a document belongs in the document. WRITE and
         // REWRITE both return the piece itself -- a rewrite is the draft after
@@ -1369,6 +1373,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         })
       })
       .catch((error) => {
+        if (turn !== turnSeq.current) return
         // A failure is reported as itself. Falling back to a canned reply is
         // exactly what made this panel unable to tell the reader anything was
         // ever wrong.
@@ -1491,7 +1496,18 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // travelling while the reader asked for stillness.
   const canUseMetal = hasWebGL2() && live
 
-  const plainSendButton = (
+  const stopTurn = () => {
+    turnSeq.current += 1
+    setTyping(false)
+    setTurnSteps([])
+    cancelChat().catch(() => {})
+  }
+
+  const plainSendButton = typing ? (
+    <motion.button className="send-button is-stop" style={{ pointerEvents: 'auto' }} type="button" aria-label="Stop the assistant" title="Stop" onClick={stopTurn} whileTap={{ scale: 0.94 }} transition={spring}>
+      <Icon name="stop" size={14} />
+    </motion.button>
+  ) : (
     <motion.button className="send-button" style={{ pointerEvents: 'auto' }} type="button" disabled={typing || (!input.trim() && !attachment?.text)} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
       <Icon name="send" size={15} />
     </motion.button>

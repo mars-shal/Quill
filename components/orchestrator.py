@@ -689,10 +689,31 @@ class Task:
         return self.agent.model(prompt)
 
     @timed("Task.Explain")
-    def Explain(self, prompt: str):
+    def Explain(self, prompt: str, context: str = ""):
+        """Explain the open draft when one exists, not the whole web.
+
+        The log that motivated this passed the entire chat transcript --
+        including "hey" and a variant instruction -- to ResearchEngine. The
+        planner treated "Can I Help" as the subject, searched for it, and built
+        a 39k-token prompt that could never fit the 6k TPM budget. A document
+        question should use the document; research is only the fallback.
+        """
+        context = (context or "").strip()
+        if context:
+            source = context[:12000]
+            answer = self.agent.model(
+                f"QUESTION: {prompt}\n\n"
+                "Explain the document below to the reader. Use only what it "
+                "contains; say when something is not in it.\n\n"
+                f"DOCUMENT:\n{source}",
+                system_prompt="You give concise, well-grounded explanations.",
+            )
+            return {"answer": answer, "research": {"summary": "", "pages": [], "corpus": ""}}
+
         payload = ResearchEngine(agent=self.agent).run(prompt, prompt=prompt)
+        corpus = str(payload.get("corpus") or "")[:12000]
         answer = self.agent.model(
-            f"QUESTION: {prompt}\n\nExplain using only the research below.\n\nRESEARCH:\n{payload.get('corpus', '')}",
+            f"QUESTION: {prompt}\n\nExplain using only the research below.\n\nRESEARCH:\n{corpus}",
             system_prompt="You give concise, well-grounded explanations.",
         )
         return {"answer": answer, "research": payload}

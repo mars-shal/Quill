@@ -679,6 +679,27 @@ pub async fn api_transcribe(
     Ok(payload)
 }
 
+/// Stop waiting on one chat turn. The sidecar ends the stream and drops the
+/// late reply; the worker thread may still finish its current provider call.
+#[tauri::command]
+pub async fn api_cancel_chat(turn_id: String) -> AppResult<()> {
+    let response = reqwest::Client::new()
+        .post(format!("{}/chat/cancel", base_url()))
+        .json(&serde_json::json!({ "turn_id": turn_id }))
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(map_transport)?;
+    if response.status().is_success() || response.status().as_u16() == 404 {
+        Ok(())
+    } else {
+        Err(AppError::Other(format!(
+            "cancel failed: HTTP {}",
+            response.status()
+        )))
+    }
+}
+
 /// Resolve citations and search open indexes for copied passages.
 #[tauri::command]
 pub async fn api_verify(

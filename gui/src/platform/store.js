@@ -859,9 +859,12 @@ export async function startRun({ prompt, documentId, sessionName, conceptMode } 
  * the first is still answering -- so the id is the only thing that stops one
  * turn's progress appearing inside another's bubble.
  */
+let activeChatTurn = null
+
 export async function chat({ messages, draft, conceptMode, task, variant, tokenSaving, naturalVoice, writingProfile, onStage } = {}) {
   if (!isTauri) throw new Error('The assistant needs the desktop app.')
   const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  activeChatTurn = turnId
   const release = typeof onStage === 'function'
     ? subscribe('quill://chat-stage', (payload) => {
       if (payload?.turnId !== turnId) return
@@ -882,7 +885,20 @@ export async function chat({ messages, draft, conceptMode, task, variant, tokenS
       task: task || 'auto',
     })
   } finally {
+    if (activeChatTurn === turnId) activeChatTurn = null
     release()
+  }
+}
+
+/** Stop the in-flight chat turn, if there is one. */
+export async function cancelChat() {
+  const turnId = activeChatTurn
+  activeChatTurn = null
+  if (!turnId || !isTauri) return
+  try {
+    await (await tauriInvoke())('api_cancel_chat', { turnId })
+  } catch (error) {
+    console.warn('Could not cancel the assistant turn', error)
   }
 }
 

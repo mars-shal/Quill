@@ -20,6 +20,7 @@ from components.researchEngine import ResearchEngine as R
 from components.researchEngine import _entity_confirmed, _is_informative
 from utilis.pydanticModels import SageConcept
 from utilis.store import SqliteDatabase
+from utilis.ratelimit import RateLimitError, TokenBudget
 
 RESULTS: list[tuple[bool, str, str]] = []
 
@@ -170,6 +171,14 @@ chk("Task.Write forwards concept_mode",
     "concept_mode=concept_mode" in inspect.getsource(Task.Write))
 chk("TaskRouter delegates Write",
     "Write" in inspect.getsource(TaskRouter.route_task))
+
+
+# --- Rate-limit must fail fast when a request cannot fit the window ---------
+try:
+    TokenBudget(tpm=1000, rpm=5).wait_for(0)
+    chk("oversized request fails fast", False, "wait_for returned")
+except RateLimitError as error:
+    chk("oversized request fails fast", "budget" in str(error), str(error))
 
 
 # --- Windows / persistence regressions ---------------------------------------

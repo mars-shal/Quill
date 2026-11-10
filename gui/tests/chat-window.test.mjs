@@ -724,3 +724,27 @@ test('the composer marks send ready and enables it when text is present', async 
   assert.equal(box.hasAttribute('data-ready'), false, 'clearing the field clears ready')
   assert.equal(button.disabled, true, 'clearing the field disables send again')
 })
+
+test('the send button becomes a stop control while a turn is running', async () => {
+  const working = handlers.api_chat
+  handlers.api_chat = () => new Promise((resolve) => {
+    window.setTimeout(() => resolve({
+      reply: 'late answer',
+      transport: 'sidecar',
+      task: 'EXPLAIN',
+      sources: [],
+    }), 180)
+  })
+  try {
+    await send('explain this draft')
+    await tick(30)
+    const stop = root.querySelector('.send-button')
+    assert.equal(stop.getAttribute('aria-label'), 'Stop the assistant', 'working turns offer a stop control')
+    await click(stop)
+    await tick(30)
+    assert.equal(root.querySelector('.send-button').getAttribute('aria-label'), 'Send message', 'stopping returns the send control')
+    await tick(260)
+  } finally {
+    handlers.api_chat = working
+  }
+})

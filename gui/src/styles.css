@@ -4531,3 +4531,7 @@ section#settings-assistant.settings-section {
 .toast > button:hover { color: var(--text-1); }
 .toast--info { border-left-color: var(--accent); }
 .toast--success { border-left-color: var(--publish); }
+
+/* The same button becomes a stop control while a turn is running. */
+.send-button.is-stop { color: var(--on-accent); background: var(--danger); }
+.send-button.is-stop:hover { filter: brightness(1.12); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent), var(--shadow-2); }

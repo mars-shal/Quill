@@ -128,6 +128,7 @@ class ChatTurn:
         self.id = uuid.uuid4().hex
         self.events: list[dict] = []
         self.done = False
+        self.cancelled = False
         self.reply: dict | None = None
         self.error = ""
         # The last label emitted. The timing wrapper fires once per call, and a
@@ -154,6 +155,12 @@ class ChatTurn:
             self.done = True
             self._cv.notify_all()
 
+    def cancel(self) -> None:
+        with self._cv:
+            self.cancelled = True
+            self.done = True
+            self._cv.notify_all()
+
     def stream(self):
         """Yield events as they arrive, returning once the turn is over."""
         cursor = 0
@@ -171,6 +178,8 @@ class ChatTurn:
 
 
 RUNS: dict[str, Run] = {}
+CHAT_TURNS: dict[str, ChatTurn] = {}
+_CHAT_LOCK = threading.Lock()
 _RUNS_LOCK = threading.Lock()
 _CURRENT = threading.local()
 
@@ -711,6 +720,7 @@ def _route_chat_turn(
             provider, forced.upper(), task, draft,
             concept_mode=concept_mode, token_saving=token_saving,
             natural_voice=natural_voice, writing_profile=writing_profile,
+            question=question,
         )
 
     response = Agent(provider).Nous(task)
@@ -728,7 +738,7 @@ def _route_chat_turn(
         provider, task_type, task, draft,
         concept_mode=concept_mode, token_saving=token_saving,
         natural_voice=natural_voice,
-        writing_profile=writing_profile,
+        writing_profile=writing_profile, question=question,
     )
 
 
@@ -1164,6 +1174,20 @@ class Handler(BaseHTTPRequestHandler):
             logger.exception("markitdown conversion failed")
             return self._json(400, {"error": f"conversion failed: {exc}"})
 
+    def _cancel_chat(self, body: dict) -> None:
+        """Stop waiting on one live chat turn.
+
+        Python cannot kill a worker thread mid-call, but this ends the SSE
+        stream immediately and marks the turn so its late reply is discarded.
+        """
+        turn_id = str(body.get("turn_id") or "").strip()
+        with _CHAT_LOCK:
+            turn = CHAT_TURNS.pop(turn_id, None)
+        if turn is None:
+            return self._json(404, {"error": "no such turn"})
+        turn.cancel()
+        return self._json(200, {"cancelled": True})
+
     def _chat(self, body: dict) -> None:
         """One assistant turn, routed through the task pipeline.
 
@@ -1253,6 +1277,8 @@ class Handler(BaseHTTPRequestHandler):
         draft = str(body.get("draft") or "").strip()[:12000]
         concept_mode = _concept_mode(body)
         turn = ChatTurn()
+        with _CHAT_LOCK:
+            CHAT_TURNS[turn.id] = turn
 
         def work() -> None:
             _CURRENT.run = None
@@ -1275,6 +1301,8 @@ class Handler(BaseHTTPRequestHandler):
                 turn.error = str(exc) or exc.__class__.__name__
             finally:
                 turn.finish()
+                with _CHAT_LOCK:
+                    CHAT_TURNS.pop(turn.id, None)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -1332,6 +1360,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._profile(body)
         if route == "/transcribe":
             return self._transcribe(body)
+        if route == "/chat/cancel":
+            return self._cancel_chat(body)
         if route == "/chat":
             return self._chat(body)
         if route == "/chat/stream":
