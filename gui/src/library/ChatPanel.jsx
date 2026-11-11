@@ -27,6 +27,7 @@ import { hasWebGL2 } from '../platform/capabilities.js'
 import { EffectBoundary } from '../ErrorBoundary.jsx'
 import { getFastTransition, getMotionTransition } from './motion.js'
 import { renderChatMarkdown } from './chatMarkdown.js'
+import { startWavRecording } from './audioRecorder.js'
 import { notify } from './toast.js'
 import { VoiceBeam, useMicrophone } from 'voice-glow'
 import { readTableSize, resizeTable, tableSizes } from '../editor/tableSize.js'
@@ -1053,9 +1054,40 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const micRef = useRef(mic)
   micRef.current = mic
   const recorderRef = useRef(null)
+  const wavRecorderRef = useRef(null)
   const chunksRef = useRef([])
   const [voiceState, setVoiceState] = useState('idle')
   const [voiceError, setVoiceError] = useState('')
+
+  const transcribeBlob = useCallback(async (blob) => {
+    setVoiceState('transcribing')
+    setVoiceError('')
+    try {
+      const bytes = new Uint8Array(await blob.arrayBuffer())
+      let binary = ''
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+      }
+      const isWav = String(blob.type).includes('wav')
+      const result = await transcribeAudio({
+        audio: window.btoa(binary),
+        mime: blob.type || 'audio/webm',
+        filename: isWav ? 'quill-voice.wav' : 'quill-voice.webm',
+      })
+      const text = String(result?.text || '').trim()
+      if (text) {
+        setInput((current) => (current.trim() ? `${current.trim()} ${text}` : text))
+      } else {
+        setVoiceError('No speech was detected.')
+      }
+    } catch (error) {
+      const message = error?.message || 'The recording could not be transcribed.'
+      setVoiceError(message)
+      notify(message)
+    } finally {
+      setVoiceState('idle')
+    }
+  }, [setInput])
 
   const startVoice = useCallback(async () => {
     const microphone = micRef.current
@@ -1071,8 +1103,18 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         setVoiceState('error')
         return
       }
+
+      // WebKitGTK can provide getUserMedia and Web Audio without
+      // MediaRecorder. Capture PCM and send a WAV instead of failing.
+      if (typeof window.MediaRecorder !== 'function') {
+        wavRecorderRef.current = startWavRecording(stream)
+        setVoiceError('')
+        setVoiceState('recording')
+        return
+      }
+
       const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg']
-      const mimeType = candidates.find((type) => window.MediaRecorder?.isTypeSupported?.(type)) || ''
+      const mimeType = candidates.find((type) => window.MediaRecorder.isTypeSupported?.(type)) || ''
       const recorder = mimeType ? new window.MediaRecorder(stream, { mimeType }) : new window.MediaRecorder(stream)
       chunksRef.current = []
       recorder.ondataavailable = (event) => {
@@ -1081,32 +1123,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
         chunksRef.current = []
-        setVoiceState('transcribing')
-        setVoiceError('')
-        try {
-          const bytes = new Uint8Array(await blob.arrayBuffer())
-          let binary = ''
-          for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-            binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
-          }
-          const result = await transcribeAudio({
-            audio: window.btoa(binary),
-            mime: blob.type || 'audio/webm',
-            filename: 'quill-voice.webm',
-          })
-          const text = String(result?.text || '').trim()
-          if (text) {
-            setInput((current) => (current.trim() ? `${current.trim()} ${text}` : text))
-          } else {
-            setVoiceError('No speech was detected.')
-          }
-        } catch (error) {
-          const message = error?.message || 'The recording could not be transcribed.'
-          setVoiceError(message)
-          notify(message)
-        } finally {
-          setVoiceState('idle')
-        }
+        await transcribeBlob(blob)
       }
       recorder.start()
       recorderRef.current = recorder
@@ -1118,14 +1135,29 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       notify(message)
       setVoiceState('error')
     }
-  }, [setInput])
+  }, [setInput, transcribeBlob])
 
   const stopVoice = useCallback(() => {
+    const wav = wavRecorderRef.current
+    wavRecorderRef.current = null
+    if (wav) {
+      wav.stop()
+        .then(transcribeBlob)
+        .catch((error) => {
+          const message = error?.message || 'The recording could not be stopped.'
+          setVoiceError(message)
+          notify(message)
+          setVoiceState('idle')
+        })
+      micRef.current?.stop?.()
+      return
+    }
     const recorder = recorderRef.current
     recorderRef.current = null
     if (recorder && recorder.state !== 'inactive') recorder.stop()
     micRef.current?.stop?.()
-  }, [])
+  }, [transcribeBlob])
+
   // Every effect below is decorative motion, so a reduced-motion request has to
   // freeze all of them, not just the CSS transitions.
   //

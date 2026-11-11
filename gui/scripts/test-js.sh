@@ -54,7 +54,8 @@ node --test --test-force-exit --test-concurrency=1 \
   tests/app-shell-overlay.test.mjs \
   tests/browser-store.test.mjs \
   tests/import-templates.test.mjs \
-  tests/chat-markdown.test.mjs || status=1
+  tests/chat-markdown.test.mjs \
+  tests/audio-recorder.test.mjs || status=1
 
 echo
 echo "==> render suite (framer-motion mocked)"
