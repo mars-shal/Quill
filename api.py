@@ -501,6 +501,11 @@ def _parse_questionnaire(reply) -> list[dict]:
     if start < 0 or end <= start:
         raise RuntimeError("the model did not return a questionnaire")
     body = text[start : end + 1]
+    # Some models emit `,"{header":...` instead of `,{"header":...` between
+    # question objects. Repair that exact shape before handing it to the JSON
+    # parser, otherwise a permissive repairer can drop the following headers.
+    for key in ("header", "question", "multiSelect", "options"):
+        body = body.replace(f',"{{{key}"', f',{{"{key}"')
     try:
         payload = json.loads(body)
     except (ValueError, TypeError) as exc:

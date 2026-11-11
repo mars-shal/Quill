@@ -196,8 +196,11 @@ _api_module = __import__("api")
 chk("FORMAT normalisation is a document turn",
     _api_module._normalise_chat_answer("FORMAT", {"markdown": "# X"})["task"] == "FORMAT")
 _bad_questions = '{"questions":[{"header":"Format","question":"Q1","multiSelect":false,"options":[{"label":"A","description":"a"}]},{header":"Definitions","question":"Q2","multiSelect":false,"options":[{"label":"B","description":"b"}]}]}'
+_repaired_questions = _api_module._parse_questionnaire(_bad_questions)
 chk("malformed questionnaire JSON is repaired",
-    len(_api_module._parse_questionnaire(_bad_questions)) == 2)
+    len(_repaired_questions) == 2)
+chk("repaired questionnaire keeps its headers",
+    [q["header"] for q in _repaired_questions] == ["Format", "Definitions"])
 class _FormatAgent:
     def Quill(self, prompt, skill="", **kwargs):
         return "# Formatted\n\nThe transistor notes are preserved."
