@@ -192,8 +192,12 @@ chk("Task.Format exists and takes a prompt",
     "prompt" in _inspect.signature(_Task.Format).parameters)
 chk("format chunks split long documents",
     len(_format_chunks("# A\n\n" + ("x" * 14000) + "\n\n# B\n\n" + ("y" * 5000))) >= 2)
+_api_module = __import__("api")
 chk("FORMAT normalisation is a document turn",
-    __import__("api")._normalise_chat_answer("FORMAT", {"markdown": "# X"})["task"] == "FORMAT")
+    _api_module._normalise_chat_answer("FORMAT", {"markdown": "# X"})["task"] == "FORMAT")
+_bad_questions = '{"questions":[{"header":"Format","question":"Q1","multiSelect":false,"options":[{"label":"A","description":"a"}]},{header":"Definitions","question":"Q2","multiSelect":false,"options":[{"label":"B","description":"b"}]}]}'
+chk("malformed questionnaire JSON is repaired",
+    len(_api_module._parse_questionnaire(_bad_questions)) == 2)
 class _FormatAgent:
     def Quill(self, prompt, skill="", **kwargs):
         return "# Formatted\n\nThe transistor notes are preserved."

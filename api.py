@@ -500,10 +500,19 @@ def _parse_questionnaire(reply) -> list[dict]:
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end <= start:
         raise RuntimeError("the model did not return a questionnaire")
+    body = text[start : end + 1]
     try:
-        payload = json.loads(text[start : end + 1])
+        payload = json.loads(body)
     except (ValueError, TypeError) as exc:
-        raise RuntimeError(f"the questionnaire was not valid JSON: {exc}") from exc
+        # Small models regularly drop a `{` between question objects or leave
+        # a trailing comma. json_repair is already a project dependency for the
+        # research parser; use it before failing the whole interview.
+        try:
+            from json_repair import loads as repair_loads
+
+            payload = repair_loads(body)
+        except Exception:
+            raise RuntimeError(f"the questionnaire was not valid JSON: {exc}") from exc
     raw = payload.get("questions") if isinstance(payload, dict) else None
     if not isinstance(raw, list):
         raise RuntimeError("the model returned no questions")
