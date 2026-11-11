@@ -421,7 +421,7 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
    * The markdown is parsed through `@tiptap/markdown` either way, so the
    * produced document becomes the same nodes a hand-typed one would.
    */
-  const appendToDocument = useCallback((markdown) => {
+  const appendToDocument = useCallback((markdown, { replace = false } = {}) => {
     const editor = tiptap
     const text = typeof markdown === 'string' ? markdown.trim() : ''
     if (!editor || !text) return false
@@ -438,7 +438,7 @@ function Editor({ doc, stats, settings, theme, onSettingsChange, activeProvider,
     const fillsTemplate = existing.length >= 2
       && shared.length >= 2
       && shared.length >= Math.ceil(existing.length * 0.6)
-    if (fillsTemplate) {
+    if (replace || fillsTemplate) {
       // A wholesale replacement is destructive, so keep the pre-fill state in
       // version history rather than relying on the autosave window.
       recordVersion(doc.id, editor.getHTML(), { force: true })

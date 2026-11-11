@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import main as M
 from components.conceptEngine import ConceptEngine as C
-from components.orchestrator import Task, TaskRouter
+from components.orchestrator import Task, TaskRouter, _format_chunks, is_format_request
 from components.researchEngine import ResearchEngine as R
 from components.researchEngine import _entity_confirmed, _is_informative
 from utilis.pydanticModels import SageConcept
@@ -184,6 +184,35 @@ chk("explain receives the draft as context",
     "context=draft" in _inspect.getsource(_dispatch))
 chk("Task.Explain accepts context",
     "context" in _inspect.signature(_Task.Explain).parameters)
+chk("format requests are recognised",
+    is_format_request("can u format this for me and add definishions"))
+chk("format requests are not new-subject writes",
+    not is_format_request("write a new essay about transistors"))
+chk("Task.Format exists and takes a prompt",
+    "prompt" in _inspect.signature(_Task.Format).parameters)
+chk("format chunks split long documents",
+    len(_format_chunks("# A\n\n" + ("x" * 14000) + "\n\n# B\n\n" + ("y" * 5000))) >= 2)
+chk("FORMAT normalisation is a document turn",
+    __import__("api")._normalise_chat_answer("FORMAT", {"markdown": "# X"})["task"] == "FORMAT")
+class _FormatAgent:
+    def Quill(self, prompt, skill="", **kwargs):
+        return "# Formatted\n\nThe transistor notes are preserved."
+
+
+with tempfile.TemporaryDirectory() as _tmp:
+    _format_db = SqliteDatabase(os.path.join(_tmp, "format.db"))
+    _format_db.set("format-doc", {"title": "Transistors", "markdown": "# Transistors\n\nOriginal"})
+    _format_task = Task.__new__(Task)
+    _format_task.agent = _FormatAgent()
+    _format_task.database = _format_db
+    _format_task._last_document_id = "format-doc"
+    _format_result = Task.Format(_format_task, "format this and add definitions", "format-doc")
+    chk("Task.Format returns the formatted document",
+        _format_result.get("markdown", "").startswith("# Formatted"))
+    chk("Task.Format reports a written document",
+        (_format_result.get("write_gate") or {}).get("written") == 1)
+    _format_db.close()
+
 chk("research-gap loop is an instance method",
     "self" in _inspect.signature(_Task._close_research_gaps).parameters
     and not isinstance(_Task.__dict__["_close_research_gaps"], staticmethod))

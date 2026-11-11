@@ -32,7 +32,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from loguru import logger
 
-from components.orchestrator import TaskRouter
+from components.orchestrator import TaskRouter, is_format_request
 from components.sessionManager import SessionManager
 
 # ---------------------------------------------------------------------------
@@ -403,7 +403,7 @@ PROTOCOLS = ("openai_chat", "openai_responses", "anthropic_messages", "google_ge
 
 # Task types whose engines read an existing document. They are handed the
 # ephemeral draft's id; everything else runs against the prompt alone.
-_DOCUMENT_TASKS = ("WRITE", "REWRITE", "CRITIQUE")
+_DOCUMENT_TASKS = ("WRITE", "REWRITE", "CRITIQUE", "FORMAT")
 
 # The prefix the chat's throwaway document is stored under. Every key a task
 # derives from a document id (`written:{id}`, `research:{id}`, ...) inherits it,
@@ -448,7 +448,7 @@ def _normalise_chat_answer(task_type: str, result) -> dict:
     if result.get("error"):
         raise RuntimeError(str(result["error"]))
 
-    if task_type in ("WRITE", "REWRITE"):
+    if task_type in ("WRITE", "REWRITE", "FORMAT"):
         markdown = str(result.get("markdown") or "").strip()
         if not markdown:
             raise RuntimeError(f"{task_type} produced no document")
@@ -564,9 +564,20 @@ def _chat_dispatch(
     ephemeral_id = f"{_CHAT_DOC_PREFIX}{uuid.uuid4().hex}"
 
     if task_type in _DOCUMENT_TASKS:
-        parsed = DocumentParser(provider=provider).parse_text(
-            draft, name="chat-draft.md", persist=False
-        )
+        if task_type == "FORMAT":
+            # A formatting pass needs the markdown, not an LLM-restructured
+            # section tree. Parsing here would add latency and could change the
+            # text before the formatter sees it.
+            parsed = {
+                "unique_id": ephemeral_id,
+                "title": "Chat draft",
+                "markdown": draft,
+                "sections": [],
+            }
+        else:
+            parsed = DocumentParser(provider=provider).parse_text(
+                draft, name="chat-draft.md", persist=False
+            )
         # Rewritten before it is stored, so `written:{id}`, `research:{id}` and
         # the rest are all born already namespaced.
         parsed["unique_id"] = ephemeral_id
@@ -604,6 +615,8 @@ def _chat_dispatch(
             result = executor.Critique(task, ephemeral_id)
         elif task_type == "RESEARCH":
             result = executor.Research(task)
+        elif task_type == "FORMAT":
+            result = executor.Format(question or task, ephemeral_id)
         elif task_type == "EXPLAIN":
             # Explain the open draft when there is one; only search when the
             # turn has no document context. The full history is not a subject.
@@ -706,6 +719,17 @@ def _route_chat_turn(
     question = transcript[-1][1]
     history = "\n\n".join(f"{role}: {text}" for role, text in transcript[:-1])
     task = f"{history}\n\nuser: {question}" if history else question
+
+    # A format request is an edit of the open draft, not a new subject. Do this
+    # before classification: the classifier has repeatedly read "add
+    # definitions" as a request to write about definitions.
+    if draft.strip() and is_format_request(question):
+        return _chat_dispatch(
+            provider, "FORMAT", task, draft,
+            concept_mode=concept_mode, token_saving=token_saving,
+            natural_voice=natural_voice, writing_profile=writing_profile,
+            question=question,
+        )
     if token_saving:
         task += "\n\n[Token-saving mode: answer concisely, do not repeat the draft.]"
     task += _VARIANT_INSTRUCTIONS.get(str(variant or "balanced").lower(), "")

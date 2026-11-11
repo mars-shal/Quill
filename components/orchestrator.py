@@ -36,6 +36,16 @@ _NEW_SUBJECT_INTENT = re.compile(
 )
 
 
+def is_format_request(text: str) -> bool:
+    """True when the reader is asking to tidy an existing document.
+
+    These requests must edit the open draft. Sending one through the normal
+    WRITE path is what turned "format this and add definitions" into a new
+    document about definition formatting.
+    """
+    return bool(_FORMAT_INTENT.search(text or ""))
+
+
 def _research_note(research: dict) -> str:
     """The writer's instruction for a thin corpus, or nothing."""
     if not research.get("low_research"):
@@ -67,6 +77,46 @@ class TaskRoutingError(RuntimeError):
     error makes the failure impossible to mistake for a task result and gives the
     chat layer a real reason to hand back instead of a fake reply.
     """
+
+
+FORMAT_RULES = """
+You are a formatting editor working on an existing document.
+- Preserve every technical fact, name, number, heading, table, equation and citation.
+- Do not research, add sources, change the subject, or remove technical content.
+- Improve heading hierarchy, lists, spacing and consistency.
+- Where the reader asks for definitions, add one concise sentence for each key
+  technical term the first time it appears. Do not invent facts.
+- Do not rewrite clear prose merely to change its style.
+- Return Markdown only, with the document's existing title and structure.
+"""
+
+
+def _format_chunks(text: str, limit: int = 12000) -> list[str]:
+    """Split a long document at headings/paragraphs so one call fits the budget."""
+    text = re.sub(r"\n{3,}", "\n\n", text or "").strip()
+    if len(text) <= limit:
+        return [text] if text else []
+    sections = re.split(r"(?=^#{1,3} )", text, flags=re.M)
+    chunks: list[str] = []
+    current = ""
+    for section in sections:
+        if not section:
+            continue
+        if current and len(current) + len(section) > limit:
+            chunks.append(current)
+            current = ""
+        if len(section) > limit:
+            paragraphs = re.split(r"(?<=\n\n)", section)
+            for paragraph in paragraphs:
+                if current and len(current) + len(paragraph) > limit:
+                    chunks.append(current)
+                    current = ""
+                current += paragraph
+            continue
+        current += section
+    if current:
+        chunks.append(current)
+    return [chunk[:limit] for chunk in chunks if chunk.strip()]
 
 
 class Task:
@@ -593,6 +643,49 @@ class Task:
     @timed("Task.current_session")
     def current_session(self) -> dict:
         return self.sessions.current()
+
+    @timed("Task.Format")
+    def Format(self, prompt: str, document_id: str = ""):
+        """Format the existing document, in place, without research.
+
+        This is deliberately separate from Write: a formatting request has no
+        new subject, so the concept planner and web research must not run.
+        """
+        document_id = document_id or self._last_document_id
+        document = self.database.get(document_id) or {}
+        text = str(document.get("markdown") or "").strip()
+        if not text:
+            return {"error": "No document to format. Open a document first."}
+        chunks = _format_chunks(text)
+        outputs: list[str] = []
+        for index, chunk in enumerate(chunks, start=1):
+            part_note = (
+                f"\nThis is part {index} of {len(chunks)} of a larger document. "
+                "Do not add a document title that is not already in this part."
+                if len(chunks) > 1 else ""
+            )
+            body = self.agent.Quill(
+                f"REQUEST: {prompt}\n{part_note}\nDOCUMENT:\n{chunk}",
+                skill=FORMAT_RULES,
+            ) or ""
+            body = body.strip()
+            if body.startswith("```"):
+                body = re.sub(r"^```(?:markdown)?\s*", "", body)
+                body = re.sub(r"\s*```$", "", body).strip()
+            if body:
+                outputs.append(body)
+        formatted = "\n\n".join(outputs).strip()
+        if not formatted:
+            return {"error": "The formatting pass returned no document."}
+        payload = {
+            "unique_id": document_id,
+            "title": document.get("title", ""),
+            "markdown": formatted,
+            "research_pages": [],
+            "write_gate": {"written": 1, "placeholder": 0, "retried": 0},
+        }
+        self.database.set(f"written:{document_id}", payload)
+        return payload
 
     @timed("Task.ReWrite")
     def ReWrite(

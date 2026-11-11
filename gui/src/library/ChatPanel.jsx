@@ -1390,9 +1390,9 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         // explaining that instead of a document, and the notice stays here in
         // the bubble -- appending it would replace the reader's draft with a
         // warning. An older backend omits the flag, hence `!== false`.
-        const writesDocument = task === 'WRITE' || task === 'REWRITE'
+        const writesDocument = task === 'WRITE' || task === 'REWRITE' || task === 'FORMAT'
         const wrote = writesDocument && wroteDocument !== false && typeof onWriteToDocument === 'function'
-          ? onWriteToDocument(reply)
+          ? onWriteToDocument(reply, { replace: task === 'FORMAT' })
           : false
         appendReply({
           id: nextMessageId('ai'),
