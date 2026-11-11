@@ -417,8 +417,8 @@ class Task:
                     queries.append(query)
         return {"queries": queries, "needs": clean}
 
-    @staticmethod
     def _close_research_gaps(
+        self,
         writer: WritingEngine,
         research_engine: ResearchEngine,
         research: dict,

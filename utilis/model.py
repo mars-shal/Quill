@@ -38,6 +38,21 @@ def _is_tool_use_error(exc: BaseException) -> bool:
     text = str(exc).lower()
     return any(marker in text for marker in _TOOL_USE_ERRORS)
 
+
+def _is_missing_model_error(exc: BaseException) -> bool:
+    """True when the provider says the configured model id does not exist.
+
+    Groq/Gateway can return 404 `model ... not found` for a model that has been
+    retired on one account or endpoint. That is a configuration problem, not a
+    reason to retry the same id forever.
+    """
+    text = str(exc).lower()
+    if "model" not in text:
+        return False
+    return any(marker in text for marker in (
+        "not found", "model_not_found", "does not exist", "decommissioned",
+    ))
+
 from utilis.timing import log_block, timed
 
 # --- Caveman Compression (https://github.com/wilpel/caveman-compression) ---
@@ -313,6 +328,7 @@ class Agent:
             self.max_output_tokens = int(cfg.get("max_output_tokens") or 0)
         except (TypeError, ValueError):
             self.max_output_tokens = 0
+        self._model_fallback_used = False
 
         if self.protocol == "cli":
             # `base_url` carries the command prefix that receives the turn
@@ -514,16 +530,56 @@ class Agent:
         log_block(f"LLM REQUEST [{model_name}]", f"{system_prompt}\n\n{prompt}")
         logger.debug(f"LLM estimated_tokens={estimated}")
 
-        def _call(instructions_override: str | None = None):
+        def _call(
+            instructions_override: str | None = None,
+            model_override: str | None = None,
+        ):
             LIMITER.wait_for(estimated)
             return self._complete(
-                model_name, prompt, instructions_override or instructions, temperature
+                model_override or model_name,
+                prompt,
+                instructions_override or instructions,
+                temperature,
             )
+
+        def _fallback_model(missing: str) -> str | None:
+            if self._model_fallback_used:
+                return None
+            self._model_fallback_used = True
+            candidates = [
+                "openai/gpt-oss-120b",
+                "qwen/qwen3.8-27b",
+                "llama-3.3-70b-versatile",
+                "llama-3.1-8b-instant",
+            ]
+            try:
+                listed = [item.id for item in self.OpenAi.models.list().data]
+            except Exception:  # noqa: BLE001 - the priority list is enough
+                listed = []
+            for candidate in candidates + listed:
+                if candidate and candidate != missing and not any(
+                    bad in candidate.lower()
+                    for bad in ("whisper", "orpheus", "prompt-guard")
+                ):
+                    return candidate
+            return None
 
         try:
             output = run_with_retry(_call)()
         except Exception as exc:
-            if not _is_tool_use_error(exc):
+            if _is_missing_model_error(exc):
+                fallback = _fallback_model(model_name)
+                if fallback:
+                    logger.warning(
+                        "[model] configured model {} is unavailable; retrying with {}",
+                        model_name, fallback,
+                    )
+                    output = run_with_retry(
+                        lambda: _call(model_override=fallback)
+                    )()
+                else:
+                    raise
+            elif not _is_tool_use_error(exc):
                 raise
             # Some models emit a tool call as output even though no tools were
             # offered, which the provider rejects with a 400. Correct the

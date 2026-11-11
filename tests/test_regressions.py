@@ -184,6 +184,9 @@ chk("explain receives the draft as context",
     "context=draft" in _inspect.getsource(_dispatch))
 chk("Task.Explain accepts context",
     "context" in _inspect.signature(_Task.Explain).parameters)
+chk("research-gap loop is an instance method",
+    "self" in _inspect.signature(_Task._close_research_gaps).parameters
+    and not isinstance(_Task.__dict__["_close_research_gaps"], staticmethod))
 
 
 # --- Rate-limit must fail fast when a request cannot fit the window ---------
