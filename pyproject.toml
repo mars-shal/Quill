@@ -5,7 +5,7 @@ description = "Quill document import + task orchestration layer"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "markitdown[pdf]>=0.1.5",
+    "markitdown[pdf,docx,pptx,xlsx]>=0.1.5",
     "openai>=1.40",
     "pydantic>=2.0",
     "json-repair>=0.42",
