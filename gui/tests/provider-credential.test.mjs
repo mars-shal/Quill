@@ -60,7 +60,9 @@ test('the panel describes the registry provider rather than a menu of names', as
     'and so is the endpoint',
   )
 
-  const page = root.querySelector('.settings-page').textContent
+  // The Assistant panel is where the provider choice lives. The Connectors
+  // panel legitimately names Google Drive, so the whole page is the wrong scope.
+  const page = root.querySelector('#settings-assistant').textContent
   for (const phantom of ['Anthropic', 'Google', 'Custom endpoint']) {
     assert.doesNotMatch(
       page,
@@ -115,4 +117,31 @@ test('connecting files the key under the active provider id, and removing forget
     'compatible',
     'the same id, so the environment can take the provider back',
   )
+})
+
+test('the connectors section offers OpenRouter sign-in', async () => {
+  await openSettings()
+  const tab = [...root.querySelectorAll('[role="tab"]')].find(
+    (node) => node.textContent.trim() === 'Connectors',
+  )
+  assert.ok(tab, 'the settings tab bar offers Connectors')
+  await clickAndSettle(tab)
+
+  const panel = root.querySelector('#settings-connectors')
+  assert.ok(panel, 'the connectors panel is mounted')
+  assert.equal(panel.hidden, false, 'and is the visible panel')
+  assert.match(panel.textContent, /OpenRouter/, 'OpenRouter is the first connector')
+  assert.match(panel.textContent, /Connect with OpenRouter/, 'the sign-in action is present')
+  assert.match(panel.textContent, /Manage access/, 'the account link is present')
+  assert.match(panel.textContent, /credential vault/i, 'and the storage promise is stated')
+})
+
+test('thinking and writing models default to the chat model', async () => {
+  await openSettings()
+  const thinking = root.querySelector('#thinking-model')
+  const writing = root.querySelector('#writing-model')
+  assert.ok(thinking, 'the thinking model control rendered')
+  assert.ok(writing, 'the writing model control rendered')
+  assert.match(thinking.textContent, /Same as chat model/, 'empty means the selected model')
+  assert.match(writing.textContent, /Same as chat model/, 'and so does writing')
 })

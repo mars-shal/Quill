@@ -15,12 +15,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import main as M
 from components.conceptEngine import ConceptEngine as C
-from components.orchestrator import Task, TaskRouter, _format_chunks, is_format_request
+from components.orchestrator import (
+    Task, TaskRouter, _format_chunks, _research_effort, _strip_generated_noise,
+    document_type_style, infer_document_type,
+    is_document_edit_request, is_document_question,
+    is_document_transform_request, is_format_request,
+)
 from components.researchEngine import ResearchEngine as R
 from components.researchEngine import _entity_confirmed, _is_informative
 from utilis.pydanticModels import SageConcept
 from utilis.store import SqliteDatabase
-from utilis.ratelimit import RateLimitError, TokenBudget
+from utilis.ratelimit import RateLimitError, TokenBudget, run_with_retry
+from utilis.model import Agent as _Agent, _credit_message, _is_credit_error
 
 RESULTS: list[tuple[bool, str, str]] = []
 
@@ -182,19 +188,155 @@ chk("chat dispatch accepts question",
     "question" in _inspect.signature(_dispatch).parameters)
 chk("explain receives the draft as context",
     "context=draft" in _inspect.getsource(_dispatch))
+chk("a blocked rewrite prerequisite is a failed turn",
+    "if _chat_task_blocked(written):" in _inspect.getsource(_dispatch))
 chk("Task.Explain accepts context",
     "context" in _inspect.signature(_Task.Explain).parameters)
 chk("format requests are recognised",
     is_format_request("can u format this for me and add definishions"))
 chk("format requests are not new-subject writes",
     not is_format_request("write a new essay about transistors"))
+_rewrite_prompt = "can rewrite the document in the words of a 10 year old to better explain it to me"
+chk("self-referential rewrites are document edits",
+    is_document_edit_request(_rewrite_prompt))
+chk("self-referential rewrites edit the open draft",
+    is_document_transform_request(_rewrite_prompt))
+chk("a rewrite of a new subject is not a document edit",
+    not is_document_edit_request("rewrite the history of Rome"))
+chk("a new essay is not a document edit",
+    not is_document_edit_request("write a new essay about transistors"))
+chk("a question about an object is not a document edit",
+    not is_document_edit_request("simplify this equation")
+    and not is_document_edit_request("explain this concept"))
+chk("explaining the document answers in chat, it does not rewrite it",
+    is_document_edit_request("explain the document to me")
+    and not is_document_transform_request("explain the document to me"))
+chk("latex in a new-subject prompt does not make it an edit",
+    not is_document_transform_request("write a thesis about X in LaTeX"))
+_source_doc = {
+    "title": "Multistage Amplifiers: Analysis, Design, and Practical Considerations",
+    "sections": [{"text": "A cascode stage increases output resistance and bandwidth."}],
+}
+chk("the write gate stands down for a self-referential rewrite",
+    _Task._prompt_document_mismatch(_source_doc, _rewrite_prompt, "reference") == "")
+chk("the document type is inferred from the request",
+    infer_document_type("write my thesis on multistage amplifiers") == "thesis"
+    and infer_document_type("draft the meeting minutes") == "meeting"
+    and infer_document_type("a short report on the findings") == "report")
+chk("an explicit document type wins over inference",
+    "THESIS" in document_type_style("thesis", "", "write a report"))
+chk("auto falls back to the open document's kind",
+    "REPORT" in document_type_style("auto", "Report", "rewrite this"))
+chk("a draft question is recognised",
+    is_document_question("did you remove millers effect?"))
+chk("a new-work request is not a draft question",
+    not is_document_question("can you write a thesis about Rome?"))
+chk("fast research is one pass",
+    _research_effort("fast")["max_iterations"] == 1)
+chk("fast research uses fewer pages than deep",
+    _research_effort("fast")["max_pages_total"]
+    < _research_effort("deep")["max_pages_total"])
+chk("balanced research keeps the engine defaults",
+    _research_effort("balanced") == {})
+chk("Task.Write accepts a variant and a live draft sink",
+    {"variant", "on_draft"} <= set(_inspect.signature(_Task.Write).parameters))
+
 chk("Task.Format exists and takes a prompt",
     "prompt" in _inspect.signature(_Task.Format).parameters)
+_halt_task = _Task.__new__(_Task)
+_halt_task.database = type("_Store", (), {
+    "get": lambda self, key: {"markdown": "# Generation Halted — Insufficient Research Evidence"},
+})()
+_halt_format = _halt_task.Format("format this", "halt-doc")
+_leaked = "Real paragraph.\n\nWrite II. for: assistant: New conversation. user: can rewrite this.\n\n*- a bullet"
+chk("leaked chat text is stripped before a rewrite",
+    _strip_generated_noise(_leaked) == "Real paragraph.\n\n- a bullet")
+chk("FORMAT refuses a generation stub",
+    "generation stub" in str(_halt_format.get("error")))
 chk("format chunks split long documents",
     len(_format_chunks("# A\n\n" + ("x" * 14000) + "\n\n# B\n\n" + ("y" * 5000))) >= 2)
 _api_module = __import__("api")
+class _SinkTurn:
+    def __init__(self):
+        self.events = []
+    def emit(self, name, **data):
+        self.events.append((name, data))
+
+_sink_turn = _SinkTurn()
+_api_module._CURRENT.turn = _sink_turn
+try:
+    class _SinkMessage:
+        record = {"message": 'GROUNDING {"section": "4.1", "unverified": 3, "claims": 3}'}
+    _api_module._sink(_SinkMessage())
+    _api_module._CURRENT.turn = None
+    class _SinkMessageList:
+        record = {"message": 'GROUNDING {"section": "4.2", "unverified": [1, 2], "claims": 3}'}
+    _api_module._CURRENT.turn = _sink_turn
+    _api_module._sink(_SinkMessageList())
+finally:
+    _api_module._CURRENT.turn = None
+_credit_exc = RuntimeError(
+    "Error code: 402 - {'error': {'message': 'This request requires more credits, "
+    "or fewer max_tokens. You requested up to 131072 tokens, but can only afford 2871.', "
+    "'code': 402, 'previous_errors': [{'code': 402}]}}"
+)
+chk("an OpenRouter credit failure is recognised", _is_credit_error(_credit_exc))
+chk("the credit message drops the nested provider blob",
+    "previous_errors" not in _credit_message(_credit_exc, "openrouter/free")
+    and "2,871" in _credit_message(_credit_exc, "openrouter/free")
+    and "openrouter.ai/settings/credits" in _credit_message(_credit_exc, "openrouter/free"))
+_saved_writing = os.environ.get("QUILL_WRITING_MODEL")
+os.environ["QUILL_WRITING_MODEL"] = "qwen/qwen3.8-27b"
+try:
+    _selected = _Agent({
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_key": "sk-test",
+        "model": "openrouter/free",
+        "thinking_model": "",
+        "writing_model": "",
+    })
+    chk("the selected provider model beats the env writing model",
+        _selected._resolve_writing() == "openrouter/free"
+        and _selected._resolve_thinking() == "openrouter/free")
+finally:
+    if _saved_writing is None:
+        os.environ.pop("QUILL_WRITING_MODEL", None)
+    else:
+        os.environ["QUILL_WRITING_MODEL"] = _saved_writing
+chk("an OpenRouter agent caps its output window",
+    _Agent({"base_url": "https://openrouter.ai/api/v1", "api_key": "sk-test",
+            "model": "openrouter/free"}).max_output_tokens == 2048)
+
+def _bad_request():
+    raise RuntimeError("400 bad request")
+try:
+    run_with_retry(_bad_request)()
+except RuntimeError as error:
+    chk("a non-retryable provider error is not wrapped as a rate limit",
+        str(error) == "400 bad request")
+else:
+    chk("a non-retryable provider error is not wrapped as a rate limit", False)
+
+chk("a numeric grounding count is not treated as a list",
+    _sink_turn.events[0][1]["unverified"] == 3)
+chk("a list grounding count keeps its length",
+    _sink_turn.events[1][1]["unverified"] == 2)
+
+chk("chat streams the whole draft instead of a 12k slice",
+    "[:12000]" not in _inspect.getsource(_api_module.Handler._chat_stream))
 chk("FORMAT normalisation is a document turn",
     _api_module._normalise_chat_answer("FORMAT", {"markdown": "# X"})["task"] == "FORMAT")
+_halt = {"markdown": "# Generation Halted — Insufficient Research Evidence\n\n> **⚠ THIS RUN PRODUCED NO CONTENT.**"}
+chk("a halt stub is never written into the document",
+    _api_module._normalise_chat_answer("REWRITE", _halt)["wrote_document"] is False)
+chk("a halt stub is not a document even with an empty gate",
+    _api_module._normalise_chat_answer("REWRITE", {**_halt, "write_gate": {}})["wrote_document"] is False)
+chk("a real rewrite is still written",
+    _api_module._normalise_chat_answer(
+        "REWRITE", {"markdown": "# Real", "write_gate": {"written": 1}}
+    )["wrote_document"] is True)
+chk("a plain result is not blocked", not _api_module._chat_task_blocked({"markdown": "# X"}))
+chk("an early refusal is blocked", _api_module._chat_task_blocked({"blocked": "prompt_document_mismatch"}))
 _bad_questions = '{"questions":[{"header":"Format","question":"Q1","multiSelect":false,"options":[{"label":"A","description":"a"}]},{header":"Definitions","question":"Q2","multiSelect":false,"options":[{"label":"B","description":"b"}]}]}'
 _repaired_questions = _api_module._parse_questionnaire(_bad_questions)
 chk("malformed questionnaire JSON is repaired",

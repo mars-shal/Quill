@@ -251,3 +251,25 @@ test('a corrupt theme store reads as empty instead of stopping the app', async (
   assert.equal(listed[0].theme_id, 'kept')
   storage.delete('quill:custom-themes')
 })
+
+
+test('only an absent pipeline is reported as the writing service being down', () => {
+  assert.match(
+    store.describeFailure(new Error('the sync server is unreachable')),
+    /writing service is not running/,
+  )
+  assert.match(
+    store.describeFailure(new Error('connection refused')),
+    /writing service is not running/,
+  )
+  assert.equal(
+    store.describeFailure(new Error('could not connect to OpenRouter')),
+    'could not connect to OpenRouter',
+    'a provider network error must keep its own reason',
+  )
+  assert.equal(
+    store.describeFailure(new Error('the writing service took too long to answer')),
+    'the writing service took too long to answer',
+    'a timeout is not an absent service',
+  )
+})

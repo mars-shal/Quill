@@ -216,6 +216,7 @@ class WritingEngine:
         context: str,
         research_note: str = "",
         evidence: dict | None = None,
+        on_draft=None,
     ) -> str:
         evidence = evidence or {}
         corpus_chars = int(evidence.get("corpus_chars") or 0)
@@ -261,6 +262,14 @@ class WritingEngine:
             )
             blocks.append(block)
             outcomes.append(outcome)
+            # A live draft is the sections written so far, in document order.
+            # The panel can put this in the editor while the rest is still
+            # being written, instead of waiting ten minutes for the whole file.
+            if on_draft is not None and outcome["status"] == "written":
+                try:
+                    on_draft("\n\n".join(b for b in blocks if b and b.strip()))
+                except Exception:
+                    logger.debug("live draft sink failed", exc_info=True)
             if outcome["status"] == "written":
                 digests.append(self._digest(title, claim, body))
             stats[outcome["status"]] += 1
@@ -404,7 +413,10 @@ class WritingEngine:
                 title, corpus_chars, relevant_pages, quality, reason=reason
             ))
 
-        if not self._evidence_ok(corpus_chars, relevant_pages, quality):
+        if not self._evidence_ok(
+            corpus_chars, relevant_pages, quality,
+            source_grounded=bool(evidence.get("source_grounded")),
+        ):
             self._log_attempt(title, evidence, "evidence_blocked", attempt=0)
             outcome["reason"] = "evidence_blocked"
             return done("", placeholder())
@@ -437,9 +449,20 @@ class WritingEngine:
         heading = outcome.get("heading") or ""
         return f"{heading}\n\n{body}" if heading else body
 
-    def _evidence_ok(self, corpus_chars: int, relevant_pages: int, quality: float) -> bool:
+    def _evidence_ok(
+        self, corpus_chars: int, relevant_pages: int, quality: float,
+        source_grounded: bool = False,
+    ) -> bool:
         """Thin research is treated as hard as absent: 0.321 quality already
-        produced tier-1-grade output, so advisory warnings are not enough."""
+        produced tier-1-grade output, so advisory warnings are not enough.
+
+        A rewrite is different. Its evidence is the document being rewritten,
+        not a web corpus, so the web gates do not apply: requiring one relevant
+        page is what turned "rewrite this in simpler words" into a halt stub
+        even though the source text was right there.
+        """
+        if source_grounded:
+            return corpus_chars > 0
         return (
             corpus_chars >= self.MIN_CORPUS_CHARS
             and relevant_pages >= self.MIN_RELEVANT_PAGES
@@ -604,7 +627,10 @@ class WritingEngine:
         for level, title, claim in nodes:
             if title:
                 lines.append(f"{'#' * min(level + 1, 6)} {title}")
-            if claim:
+            # A claim that starts with "Write ..." is the plan's instruction to
+            # the writer, not a description of the section. Printing it here is
+            # how a skipped outline ended up quoting the reader's chat request.
+            if claim and not claim.lower().startswith("write "):
                 lines.append(f"*{claim}*")
         return "\n".join(lines)
 

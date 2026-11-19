@@ -90,6 +90,12 @@ test('the last step offers every detected model and adopts the chosen one', asyn
   assert.ok(addKey, 'the model step offers an API-key path')
   await clickAndSettle(addKey)
   assert.ok(root.querySelector('#onboarding-api-key'), 'the key is entered in onboarding, not Settings')
+  assert.ok(
+    [...root.querySelectorAll('.onboarding-v2-keyform button')].some(
+      (node) => /Connect with OpenRouter/i.test(node.textContent),
+    ),
+    'the OpenRouter connector is offered on the first run too',
+  )
   await clickAndSettle(addKey)
 
   const tools = [...root.querySelectorAll('.onboarding-tool')]

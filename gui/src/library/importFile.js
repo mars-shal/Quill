@@ -378,7 +378,11 @@ export function cleanupImportedHtml(source = '') {
   for (const node of textNodes) {
     const parent = node.parentElement
     if (!parent || parent.closest('pre, code, [data-type$="-math"]')) continue
-    const cleaned = String(node.nodeValue || '').replace(/<\/?[wm]:[^>]*>/g, '')
+    const cleaned = String(node.nodeValue || '')
+      .replace(/<\/?[wm]:[^>]*>/g, '')
+      // A generated list sometimes loses its emphasis and arrives as `*- item`.
+      // That is a bullet, not a malformed italic run.
+      .replace(/^[ \t]*\*-[ \t]+/gm, '- ')
     const segments = splitMathSegments(cleaned)
     if (!segments.some((segment) => segment.latex)) {
       if (cleaned !== node.nodeValue) node.nodeValue = cleaned
@@ -399,7 +403,15 @@ export function cleanupImportedHtml(source = '') {
   }
 
   for (const paragraph of [...doc.body.querySelectorAll('p')]) {
-    if (paragraph.textContent.trim()) continue
+    const text = paragraph.textContent || ''
+    // A failed generation used to copy the whole chat request into the plan.
+    // That paragraph is not the document; remove it rather than leaving the
+    // reader's transcript in their prose.
+    if (/\bassistant:\s*New conversation/i.test(text)) {
+      paragraph.remove()
+      continue
+    }
+    if (text.trim()) continue
     if (paragraph.querySelector('img, [data-type$="-math"]')) continue
     paragraph.remove()
   }

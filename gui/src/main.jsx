@@ -13,6 +13,7 @@ import { resolveTheme, THEME_IDS } from './library/themes.js'
 import { readableInk } from './library/contrast.js'
 import { templateById } from './library/templates.js'
 import { fileToDocument } from './library/importFile.js'
+import { useAutomaticWritingProfile } from './library/useWritingProfile.js'
 
 import { backgroundProperties } from './library/backgrounds.js'
 import { DetailsDialog, SettingsPage } from './library/SettingsPage.jsx'
@@ -704,6 +705,19 @@ function App() {
     store.setSettings(next).catch((error) => console.error('Failed to persist settings', error))
   }, [setDensity, setSettings])
 
+  // The profile is a local, deterministic pass over the library. It refreshes
+  // itself weekly and after the library changes; the manual button in Settings
+  // remains as an immediate refresh.
+  const saveWritingProfile = useCallback((value) => {
+    persistSettings({ ...settingsRef.current, writingProfile: value })
+  }, [persistSettings])
+
+  useAutomaticWritingProfile({
+    documents: docs,
+    writingProfile: settings.writingProfile,
+    onChange: saveWritingProfile,
+  })
+
   /**
    * Looks for local tools whenever Settings opens.
    *
@@ -855,6 +869,23 @@ function App() {
     }
     setSessionApiKey('')
     setProviderReady(false)
+  }, [activeProvider])
+
+  /** OpenRouter's connector: sign in, store the key, activate the provider. */
+  const connectOpenRouter = useCallback(async () => {
+    const provider = await store.connectOpenRouter()
+    const list = await store.listProviders()
+    setProviders(list)
+    const active = await store.getActiveProvider()
+    setActiveProvider(active ?? provider)
+    setProviderReady(true)
+    return active ?? provider
+  }, [])
+
+  const disconnectOpenRouter = useCallback(async () => {
+    await store.disconnectOpenRouter()
+    if ((activeProvider?.id || '') === 'openrouter') setProviderReady(false)
+    setProviders(await store.listProviders())
   }, [activeProvider])
 
   /** Points requests at another provider in the registry, and reports whether a
@@ -1028,15 +1059,6 @@ function App() {
     }
   }, [])
 
-  /** Replays first-run onboarding from Settings, resetting the completion flag. */
-  const replayOnboarding = useCallback(() => {
-    setSettingsOpen(false)
-    setOnboarding(true)
-    store.writeOnboarding('completed', 'false').catch((error) =>
-      console.error('Failed to reset onboarding state', error),
-    )
-  }, [])
-
   /** Edits the active provider's default model, so the chat picker and every
    * run resolve one and the same field from the registry. */
   const selectModel = useCallback(async (model) => {
@@ -1073,7 +1095,7 @@ function App() {
         </div>
       )}
       {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} labels={labelOptions} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}
-      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} onReplayOnboarding={replayOnboarding} documents={docs} />}
+      {settingsOpen && <SettingsPage key="settings-page" settings={settings} theme={theme} customThemes={customThemes} onCustomThemesChange={setCustomThemes} onApplyTheme={updateSettings} sessionApiKey={sessionApiKey} providerReady={providerReady} onClose={() => setSettingsOpen(false)} onPersist={persistSettings} onConnect={connectProvider} onDisconnect={disconnectProvider} activeProvider={activeProvider} providers={providers} onSelectProvider={selectProvider} onSelectModel={selectModel} localTools={localTools} onAdoptTool={adoptTool} onSaveProvider={saveProvider} onCreateProvider={createProvider} onConnectOpenRouter={connectOpenRouter} onDisconnectOpenRouter={disconnectOpenRouter} documents={docs} />}
       <ToastHost key="toast-host" />
       <BootLayer key="boot-layer" bootstrapped={bootstrapped} bootError={bootError} />
       {onboarding && bootstrapped && !bootError && (
@@ -1089,6 +1111,7 @@ function App() {
           onTestTool={testTool}
           onSaveKey={saveOnboardingKey}
           onCreateProvider={createProvider}
+          onConnectOpenRouter={connectOpenRouter}
           activeProvider={activeProvider}
           providers={providers}
           onFinish={finishOnboarding}

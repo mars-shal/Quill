@@ -39,6 +39,37 @@ def _is_tool_use_error(exc: BaseException) -> bool:
     return any(marker in text for marker in _TOOL_USE_ERRORS)
 
 
+_CREDIT_MARKERS = (
+    "requires more credits",
+    "insufficient credits",
+    "openrouter_credits",
+    "can only afford",
+)
+
+
+def _is_credit_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in _CREDIT_MARKERS)
+
+
+def _affordable_tokens(exc: BaseException) -> int:
+    match = re.search(r"can only afford\s+(\d+)", str(exc), re.IGNORECASE)
+    return int(match.group(1)) if match else 0
+
+
+def _credit_message(exc: BaseException, model_name: str) -> str:
+    affordable = _affordable_tokens(exc)
+    balance = (
+        f" Your balance covers about {affordable:,} output tokens."
+        if affordable else ""
+    )
+    return (
+        f"OpenRouter needs more credit for {model_name}.{balance} "
+        "Add credits at https://openrouter.ai/settings/credits, choose a "
+        "cheaper model, or lower QUILL_OPENROUTER_MAX_TOKENS."
+    )
+
+
 def _is_missing_model_error(exc: BaseException) -> bool:
     """True when the provider says the configured model id does not exist.
 
@@ -312,16 +343,16 @@ class Agent:
         # qwen writes the prose, gpt-oss does the reasoning -- gpt-oss bills its
         # hidden chain-of-thought as output, so spending it on prose is waste,
         # while the writer's system prompt already says "low-tier model").
-        # Precedence is explicit env first, provider registry second, LLM_MODEL
-        # last. During the registry migration the env knobs are the operator
-        # path that actually runs; the provider block will carry the same fields
-        # from Task 6 on. Empty means "same model for both roles".
-        self._thinking_model = str(
-            cfg.get("thinking_model") or os.environ.get("QUILL_THINKING_MODEL") or ""
-        ).strip()
-        self._writing_model = str(
-            cfg.get("writing_model") or os.environ.get("QUILL_WRITING_MODEL") or ""
-        ).strip()
+        # The provider block is the GUI's explicit choice and must win. The
+        # environment is only the standalone-sidecar fallback. Reading
+        # QUILL_WRITING_MODEL first made a reader's selected OpenRouter model
+        # irrelevant: every writing call silently went to the env model while
+        # the picker still showed the selected one.
+        self._thinking_model = str(cfg.get("thinking_model") or "").strip()
+        self._writing_model = str(cfg.get("writing_model") or "").strip()
+        if not cfg:
+            self._thinking_model = os.environ.get("QUILL_THINKING_MODEL", "").strip()
+            self._writing_model = os.environ.get("QUILL_WRITING_MODEL", "").strip()
         # A caller-set ceiling, used by token-saving mode. Zero means the
         # provider's own default, which is the normal path.
         try:
@@ -349,6 +380,17 @@ class Agent:
 
         base_url = cfg.get("base_url") or os.environ.get("OPENAI_BASE_URL")
         self.base_url = str(base_url or "")
+        # OpenRouter treats an omitted max_tokens as the model's whole output
+        # window (often 131,072). With a small balance every call then fails
+        # with 402 even though the answer is a few hundred words. Cap the
+        # request at a normal section's size; a caller can still raise it.
+        if self.max_output_tokens <= 0 and "openrouter.ai" in self.base_url.lower():
+            try:
+                self.max_output_tokens = int(
+                    os.environ.get("QUILL_OPENROUTER_MAX_TOKENS", "2048")
+                )
+            except ValueError:
+                self.max_output_tokens = 2048
         # An empty key in the provider block means the caller resolved a local
         # server, which genuinely has none -- Rust treats a loopback endpoint the
         # same way. It is not the same as "unset": unset still falls back to the
@@ -567,7 +609,21 @@ class Agent:
         try:
             output = run_with_retry(_call)()
         except Exception as exc:
-            if _is_missing_model_error(exc):
+            if _is_credit_error(exc):
+                affordable = _affordable_tokens(exc)
+                current = self.max_output_tokens or 0
+                target = min(current or 2048, affordable - 128) if affordable else 1024
+                target = max(256, target)
+                if not current or target < current:
+                    self.max_output_tokens = target
+                    logger.warning(
+                        "[model] OpenRouter credit limit; retrying {} with "
+                        "max_tokens={}", model_name, target,
+                    )
+                    output = run_with_retry(_call)()
+                else:
+                    raise RuntimeError(_credit_message(exc, model_name)) from exc
+            elif _is_missing_model_error(exc):
                 fallback = _fallback_model(model_name)
                 if fallback:
                     logger.warning(

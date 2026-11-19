@@ -174,7 +174,12 @@ test('the assistant and toolbar pickers are hand-built listboxes', async () => {
   assert.match(source, /const DEFAULT_SIZE = '12'/, 'the document default size is 12pt')
   assert.match(
     source,
+    /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/,
+    'the trigger keeps the editor selection while it opens',
+  )
+  assert.doesNotMatch(
+    source,
     /onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/,
-    'the trigger still stops propagation, so the selection bubble stays shut',
+    'opening one picker must be allowed to close the other',
   )
 })

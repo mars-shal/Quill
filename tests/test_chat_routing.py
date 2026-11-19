@@ -42,7 +42,10 @@ def _fake_nous(task_type, links=None):
     return _nous
 
 
-def _run_turn(task_type, executor_stub, question="hello"):
+def _run_turn(
+    task_type, executor_stub, question="hello", draft="the draft",
+    history=(), **overrides,
+):
     """Dispatches one turn with the classifier and executor stubbed out.
 
     `_chat_dispatch` builds its router itself, so the seam is the router class:
@@ -62,8 +65,9 @@ def _run_turn(task_type, executor_stub, question="hello"):
     try:
         return api._route_chat_turn(
             {"api_key": "sk-test", "base_url": "https://example.test/v1"},
-            [("user", question)],
-            "the draft",
+            [("user", item) for item in history] + [("user", question)],
+            draft,
+            **overrides,
         )
     finally:
         Agent.Nous = saved_nous
@@ -77,28 +81,38 @@ class _StubExecutor:
         self.payload = payload
         self.expect_document = expect_document
         self.calls = []
+        self.seen_tasks = []
+        self.seen_contexts = []
         self.database = _RecordingStore()
         self.seen_document_ids = []
 
     def _record(self, name, task, document_id="", **kwargs):
         self.calls.append(name)
+        self.seen_tasks.append(task)
         self.seen_document_ids.append(document_id)
         return self.payload
 
-    def Write(self, task, document_id="", session_name="", concept_mode="reference"):
+    def Write(self, task, document_id="", session_name="", concept_mode="reference", **kwargs):
         return self._record("Write", task, document_id)
 
-    def ReWrite(self, task, document_id=""):
+    def ReWrite(self, task, document_id="", **kwargs):
         return self._record("ReWrite", task, document_id)
+
+    def Format(self, task, document_id="", **kwargs):
+        return self._record("Format", task, document_id)
 
     def Critique(self, task, document_id=""):
         return self._record("Critique", task, document_id)
 
-    def Research(self, task):
+    def Research(self, task, **kwargs):
         return self._record("Research", task)
 
-    def Explain(self, task):
+    def Explain(self, task, **kwargs):
         return self._record("Explain", task)
+
+    def Search(self, task, context=""):
+        self.seen_contexts.append(context)
+        return self._record("Search", task)
 
     def SmallTalk(self, task):
         return self._record("SmallTalk", task)
@@ -123,7 +137,7 @@ def _real_document_is_untouched(results):
             super().__init__(None)
             self.database = store
 
-        def Write(self, task, document_id="", session_name="", concept_mode="reference"):
+        def Write(self, task, document_id="", session_name="", concept_mode="reference", **kwargs):
             # Every key a real Write derives, so the sweep has something to miss.
             self.database.set(f"written:{document_id}", {"unique_id": document_id})
             self.database.set(f"research:{document_id}", {"corpus": "..."})
@@ -216,6 +230,135 @@ def main() -> int:
             stub.calls[:2] == ["Write", engine],
             ", ".join(stub.calls),
         )
+
+    # -- the document task gets the turn, not the whole transcript --
+    history_stub = _StubExecutor({"markdown": "# D"})
+    _run_turn(
+        "REWRITE", history_stub, question="tighten this",
+        history=[
+            "New conversation. What would you like to work on?",
+            "can rewrite the document in the words of a 10 year old",
+        ],
+    )
+    _check(
+        results,
+        "a chat rewrite gets only the latest question",
+        history_stub.seen_tasks and all(
+            task == "tighten this" for task in history_stub.seen_tasks
+        ),
+        repr(history_stub.seen_tasks),
+    )
+
+    # -- a question about the draft is answered, never written --
+    question_stub = _StubExecutor({"answer": "No, the draft does not contain Miller."})
+    answer = _run_turn(
+        "WRITE", question_stub, question="did you remove millers effect?"
+    )
+    _check(
+        results,
+        "a draft question routes to Search before classification",
+        question_stub.calls == ["Search"] and answer.get("task") == "SEARCH",
+        f"{question_stub.calls} {answer.get('task')}",
+    )
+
+    long_draft = "The Miller effect is discussed here. " * 900
+    long_stub = _StubExecutor({"answer": "Still there."})
+    _run_turn("WRITE", long_stub, question="did you remove the Miller effect?", draft=long_draft)
+    _check(
+        results,
+        "Search receives the whole draft, not a 12k slice",
+        long_stub.seen_contexts and len(long_stub.seen_contexts[0]) == len(long_draft),
+        f"{len(long_stub.seen_contexts[0]) if long_stub.seen_contexts else 0} of {len(long_draft)}",
+    )
+
+    write_stub = _StubExecutor({"markdown": "# Thesis", "write_gate": {"written": 1}})
+    _run_turn("WRITE", write_stub, question="can you write a thesis about Rome?")
+    _check(
+        results,
+        "a request for a new work still writes",
+        write_stub.calls == ["Write"],
+        repr(write_stub.calls),
+    )
+
+    # -- search mode answers from the draft, never from the web --
+    search_stub = _StubExecutor({"answer": "The draft does not contain Miller."})
+    answer = _run_turn(
+        "SEARCH", search_stub, question="did you remove the Miller effect?"
+    )
+    _check(
+        results,
+        "SEARCH reaches the document search",
+        search_stub.calls == ["Search"] and answer.get("task") == "SEARCH",
+        f"{search_stub.calls} {answer.get('task')}",
+    )
+
+    forced_search = _StubExecutor({"answer": "It is in the Miller effect section."})
+    answer = _run_turn(
+        "WRITE", forced_search,
+        question="did you remove the Miller effect?", forced_task="search",
+    )
+    _check(
+        results,
+        "Search mode forces document search before classification",
+        forced_search.calls == ["Search"] and answer.get("task") == "SEARCH",
+        f"{forced_search.calls} {answer.get('task')}",
+    )
+
+    no_draft = _StubExecutor({"summary": "Web answer.", "pages": []})
+    answer = _run_turn(
+        "WRITE", no_draft,
+        question="did you remove the Miller effect?", draft="", forced_task="search",
+    )
+    _check(
+        results,
+        "Search mode falls back to research without a draft",
+        no_draft.calls == ["Research"] and answer.get("task") == "RESEARCH",
+        f"{no_draft.calls} {answer.get('task')}",
+    )
+
+    # -- a rewrite of the open draft is an edit, not a new subject --
+    edit_stub = _StubExecutor(
+        {"markdown": "# Rewritten", "write_gate": {"written": 1, "placeholder": 0}}
+    )
+    answer = _run_turn(
+        "REWRITE", edit_stub,
+        question="can rewrite the document in the words of a 10 year old to better explain it to me",
+    )
+    _check(
+        results,
+        "a self-referential rewrite routes to FORMAT",
+        edit_stub.calls == ["Format"] and answer.get("task") == "FORMAT",
+        f"{edit_stub.calls} {answer.get('task')}",
+    )
+
+    class _BlockedWrite(_StubExecutor):
+        def __init__(self):
+            super().__init__(None)
+
+        def Write(self, task, document_id="", session_name="", concept_mode="reference", **kwargs):
+            self.calls.append("Write")
+            return {
+                "error": "Prompt and source document are unrelated",
+                "blocked": "prompt_document_mismatch",
+            }
+
+        def ReWrite(self, task, document_id="", **kwargs):
+            self.calls.append("ReWrite")
+            return {"markdown": "# Generation Halted", "write_gate": {"written": 0}}
+
+    blocked_prerequisite = _BlockedWrite()
+    raised = ""
+    try:
+        _run_turn("REWRITE", blocked_prerequisite)
+    except Exception as exc:
+        raised = str(exc)
+    _check(
+        results,
+        "a blocked prerequisite stops the rewrite",
+        raised.startswith("Prompt and source document are unrelated")
+        and blocked_prerequisite.calls == ["Write"],
+        f"{raised!r} {blocked_prerequisite.calls}",
+    )
 
     # -- the document types are handed a namespaced id, others are not --
     doc_stub = _StubExecutor({"markdown": "# D", "research_pages": []})

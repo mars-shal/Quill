@@ -266,9 +266,16 @@ def run_with_retry(
                 if is_exhausted_quota(exc):
                     logger.error(f"[ratelimit] daily allowance exhausted: {exc}")
                     raise DailyQuotaExceeded(str(exc) + _quota_hint(exc)) from exc
-                if not retryable(exc) or attempt >= retries_max:
+                # A non-retryable error (402 credits, 400 request shape,
+                # 404 model) must propagate as itself. Wrapping it in a
+                # RateLimitError hid the provider's own reason behind
+                # "still failing after 0 attempts" and made every caller think
+                # the rate limiter was the problem.
+                if not retryable(exc):
+                    raise
+                if attempt >= retries_max:
                     raise RateLimitError(
-                        f"still failing after {attempt} attempts: {exc}"
+                        f"still failing after {attempt + 1} attempts: {exc}"
                     ) from exc
                 delay = _retry_after(exc) or (base_delay * (2 ** attempt))
                 logger.warning(

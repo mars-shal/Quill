@@ -223,6 +223,65 @@ def main() -> int:
         import importlib
         importlib.reload(_we)
 
+    stub = eng._run_failure_stub(
+        [
+            (2, "II. How They Work Together", "Write II. How They Work Together for: user: rewrite this"),
+            (2, "Gain and Decibels", "gain is a number that says how much louder the output is"),
+        ],
+        209448, 0, 0.101,
+    )
+    _check(
+        results, "the halt stub does not quote the writer's instructions",
+        "Write II." not in stub and "rewrite this" not in stub,
+        stub,
+    )
+    _check(
+        results, "the halt stub keeps a real section claim",
+        "gain is a number" in stub,
+        stub,
+    )
+
+    _check(
+        results, "web evidence gate still requires a relevant page",
+        not eng._evidence_ok(209448, 0, 0.101),
+    )
+    _check(
+        results, "a source-grounded rewrite accepts its own document",
+        eng._evidence_ok(10, 0, 0.0, source_grounded=True),
+    )
+    _check(
+        results, "a source-grounded rewrite still needs text",
+        not eng._evidence_ok(0, 0, 0.0, source_grounded=True),
+    )
+
+    drafts = []
+    real_outline, real_render, real_digest = eng._outline, eng._render_section, eng._digest
+    try:
+        eng._outline = lambda sections, topic="": [(1, "One", ""), (1, "Two", "")]
+        def _render(level, title, claim, context, digests, note, evidence, corpus, pages, quality):
+            body = f"{title} body"
+            return (
+                f"## {title}\n\n{body}", body,
+                {"status": "written", "title": title, "body": body,
+                 "block": f"## {title}\n\n{body}"},
+            )
+        eng._render_section = _render
+        eng._digest = lambda *args, **kwargs: "digest"
+        eng.dedupe = lambda text: text
+        eng.writer({"sections": []}, "ctx", on_draft=drafts.append)
+    finally:
+        eng._outline, eng._render_section, eng._digest = real_outline, real_render, real_digest
+    _check(
+        results, "a live draft grows one section at a time",
+        len(drafts) == 2 and "One body" in drafts[0] and "Two body" not in drafts[0],
+        repr(drafts),
+    )
+    _check(
+        results, "the last live draft contains the whole document",
+        "One body" in drafts[-1] and "Two body" in drafts[-1],
+        repr(drafts[-1:]),
+    )
+
     passed = sum(results)
     print(f"\n{'ALL PASS' if passed == len(results) else 'FAILURES'}: {passed}/{len(results)}")
     return 0 if passed == len(results) else 1

@@ -9,6 +9,7 @@ pub mod images;
 pub mod import;
 pub mod legacy;
 pub mod model_catalog;
+pub mod openrouter;
 pub mod pipeline;
 mod pocketbase;
 pub mod providers;
@@ -106,6 +107,8 @@ pub fn run() {
             commands::purge_document,
             commands::get_settings,
             commands::set_settings,
+            commands::openrouter_connect,
+            commands::openrouter_disconnect,
             commands::set_provider_secret,
             commands::get_provider_secret_status,
             commands::delete_provider_secret,

@@ -32,7 +32,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from loguru import logger
 
-from components.orchestrator import TaskRouter, is_format_request
+from components.orchestrator import (
+    TaskRouter, is_document_question, is_document_transform_request,
+)
 from components.sessionManager import SessionManager
 
 # ---------------------------------------------------------------------------
@@ -352,9 +354,21 @@ def _sink(message) -> None:
         d = _parse_json_object(text, "GROUNDING")
         if d is None:
             return
-        run.emit("grounding", section=d.get("section", "")[:80],
+        # `unverified` was a list in the first grounding record and is a count
+        # in the writer's newer log line. Treating it as a list raised inside
+        # the loguru sink, which printed a logging traceback instead of a
+        # progress event and left the panel without that step.
+        unverified = d.get("unverified")
+        if isinstance(unverified, (list, tuple, set, dict)):
+            unverified = len(unverified)
+        else:
+            try:
+                unverified = int(unverified or 0)
+            except (TypeError, ValueError):
+                unverified = 0
+        run.emit("grounding", section=str(d.get("section") or "")[:80],
                  claims=d.get("claims"), corroborated=d.get("corroborated"),
-                 unverified=len(d.get("unverified") or []),
+                 unverified=unverified,
                  authority_suspects=d.get("authority_suspects"))
         return
     if _COHERENCE.search(text):
@@ -411,6 +425,25 @@ _DOCUMENT_TASKS = ("WRITE", "REWRITE", "CRITIQUE", "FORMAT")
 _CHAT_DOC_PREFIX = "chat:"
 
 
+def _chat_task_blocked(result) -> bool:
+    """Whether a prerequisite task stopped before producing a document.
+
+    Chat's REWRITE and CRITIQUE turns write the draft first. That write can be
+    refused by the relevance gate, and the turn used to continue into a rewrite
+    of nothing -- which the write gate reported as `written=0 placeholder=21`
+    instead of the real refusal. A blocked write ends the turn.
+    """
+    return isinstance(result, dict) and bool(result.get("blocked") or result.get("error"))
+
+
+def _emit_draft(markdown: str, task: str = "") -> None:
+    """Publish a partial document to the streaming turn, if there is one."""
+    turn = getattr(_CURRENT, "turn", None)
+    if turn is None or not str(markdown or "").strip():
+        return
+    turn.emit("draft", markdown=str(markdown), task=task)
+
+
 def _chat_sources(research: dict) -> list:
     """The pages a research payload grounded an answer in, as chat sources."""
     return [
@@ -452,6 +485,11 @@ def _normalise_chat_answer(task_type: str, result) -> dict:
         markdown = str(result.get("markdown") or "").strip()
         if not markdown:
             raise RuntimeError(f"{task_type} produced no document")
+        # A provider failure must never be stored as prose. The sidebar error
+        # belongs in the bubble; writing it into the page replaces the reader's
+        # document with a stack of provider JSON.
+        if re.match(r"^(?:still failing after|Error code: \d+|OpenRouter needs)", markdown):
+            raise RuntimeError(markdown)
         # A blocked write still returns markdown -- the writer emits a
         # "Generation Halted" notice where the sections would have gone, because
         # a reader deserves to know why nothing was written. That notice is not
@@ -459,11 +497,18 @@ def _normalise_chat_answer(task_type: str, result) -> dict:
         # it in the editor or must keep it in the bubble.
         gate = result.get("write_gate") or {}
         produced = gate.get("written") if isinstance(gate, dict) else None
+        # A halt stub is not the reader's document. Treating it as one is how a
+        # failed rewrite replaced 44k characters of work with a notice; the
+        # panel keeps it in the bubble when this flag is false.
+        halted = (
+            markdown.lstrip().startswith("# Generation Halted")
+            or "THIS RUN PRODUCED NO CONTENT" in markdown
+        )
         return {
             "reply": markdown,
             "task": task_type,
             "sources": _chat_sources({"pages": result.get("research_pages") or []}),
-            "wrote_document": produced is None or int(produced) > 0,
+            "wrote_document": not halted and (produced is None or int(produced) > 0),
         }
 
     if task_type == "CRITIQUE":
@@ -472,10 +517,10 @@ def _normalise_chat_answer(task_type: str, result) -> dict:
             raise RuntimeError("CRITIQUE produced no critique")
         return {"reply": thoughts, "task": task_type, "sources": []}
 
-    if task_type == "EXPLAIN":
+    if task_type in ("EXPLAIN", "SEARCH"):
         answer = str(result.get("answer") or "").strip()
         if not answer:
-            raise RuntimeError("EXPLAIN produced no answer")
+            raise RuntimeError(f"{task_type} produced no answer")
         return {
             "reply": answer,
             "task": task_type,
@@ -563,6 +608,8 @@ def _chat_dispatch(
     natural_voice: bool = False,
     writing_profile: str = "",
     question: str = "",
+    variant: str = "balanced",
+    document_type: str = "auto",
 ) -> dict:
     """Runs one classified chat turn and returns the panel's reply shape.
 
@@ -589,8 +636,11 @@ def _chat_dispatch(
                 "sections": [],
             }
         else:
+            # Search and Format use the whole draft above. A document written
+            # from the draft goes through the parser's model call, so it keeps
+            # a bound; 20k characters is a long document and still fits a turn.
             parsed = DocumentParser(provider=provider).parse_text(
-                draft, name="chat-draft.md", persist=False
+                draft[:20000], name="chat-draft.md", persist=False
             )
         # Rewritten before it is stored, so `written:{id}`, `research:{id}` and
         # the rest are all born already namespaced.
@@ -600,37 +650,57 @@ def _chat_dispatch(
     try:
         if task_type == "WRITE":
             result = executor.Write(
-                task, ephemeral_id, concept_mode=concept_mode,
+                question or task, ephemeral_id, concept_mode=concept_mode,
                 token_saving=token_saving, natural_voice=natural_voice,
-                writing_profile=writing_profile,
+                writing_profile=writing_profile, variant=variant,
+                document_type=document_type,
+                on_draft=lambda text: _emit_draft(text, "WRITE"),
             )
         elif task_type == "REWRITE":
             # ReWrite reads `written:{id}`, which a fresh draft does not have. The
             # chat's "rewrite this" means "produce the document, then rewrite it",
             # so the write happens here rather than being left to a prior turn the
             # ephemeral document will never see.
-            executor.Write(
-                task, ephemeral_id, concept_mode=concept_mode,
+            written = executor.Write(
+                question or task, ephemeral_id, concept_mode=concept_mode,
                 token_saving=token_saving, natural_voice=natural_voice,
-                writing_profile=writing_profile,
+                writing_profile=writing_profile, variant=variant,
+                document_type=document_type,
+                on_draft=lambda text: _emit_draft(text, "REWRITE"),
             )
+            if _chat_task_blocked(written):
+                return _normalise_chat_answer(task_type, written)
             result = executor.ReWrite(
-                task, ephemeral_id, natural_voice=natural_voice,
-                writing_profile=writing_profile,
+                question or task, ephemeral_id, natural_voice=natural_voice,
+                writing_profile=writing_profile, document_type=document_type,
+                on_draft=lambda text: _emit_draft(text, "REWRITE"),
             )
         elif task_type == "CRITIQUE":
             # Same reasoning as ReWrite: there is nothing to critique until the
             # draft has been written, so it is written first.
-            executor.Write(
-                task, ephemeral_id, concept_mode=concept_mode,
+            written = executor.Write(
+                question or task, ephemeral_id, concept_mode=concept_mode,
                 token_saving=token_saving, natural_voice=natural_voice,
-                writing_profile=writing_profile,
+                writing_profile=writing_profile, variant=variant,
+                document_type=document_type,
+                on_draft=lambda text: _emit_draft(text, "CRITIQUE"),
             )
-            result = executor.Critique(task, ephemeral_id)
+            if _chat_task_blocked(written):
+                return _normalise_chat_answer(task_type, written)
+            result = executor.Critique(question or task, ephemeral_id)
         elif task_type == "RESEARCH":
-            result = executor.Research(task)
+            result = executor.Research(task, variant=variant)
         elif task_type == "FORMAT":
-            result = executor.Format(question or task, ephemeral_id)
+            result = executor.Format(
+                question or task, ephemeral_id,
+                document_type=document_type,
+                on_draft=lambda text: _emit_draft(text, "FORMAT"),
+            )
+        elif task_type == "SEARCH":
+            # Search mode is document search: the answer comes from the open
+            # draft, not from the web. The whole draft is available here, so a
+            # match outside the first 12k characters is still found.
+            result = executor.Search(question or task, draft)
         elif task_type == "EXPLAIN":
             # Explain the open draft when there is one; only search when the
             # turn has no document context. The full history is not a subject.
@@ -719,39 +789,63 @@ def _route_chat_turn(
     writing_profile: str = "",
     research_mode: bool = False,
     forced_task: str = "auto",
+    document_type: str = "auto",
 ) -> dict:
     """Classifies one chat turn and dispatches it to the matching task engine."""
     from utilis.model import Agent
 
     if token_saving:
-        # Token-saving is a budget, not a different assistant: it trims the
-        # draft, caps the answer, and asks for the short version. It does not
-        # skip the classifier, because routing is the cheap part of a turn.
+        # Token-saving is a budget, not a different assistant: it caps the
+        # answer and asks for the short version. The draft is trimmed *after*
+        # the intent checks, because Search and Format read the whole document
+        # and neither sends it to the model wholesale.
         provider = {**provider, "max_output_tokens": 900}
-        draft = draft[:6000]
 
     question = transcript[-1][1]
     history = "\n\n".join(f"{role}: {text}" for role, text in transcript[:-1])
     task = f"{history}\n\nuser: {question}" if history else question
 
-    # A format request is an edit of the open draft, not a new subject. Do this
-    # before classification: the classifier has repeatedly read "add
-    # definitions" as a request to write about definitions.
-    if draft.strip() and is_format_request(question):
+    # A format or rewrite request is an edit of the open draft, not a new
+    # subject. Do this before classification: the classifier has repeatedly
+    # read "add definitions" as a request to write about definitions, and it
+    # read "rewrite the document in the words of a 10 year old" as a fresh
+    # thesis -- which the relevance gate then refused as off-topic.
+    if draft.strip() and is_document_transform_request(question):
         return _chat_dispatch(
             provider, "FORMAT", task, draft,
             concept_mode=concept_mode, token_saving=token_saving,
             natural_voice=natural_voice, writing_profile=writing_profile,
-            question=question,
+            question=question, variant=variant,
         )
+
+    # A question about the open draft is not a request for a new one. The
+    # classifier read "did you remove the Miller effect?" as a rewrite and wrote
+    # a halt stub over the document; Search reads the draft and answers in chat.
+    if draft.strip() and is_document_question(question):
+        return _chat_dispatch(
+            provider, "SEARCH", task, draft,
+            concept_mode=concept_mode, token_saving=token_saving,
+            natural_voice=natural_voice, writing_profile=writing_profile,
+            question=question, variant=variant, document_type=document_type,
+        )
+
     if token_saving:
+        draft = draft[:6000]
         task += "\n\n[Token-saving mode: answer concisely, do not repeat the draft.]"
     task += _VARIANT_INSTRUCTIONS.get(str(variant or "balanced").lower(), "")
 
     forced = str(forced_task or "auto").strip().lower()
     if research_mode:
-        forced = "search"
+        forced = "research"
     if forced == "search":
+        if draft.strip():
+            return _chat_dispatch(
+                provider, "SEARCH", task, draft,
+                concept_mode=concept_mode, token_saving=token_saving,
+                natural_voice=natural_voice, writing_profile=writing_profile,
+                question=question, variant=variant, document_type=document_type,
+            )
+        # No draft to search: fall back to web research rather than refusing.
         forced = "research"
     if forced == "survey":
         concept_mode = "survey"
@@ -761,7 +855,7 @@ def _route_chat_turn(
             provider, forced.upper(), task, draft,
             concept_mode=concept_mode, token_saving=token_saving,
             natural_voice=natural_voice, writing_profile=writing_profile,
-            question=question,
+            question=question, variant=variant, document_type=document_type,
         )
 
     response = Agent(provider).Nous(task)
@@ -772,14 +866,15 @@ def _route_chat_turn(
     if not task_type:
         raise RuntimeError("the classifier returned an empty task type")
 
-    if task_type not in _DOCUMENT_TASKS + ("RESEARCH", "EXPLAIN", "SMALLTALK"):
+    if task_type not in _DOCUMENT_TASKS + ("RESEARCH", "EXPLAIN", "SEARCH", "SMALLTALK"):
         raise RuntimeError(f"unsupported task type {task_type!r}")
 
     return _chat_dispatch(
         provider, task_type, task, draft,
         concept_mode=concept_mode, token_saving=token_saving,
         natural_voice=natural_voice,
-        writing_profile=writing_profile, question=question,
+        writing_profile=writing_profile, question=question, variant=variant,
+        document_type=document_type,
     )
 
 
@@ -1263,7 +1358,7 @@ class Handler(BaseHTTPRequestHandler):
         # The open draft is what a document task operates on. Capped for the same
         # reason it always was: the whole draft is the document, and a document is
         # not a chat turn's context.
-        draft = str(body.get("draft") or "").strip()[:12000]
+        draft = str(body.get("draft") or "").strip()
 
         try:
             answer = _route_chat_turn(
@@ -1275,6 +1370,7 @@ class Handler(BaseHTTPRequestHandler):
                 writing_profile=str(body.get("writing_profile") or ""),
                 research_mode=bool(body.get("research_mode")),
                 forced_task=str(body.get("task") or "auto"),
+                document_type=str(body.get("document_type") or "auto"),
             )
         except Exception as exc:  # noqa: BLE001 - the reason is the whole answer
             logger.exception("api chat failed")
@@ -1315,7 +1411,7 @@ class Handler(BaseHTTPRequestHandler):
         if not transcript:
             return self._json(400, {"error": "messages contained no text"})
 
-        draft = str(body.get("draft") or "").strip()[:12000]
+        draft = str(body.get("draft") or "").strip()
         concept_mode = _concept_mode(body)
         turn = ChatTurn()
         with _CHAT_LOCK:
@@ -1336,6 +1432,7 @@ class Handler(BaseHTTPRequestHandler):
                     writing_profile=str(body.get("writing_profile") or ""),
                     research_mode=bool(body.get("research_mode")),
                     forced_task=str(body.get("task") or "auto"),
+                    document_type=str(body.get("document_type") or "auto"),
                 )
             except Exception as exc:  # noqa: BLE001 - the reason is the answer
                 logger.exception("api chat stream failed")

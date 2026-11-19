@@ -26,6 +26,7 @@ export default function ThoughtLine({
   steps = EMPTY_STEPS,
   collapsible = true,
   collapseOnSettle = true,
+  defaultOpen = true,
   color = 'currentColor',
   glyphColor = '',
   fontSize = 16,
@@ -45,7 +46,7 @@ export default function ThoughtLine({
 }) {
   const reduce = useReducedMotion();
   const [autoSettled, setAutoSettled] = useState(false);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
   const isWorking = working && !autoSettled;
   const doneText = doneLabel || (showTimer ? 'Thought for' : 'Done thinking');
   const hasTrace = steps.length > 0;
@@ -70,8 +71,10 @@ export default function ThoughtLine({
     if (working) setAutoSettled(false);
   }, [working]);
   useEffect(() => {
-    if (isWorking) setOpen(true);
-    else if (collapseOnSettle) setOpen(false);
+    // A trace opens only when the reader asks. The newest step stays visible in
+    // the collapsed head, so the process is still legible without the list
+    // pushing the answer down the panel.
+    if (!isWorking && collapseOnSettle) setOpen(false);
   }, [isWorking, collapseOnSettle]);
 
   useEffect(() => {

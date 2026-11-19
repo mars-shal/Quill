@@ -1,6 +1,6 @@
 [package]
 name = "quill"
-version = "0.1.0"
+version = "0.35.0"
 description = "Quill — a desktop editor for long-form writing"
 authors = ["Quill"]
 license = "MIT"
@@ -24,7 +24,7 @@ tauri-plugin-window-state = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "net"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -34,6 +34,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "5"
 base64 = "0.22"
 sha2 = "0.10"
+rand = "0.8"
 pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
 # Export pipeline. All pure Rust, no C dependencies, so all three desktop
 # targets build from the same lockfile.

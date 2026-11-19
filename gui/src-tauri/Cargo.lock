@@ -3832,7 +3832,7 @@ dependencies = [
 
 [[package]]
 name = "quill"
-version = "0.1.0"
+version = "0.35.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3844,6 +3844,7 @@ dependencies = [
  "pdf-extract",
  "printpdf",
  "pulldown-cmark",
+ "rand 0.8.8",
  "reqwest 0.12.28",
  "roxmltree 0.20.0",
  "serde",

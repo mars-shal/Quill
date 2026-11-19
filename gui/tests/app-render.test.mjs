@@ -343,6 +343,29 @@ test('the font picker opens a listbox with every face in its own typeface', asyn
   assert.equal(dom.window.document.body.querySelector('.tool-listbox-popover'), null, 'Escape closes it')
 })
 
+test('opening one toolbar picker closes the other', async () => {
+  fontTrigger().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+  await tick(20)
+  assert.equal(
+    dom.window.document.body.querySelectorAll('.tool-listbox-popover').length,
+    1,
+    'the font list opens on its own',
+  )
+
+  const size = sizeTrigger()
+  size.dispatchEvent(new dom.window.Event('pointerdown', { bubbles: true }))
+  size.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+  await tick(20)
+
+  const popovers = [...dom.window.document.body.querySelectorAll('.tool-listbox-popover')]
+  assert.equal(popovers.length, 1, 'only one list may be open at a time')
+  assert.equal(popovers[0].getAttribute('aria-label'), 'Text size', 'the new picker owns the open list')
+
+  popovers[0].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await tick(20)
+  assert.equal(dom.window.document.body.querySelector('.tool-listbox-popover'), null, 'Escape closes it')
+})
+
 // --- active-section tracking -------------------------------------------------
 // The scroll handler that tracked the active section read a bounding rect for
 // every heading on every scroll frame, after a ProseMirror tree walk to resolve

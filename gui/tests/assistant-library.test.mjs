@@ -473,3 +473,18 @@ test('the metal-fx gate reports a usable reason', () => {
   // The defaults use :- so an explicit export from the caller still wins.
   assert.match(wrapper, /:-1/, 'the GL defaults must be overridable')
 })
+
+test('the thinking trace starts collapsed and writes stream live', () => {
+  const jsx = readFileSync(join(root, 'src', 'library', 'ChatPanel.jsx'), 'utf8')
+  const trace = readFileSync(join(root, 'src', 'library', 'ui', 'ThoughtLine.jsx'), 'utf8')
+
+  assert.match(jsx, /defaultOpen=\{false\}/, 'the chat trace opens collapsed')
+  assert.match(trace, /const \[open, setOpen\] = useState\(defaultOpen\)/, 'the trace honours its default')
+  assert.ok(
+    !/if \(isWorking\) setOpen\(true\)/.test(trace),
+    'arriving steps must not force the trace open',
+  )
+  assert.match(jsx, /onDraft: \(\{ markdown, task: draftTask \}\)/, 'the panel consumes live drafts')
+  assert.match(jsx, /live: true/, 'a live draft is rendered in place')
+  assert.match(jsx, /final: true/, 'the final answer replaces the live region')
+})

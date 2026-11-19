@@ -41,6 +41,15 @@ import {
 import { BorderBeam, BotAvatar, Liquid, LiquidItem, MetalFx, ThinkingOrb } from './chat-effects.js'
 import ThoughtLine from './ui/ThoughtLine.jsx'
 import {
+  deleteChatSession,
+  loadChatSessions,
+  newChatSession,
+  saveChatSessions,
+  sessionAge,
+  switchChatSession,
+  titleForMessages,
+} from './chatSessions.js'
+import {
   chat,
   describeFailure,
   listProviderModels,
@@ -299,7 +308,6 @@ function ToolbarSelect({
         aria-expanded={open}
         title={value ? undefined : `${placeholder} — document default`}
         onMouseDown={(event) => event.preventDefault()}
-        onPointerDown={(event) => event.stopPropagation()}
         onClick={() => setOpen((isOpen) => !isOpen)}
       >
         <span className="tool-listbox-name">{shown}</span>
@@ -460,11 +468,7 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
           onChange={onSize}
         />
         <Select value={currentAlign} onValueChange={(value) => runCommand('setTextAlign', value)}>
-          <SelectTrigger
-            className="tool-select"
-            aria-label="Alignment"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
+          <SelectTrigger className="tool-select" aria-label="Alignment">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -479,11 +483,7 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
           else if (value === 'ls-normal') runCommand('unsetLetterSpacing')
           else if (value.startsWith('ls-')) runCommand('setLetterSpacing', value.slice(3))
         }}>
-          <SelectTrigger
-            className="tool-select"
-            aria-label="Line and letter spacing"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
+          <SelectTrigger className="tool-select" aria-label="Line and letter spacing">
             <SelectValue placeholder="Spacing" />
           </SelectTrigger>
           <SelectContent>
@@ -505,11 +505,7 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
           else if (value === 'math') onInsertMath?.()
           else if (value === 'table') runCommand('insertTable', { rows: 3, cols: 3, withHeaderRow: true })
         }}>
-          <SelectTrigger
-            className="tool-select"
-            aria-label="Insert"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
+          <SelectTrigger className="tool-select" aria-label="Insert">
             <SelectValue placeholder="Insert" />
           </SelectTrigger>
           <SelectContent>
@@ -637,6 +633,12 @@ function SuggestionRow({ onPick, gooey = false, transition }) {
  * when it truncates rather than silently dropping the rest.
  */
 const MAX_ATTACHMENT_CHARS = 12000
+const MAX_ATTACHMENTS = 5
+// The provider budget is shared by the whole turn: input + output reserve. Five
+// 12k-character files used to ask for 17k tokens against a 6k TPM window, so the
+// turn failed before it reached the model. Keep the combined attachment text
+// inside one budget and let the per-file cap handle the single-file case.
+const MAX_TOTAL_ATTACHMENT_CHARS = 12000
 // A UTF-8 character is at most four bytes, so this is enough to fill the
 // character cap. Slicing before `text()` matters: a reader can pick a log file
 // far larger than the token budget, and reading all of it just to throw 99% away
@@ -669,20 +671,41 @@ async function readAttachment(file) {
 }
 
 /** How an attachment is quoted into the prompt the model reads. */
-function attachmentPrompt(attachment) {
-  if (!attachment) return ''
-  if (attachment.error) return `Attached file: ${attachment.name} (could not be read: ${attachment.error})`
-  return [
-    `Attached file: ${attachment.name}${attachment.truncated ? ' (truncated)' : ''}`,
-    '',
-    attachment.text,
-    '',
-    `--- end of ${attachment.name} ---`,
-  ].join('\n')
+function budgetAttachments(attachments = []) {
+  const list = Array.isArray(attachments) ? attachments : [attachments]
+  const usable = list.filter((attachment) => attachment?.text && !attachment.error)
+  const perFile = Math.max(1200, Math.floor(MAX_TOTAL_ATTACHMENT_CHARS / Math.max(1, usable.length)))
+  return list.map((attachment) => {
+    if (!attachment?.text || attachment.error || attachment.text.length <= perFile) {
+      return attachment
+    }
+    return {
+      ...attachment,
+      text: attachment.text.slice(0, perFile),
+      truncated: true,
+    }
+  })
+}
+
+function attachmentPrompt(attachments = []) {
+  const list = budgetAttachments(attachments)
+  return list.map((attachment) => {
+    if (!attachment) return ''
+    if (attachment.error) {
+      return `Attached file: ${attachment.name} (could not be read: ${attachment.error})`
+    }
+    return [
+      `Attached file: ${attachment.name}${attachment.truncated ? ' (truncated to fit the context budget)' : ''}`,
+      '',
+      attachment.text,
+      '',
+      `--- end of ${attachment.name} ---`,
+    ].join('\n')
+  }).filter(Boolean).join('\n\n')
 }
 
 /** The message box, its controls and the send button. */
-function ChatComposer({ input, setInput, send, mode, setMode, variant, setVariant, interview, setInterview, attachment, setAttachment, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
+function ChatComposer({ input, setInput, send, mode, setMode, variant, setVariant, interview, setInterview, attachments = [], setAttachments, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
   // The desktop picker goes through MarkItDown, which covers PDF, DOCX,
   // PPTX, XLSX, HTML and more. The hidden input remains the browser fallback.
   const pickDocument = async () => {
@@ -691,19 +714,28 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
       return
     }
     try {
-      const [path] = await pickDocumentPaths()
-      if (!path) return
-      const markdown = await convertDocument(path)
-      const name = String(path).split(/[\\/]/).pop() || String(path)
-      setAttachment({
-        name,
-        size: markdown.length,
-        text: markdown.slice(0, MAX_ATTACHMENT_CHARS),
-        truncated: markdown.length > MAX_ATTACHMENT_CHARS,
-      })
+      const paths = (await pickDocumentPaths()).flat()
+      if (!paths.length) return
+      const picked = []
+      for (const path of paths) {
+        try {
+          const markdown = await convertDocument(path)
+          picked.push({
+            name: String(path).split(/[\\/]/).pop() || String(path),
+            size: markdown.length,
+            text: markdown.slice(0, MAX_ATTACHMENT_CHARS),
+            truncated: markdown.length > MAX_ATTACHMENT_CHARS,
+          })
+        } catch (error) {
+          const message = reasonFor(error)
+          picked.push({ name: String(path).split(/[\\/]/).pop() || 'Document', size: 0, error: message })
+          notify(message)
+        }
+      }
+      setAttachments((current) => [...current, ...picked].slice(0, MAX_ATTACHMENTS))
     } catch (error) {
       const message = reasonFor(error)
-      setAttachment({ name: 'Document', size: 0, error: message })
+      setAttachments((current) => [...current, { name: 'Document', size: 0, error: message }].slice(0, MAX_ATTACHMENTS))
       notify(message)
     }
   }
@@ -712,23 +744,27 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
   // change again; the File object itself stays valid after the reset.
   const pickFile = async (event) => {
     const inputElement = event.currentTarget
-    const file = inputElement.files?.[0]
+    const files = [...(inputElement.files || [])]
     inputElement.value = ''
-    if (!file) return
-    try {
-      setAttachment(await readAttachment(file))
-    } catch (error) {
-      setAttachment({ name: file.name, size: file.size, error: reasonFor(error) })
+    if (!files.length) return
+    const picked = []
+    for (const file of files) {
+      try {
+        picked.push(await readAttachment(file))
+      } catch (error) {
+        picked.push({ name: file.name, size: file.size, error: reasonFor(error) })
+      }
     }
+    setAttachments((current) => [...current, ...picked].slice(0, MAX_ATTACHMENTS))
   }
 
   return (
-    <div className="chat-box" data-ready={input.trim() || attachment?.text ? '' : undefined}>
+    <div className="chat-box" data-ready={input.trim() || attachments.some((item) => item.text) ? '' : undefined}>
       <textarea
         value={input}
         onChange={(event) => setInput(event.target.value)}
         onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }}
-        placeholder={busy ? 'Working…' : mode === 'Ask' ? 'Ask about this draft…' : 'Suggest a revision…'}
+        placeholder={busy ? 'Working…' : mode === 'Search' ? 'Ask about this draft…' : 'Suggest a revision…'}
         rows="1"
         disabled={busy}
       />
@@ -738,6 +774,7 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
             ref={fileRef}
             type="file"
             hidden
+            multiple
             accept=".txt,.text,.md,.markdown,.mdx,.csv,.tsv,.json,.ndjson,.html,.htm,.xml,.rtf,.tex,.yaml,.yml,.toml,.ini,.cfg,.log,.rst,.org,.js,.jsx,.ts,.tsx,.py,.rs,.go,.c,.cc,.cpp,.h,.hpp,.css,.scss,.sass,.sql,.sh,.bash,.zsh,.rb,.java,.kt,.swift,.php,.lua,.r,text/*"
             onChange={pickFile}
           />
@@ -758,6 +795,26 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
               {voiceState === 'recording' ? 'Listening…' : voiceState === 'transcribing' ? 'Transcribing…' : voiceError || 'Microphone'}
             </span>
           )}
+          <button
+            className={`chat-mode chat-questions${interview ? ' active' : ''}`}
+            type="button"
+            title="Ask a few clarifying questions before the next write"
+            aria-label={interview ? 'Clarifying questions on' : 'Ask clarifying questions'}
+            aria-pressed={interview}
+            onClick={() => setInterview((value) => !value)}
+          >
+            <Icon name="details" size={14} />
+          </button>
+          <button
+            className={`chat-mode chat-search${mode === 'Search' ? ' active' : ''}`}
+            type="button"
+            title={mode === 'Search' ? 'Searching this draft' : 'Search this draft instead of writing'}
+            aria-label={`Chat mode: ${mode}`}
+            aria-pressed={mode === 'Search'}
+            onClick={() => setMode(mode === 'Search' ? 'Auto' : 'Search')}
+          >
+            <Icon name="search" size={13} /> {mode}
+          </button>
           <button
             className="chat-mode chat-variant"
             type="button"
@@ -906,52 +963,62 @@ function QuestionnaireCard({ questions, answered, answers, onSubmit }) {
   )
 }
 
+/** A short, honest description of what a write turned into. */
+function writingSummary(markdown) {
+  const source = String(markdown || '')
+  const words = (source.match(/\b[\w'-]+\b/g) || []).length
+  const headings = (source.match(/^#{1,6}\s+.+$/gm) || []).length
+  const title = (source.match(/^#\s+(.+)$/m) || [])[1]?.trim() || ''
+  return { words, headings, title }
+}
+
+function writtenMessage(summary, task) {
+  const headingPart = summary.headings
+    ? ` across ${summary.headings} heading${summary.headings === 1 ? '' : 's'}`
+    : ''
+  const titlePart = summary.title ? `\n\n“${summary.title}”` : ''
+  const verb = task === 'FORMAT' ? 'reformatted' : task === 'REWRITE' ? 'rewritten' : 'written'
+  return `**The draft was ${verb}** — ${summary.words.toLocaleString()} words${headingPart}.${titlePart}`
+}
+
 function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, rightOpen, effectsActive, getDraft, onWriteToDocument }) {
-  const [messages, setMessages] = useState(() => {
-    // Restored on mount so a refresh does not empty the conversation. Vite
-    // defines `import.meta.env`; the test loader does not, and tests must not
-    // leak transcripts between mounts, so persistence only exists in the app.
-    if (import.meta.env) {
-      try {
-        const key = documentId ? transcriptKey(documentId) : TRANSCRIPT_KEY
-        let saved = JSON.parse(localStorage.getItem(key) || 'null')
-        // The first version kept one window-wide transcript. Preserve it by
-        // handing it to the first document opened after the upgrade, rather
-        // than leaving that conversation stranded under a key nothing reads.
-        if (!saved?.messages && documentId) {
-          const legacy = localStorage.getItem(TRANSCRIPT_KEY)
-          if (legacy) {
-            const previous = JSON.parse(legacy)
-            localStorage.setItem(key, legacy)
-            localStorage.removeItem(TRANSCRIPT_KEY)
-            saved = previous
-          }
+  const [sessionState, setSessionState] = useState(() => loadChatSessions(
+    documentId,
+    import.meta.env ? localStorage : null,
+  ))
+  const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeId) || sessionState.sessions[0]
+  const messages = activeSession?.messages ?? []
+  const setMessages = useCallback((updater) => {
+    setSessionState((current) => ({
+      ...current,
+      sessions: current.sessions.map((session) => {
+        if (session.id !== current.activeId) return session
+        const next = typeof updater === 'function' ? updater(session.messages) : updater
+        return {
+          ...session,
+          messages: next,
+          updatedAt: Date.now(),
+          title: titleForMessages(next) || session.title,
         }
-        if (Array.isArray(saved?.messages) && saved.messages.length) return saved.messages
-      } catch (error) {
-        console.warn('Could not restore the conversation', error)
-      }
-    }
-    return [{ id: 'welcome', role: 'ai', text: 'I’m here when you want a second pair of eyes. I can summarize, tighten, or find a pattern in the draft.' }]
-  })
+      }),
+    }))
+  }, [])
   const [input, setInput] = useState('')
-  // The conversation is part of the reader's work: a refresh must not empty it.
-  // Written straight through rather than debounced -- messages are small, and a
-  // debounce only trades a lost refresh for a lost tab close. Gated on
-  // `import.meta.env` for the same reason as the restore above.
+  // Persist the whole list, not just the active transcript: switching sessions
+  // after a refresh must not lose the conversation that was not open.
   useEffect(() => {
     if (!import.meta.env) return
     try {
-      const key = documentId ? transcriptKey(documentId) : TRANSCRIPT_KEY
-      localStorage.setItem(key, JSON.stringify({ messages }))
+      saveChatSessions(documentId, sessionState, localStorage)
     } catch (error) {
-      console.warn('Could not save the conversation', error)
+      console.warn('Could not save the conversations', error)
     }
-  }, [messages, documentId])
+  }, [sessionState, documentId])
 
   // Declared before the effect below reads them: the dependency array
   // evaluates during render, so a state born further down is a TDZ crash.
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [modelQuery, setModelQuery] = useState('')
   const pickerTriggerRef = useRef(null)
   const pickerPopoverRef = useRef(null)
 
@@ -961,7 +1028,8 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   useEffect(() => {
     if (!pickerOpen) return undefined
     const frame = requestAnimationFrame(() => {
-      pickerPopoverRef.current?.querySelector('[role="option"]')?.focus()
+      // The search field is the first thing a reader wants in a long list.
+      pickerPopoverRef.current?.querySelector('input[type="search"]')?.focus()
     })
     const onPointerDown = (event) => {
       if (pickerPopoverRef.current?.contains(event.target)) return
@@ -996,14 +1064,28 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
 
   const chooseModel = (value) => {
     setPickerOpen(false)
+    setModelQuery('')
     if (value) selectModel(value)
   }
 
-  const [attachment, setAttachment] = useState(null)
+  const [attachments, setAttachments] = useState([])
   const [typing, setTyping] = useState(false)
   // Turns typed while one is thinking are held here, in order, and dispatch
   // when the composer goes idle (see the flush effect after `send`).
-  const [mode, setMode] = useState('Auto')
+  const [mode, setMode] = useState(() => {
+    try {
+      return localStorage.getItem('quill:chat-mode') === 'search' ? 'Search' : 'Auto'
+    } catch {
+      return 'Auto'
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('quill:chat-mode', mode === 'Search' ? 'search' : 'auto')
+    } catch {
+      // Storage is a convenience; a disabled quota must not break the panel.
+    }
+  }, [mode])
   // `reference` blends the prompt with the document; `survey` extracts a
   // concept per selected section. The mode only reaches a WRITE-shaped turn;
   // answers and research ignore it, but the choice is kept for the next one.
@@ -1039,7 +1121,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // Interview is a one-shot mode: it asks the questionnaire for the next turn,
   // then turns itself off so the answers can be written without another round.
   const [interview, setInterview] = useState(false)
-  const task = 'auto'
+  const task = mode === 'Search' ? 'search' : 'auto'
   const [liveModels, setLiveModels] = useState([])
   const [modelsState, setModelsState] = useState('idle')
   const [modelsError, setModelsError] = useState('')
@@ -1192,6 +1274,12 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const NON_CHAT_MODEL = /whisper|orpheus|prompt-guard/i
   const modelOptions = Array.from(new Set([model, ...(liveModels.length ? liveModels : activeProvider?.models || [])]
     .filter((option) => option && (option === model || !NON_CHAT_MODEL.test(option)))))
+  const filteredModels = useMemo(() => {
+    const query = modelQuery.trim().toLowerCase()
+    return query
+      ? modelOptions.filter((option) => option.toLowerCase().includes(query))
+      : modelOptions
+  }, [modelOptions, modelQuery])
   // Both canvas effects read `data-theme="dark|light"` when left on "auto", and
   // Quill names its dark theme "night", so auto-detection would light them. The
   // mode comes from the *resolved* theme rather than from `settings.theme`: a
@@ -1276,15 +1364,69 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     onSelectModel?.(value)
   }
 
+  const [sessionsOpen, setSessionsOpen] = useState(false)
+  const sessionsTriggerRef = useRef(null)
+  const sessionsPopoverRef = useRef(null)
+
+  useEffect(() => {
+    if (!sessionsOpen) return undefined
+    const frame = requestAnimationFrame(() => {
+      sessionsPopoverRef.current?.querySelector('[role="option"]')?.focus()
+    })
+    const onPointerDown = (event) => {
+      if (sessionsPopoverRef.current?.contains(event.target)) return
+      if (sessionsTriggerRef.current?.contains(event.target)) return
+      setSessionsOpen(false)
+    }
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setSessionsOpen(false)
+      sessionsTriggerRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [sessionsOpen])
+
   const startNewChat = () => {
-    setMessages([{ id: `welcome-${Date.now()}`, role: 'ai', text: 'New conversation. What would you like to work on?' }])
+    if (typing) return
+    const session = newChatSession()
+    setSessionState((current) => ({ sessions: [session, ...current.sessions], activeId: session.id }))
     // A new conversation starts from the default window rather than the reader's
     // widest one, so the bound holds without them having to think about it.
     setShownCount(MESSAGE_WINDOW)
     setInput('')
-    setAttachment(null)
-    setTyping(false)
+    setAttachments([])
+    setSessionsOpen(false)
   }
+
+  const switchSession = (id) => {
+    if (typing) return
+    setSessionState((current) => switchChatSession(current, id))
+    setShownCount(MESSAGE_WINDOW)
+    setInput('')
+    setAttachments([])
+    setSessionsOpen(false)
+  }
+
+  const removeSession = (id) => {
+    if (typing) return
+    setSessionState((current) => deleteChatSession(current, id))
+  }
+
+  useEffect(() => {
+    setShownCount(MESSAGE_WINDOW)
+  }, [sessionState.activeId])
+
+  const orderedSessions = useMemo(
+    () => [...sessionState.sessions].sort((a, b) => b.updatedAt - a.updatedAt),
+    [sessionState.sessions],
+  )
 
   // A monotonic counter, not the clock. Two messages appended inside the same
   // millisecond used to share a `Date.now()` id, and these ids are React keys --
@@ -1305,10 +1447,11 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
    * the zero-argument callback the button and the Enter handler already use.
    */
   const dispatch = (value, att) => {
-    if (!value && !att) return
-    const attachmentText = attachmentPrompt(att)
+    const list = Array.isArray(att) ? att : (att ? [att] : [])
+    if (!value && !list.some((item) => item.text)) return
+    const attachmentText = attachmentPrompt(list)
     const prompt = [value, attachmentText].filter(Boolean).join('\n\n')
-    const text = [value, att ? `Attached: ${att.name}` : ''].filter(Boolean).join('\n')
+    const text = [value, list.length ? `Attached: ${list.map((item) => item.name).join(', ')}` : ''].filter(Boolean).join('\n')
     const turn = ++turnSeq.current
     const userId = nextMessageId('user')
     setMessages((current) => [...current, {
@@ -1321,7 +1464,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       prompt: prompt === text ? undefined : prompt,
     }])
     setInput('')
-    setAttachment(null)
+    setAttachments([])
     setTyping(true)
 
     // After the question it answers, not at the end of the transcript. The
@@ -1374,6 +1517,17 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       onStage: ({ step }) => setTurnSteps((current) => (
         current.includes(step) ? current : [...current, step]
       )),
+      // A write streams its sections as they finish. FORMAT and REWRITE own
+      // the whole page, so their preview replaces it; WRITE replaces only the
+      // region it appended to when the final answer lands.
+      onDraft: ({ markdown, task: draftTask }) => {
+        if (!markdown || typeof onWriteToDocument !== 'function') return
+        if (!['WRITE', 'REWRITE', 'FORMAT'].includes(draftTask)) return
+        onWriteToDocument(markdown, {
+          replace: draftTask === 'FORMAT' || draftTask === 'REWRITE',
+          live: true,
+        })
+      },
     })
       .then(({ reply, transport, task, sources, wroteDocument }) => {
         if (turn !== turnSeq.current) return
@@ -1392,12 +1546,17 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         // warning. An older backend omits the flag, hence `!== false`.
         const writesDocument = task === 'WRITE' || task === 'REWRITE' || task === 'FORMAT'
         const wrote = writesDocument && wroteDocument !== false && typeof onWriteToDocument === 'function'
-          ? onWriteToDocument(reply, { replace: task === 'FORMAT' })
+          ? onWriteToDocument(reply, {
+            replace: task === 'FORMAT' || task === 'REWRITE',
+            final: true,
+          })
           : false
         appendReply({
           id: nextMessageId('ai'),
           role: 'ai',
-          text: wrote ? 'Written to the document.' : (reply || 'The assistant returned an empty answer.'),
+          text: wrote
+            ? writtenMessage(writingSummary(reply), task)
+            : (reply || 'The assistant returned an empty answer.'),
           status: describeTransport(transport, task),
           task,
           sources: Array.isArray(sources) ? sources : [],
@@ -1426,9 +1585,10 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
    * brief before any tokens go into a draft.
    */
   const askQuestions = (value, att) => {
-    const attachmentText = attachmentPrompt(att)
+    const list = Array.isArray(att) ? att : (att ? [att] : [])
+    const attachmentText = attachmentPrompt(list)
     const prompt = [value, attachmentText].filter(Boolean).join('\n\n')
-    const text = [value, att ? `Attached: ${att.name}` : ''].filter(Boolean).join('\n')
+    const text = [value, list.length ? `Attached: ${list.map((item) => item.name).join(', ')}` : ''].filter(Boolean).join('\n')
     const userId = nextMessageId('user')
     setMessages((current) => [...current, {
       id: userId,
@@ -1437,7 +1597,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       prompt: prompt === text ? undefined : prompt,
     }])
     setInput('')
-    setAttachment(null)
+    setAttachments([])
     setTyping(true)
 
     const appendReply = (reply) => {
@@ -1500,16 +1660,16 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
 
   const send = () => {
     const value = input.trim()
-    if (!value && !attachment?.text) return
+    if (!value && !attachments.some((item) => item.text)) return
     // One turn at a time. A second send while the assistant is working is
     // refused rather than queued: the reader asked for a run, and racing it
     // with another one makes both answers harder to trust.
     if (typing) return
     if (interview) {
-      askQuestions(value, attachment)
+      askQuestions(value, attachments)
       return
     }
-    dispatch(value, attachment)
+    dispatch(value, attachments)
   }
 
   // metal-fx throws during render when WebGL2 is missing, and WebKitGTK does
@@ -1540,7 +1700,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       <Icon name="stop" size={14} />
     </motion.button>
   ) : (
-    <motion.button className="send-button" style={{ pointerEvents: 'auto' }} type="button" disabled={typing || (!input.trim() && !attachment?.text)} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
+    <motion.button className="send-button" style={{ pointerEvents: 'auto' }} type="button" disabled={typing || (!input.trim() && !attachments.some((item) => item.text))} aria-label="Send message" onClick={send} whileTap={{ scale: 0.94 }} transition={spring}>
       <Icon name="send" size={15} />
     </motion.button>
   )
@@ -1558,7 +1718,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const composerProps = {
     input, setInput, send, mode, setMode, conceptMode, setConceptMode,
     variant, setVariant, interview, setInterview,
-    attachment, setAttachment,
+    attachments, setAttachments,
     fileRef, busy: typing, voiceState, voiceError, onVoiceStart: startVoice,
     onVoiceStop: stopVoice,
   }
@@ -1588,6 +1748,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
               title={modelsState === 'error' ? modelsError : undefined}
               onClick={() => {
                 if (!providerConfigured) { onOpenSettings?.(); return }
+                setModelQuery('')
                 setPickerOpen((open) => !open)
               }}
             >
@@ -1596,67 +1757,153 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
             <Icon name="down" size={12} />
           </div>
           <button
-            className={`assistant-head-action${interview ? ' is-on' : ''}`}
+            className={`assistant-head-action${sessionsOpen ? ' is-on' : ''}`}
             type="button"
-            aria-label={interview ? 'Clarifying questions on' : 'Ask clarifying questions'}
-            aria-pressed={interview}
-            title="Ask a few clarifying questions before the next write"
-            onClick={() => setInterview((value) => !value)}
+            ref={sessionsTriggerRef}
+            aria-label="Chat sessions"
+            aria-haspopup="listbox"
+            aria-expanded={sessionsOpen}
+            title="Conversations in this document"
+            onClick={() => setSessionsOpen((value) => !value)}
+            disabled={typing}
           >
-            <Icon name="details" size={15} />
+            <Icon name="list" size={15} />
           </button>
-          <button className="assistant-head-action" type="button" aria-label="New chat" onClick={startNewChat}>
+          <button
+            className="assistant-head-action"
+            type="button"
+            aria-label="New chat"
+            title="New conversation"
+            onClick={startNewChat}
+            disabled={typing}
+          >
             <Icon name="plus" size={15} />
           </button>
         </div>
+        {sessionsOpen && (
+          <div
+            className="session-popover"
+            role="listbox"
+            aria-label="Chat sessions"
+            ref={sessionsPopoverRef}
+          >
+            <div className="session-popover-head">
+              <strong>Conversations</strong>
+              <span>{orderedSessions.length}</span>
+            </div>
+            {orderedSessions.map((session) => (
+              <div
+                className={`session-row${session.id === sessionState.activeId ? ' is-active' : ''}`}
+                key={session.id}
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={session.id === sessionState.activeId}
+                  className="session-pick"
+                  onClick={() => switchSession(session.id)}
+                >
+                  <span className="session-title">{session.title || 'New conversation'}</span>
+                  <span className="session-meta">
+                    {session.messages.length} {session.messages.length === 1 ? 'message' : 'messages'} · {sessionAge(session.updatedAt)}
+                  </span>
+                </button>
+                {sessionState.sessions.length > 1 && (
+                  <button
+                    type="button"
+                    className="session-delete"
+                    aria-label={`Delete ${session.title || 'conversation'}`}
+                    onClick={() => removeSession(session.id)}
+                    disabled={typing}
+                  >
+                    <Icon name="trash" size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              className="session-new"
+              onClick={startNewChat}
+              disabled={typing}
+            >
+              <Icon name="plus" size={12} /> New conversation
+            </button>
+          </div>
+        )}
         {pickerOpen && (
           <div
             className="model-popover"
-            role="listbox"
-            aria-label="AI model"
             ref={pickerPopoverRef}
-            onKeyDown={movePickerFocus}
           >
-            {modelOptions.map((option) => {
-              const selected = option === model
-              return (
+            <div className="model-search">
+              <Icon name="search" size={13} />
+              <input
+                type="search"
+                value={modelQuery}
+                onChange={(event) => setModelQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && filteredModels.length) {
+                    event.preventDefault()
+                    chooseModel(filteredModels[0])
+                  }
+                }}
+                placeholder="Search models"
+                aria-label="Search models"
+                autoComplete="off"
+                spellCheck="false"
+              />
+            </div>
+            <div
+              className="model-list"
+              role="listbox"
+              aria-label="AI model"
+              onKeyDown={movePickerFocus}
+            >
+              {filteredModels.map((option) => {
+                const selected = option === model
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`model-option${selected ? ' is-selected' : ''}`}
+                    onClick={() => chooseModel(option)}
+                  >
+                    <span className="model-option-badge" aria-hidden="true"><Icon name="sparkle" size={11} /></span>
+                    <span className="model-option-name">{option}</span>
+                    {selected && <i className="model-option-dot" aria-hidden="true" />}
+                  </button>
+                )
+              })}
+              {!filteredModels.length && (
+                <p className="model-empty">No models match “{modelQuery.trim()}”.</p>
+              )}
+              {modelsState === 'error' && (
                 <button
-                  key={option}
                   type="button"
                   role="option"
-                  aria-selected={selected}
-                  className={`model-option${selected ? ' is-selected' : ''}`}
-                  onClick={() => chooseModel(option)}
+                  aria-selected={false}
+                  className="model-option model-option-action"
+                  onClick={() => { setModelsRevision((count) => count + 1); setPickerOpen(false) }}
                 >
-                  <span className="model-option-badge" aria-hidden="true"><Icon name="sparkle" size={11} /></span>
-                  <span className="model-option-name">{option}</span>
-                  {selected && <i className="model-option-dot" aria-hidden="true" />}
+                  <span className="model-option-badge model-option-badge--muted" aria-hidden="true"><Icon name="sort" size={11} /></span>
+                  <span className="model-option-name">Retry reading models</span>
                 </button>
-              )
-            })}
-            {modelsState === 'error' && (
+              )}
+              <div className="model-popover-sep" />
               <button
                 type="button"
                 role="option"
                 aria-selected={false}
                 className="model-option model-option-action"
-                onClick={() => { setModelsRevision((count) => count + 1); setPickerOpen(false) }}
+                onClick={() => { setPickerOpen(false); onOpenSettings?.() }}
               >
-                <span className="model-option-badge model-option-badge--muted" aria-hidden="true"><Icon name="sort" size={11} /></span>
-                <span className="model-option-name">Retry reading models</span>
+                <span className="model-option-badge model-option-badge--muted" aria-hidden="true"><Icon name="settings" size={11} /></span>
+                <span className="model-option-name">Connect a provider…</span>
               </button>
-            )}
-            <div className="model-popover-sep" />
-            <button
-              type="button"
-              role="option"
-              aria-selected={false}
-              className="model-option model-option-action"
-              onClick={() => { setPickerOpen(false); onOpenSettings?.() }}
-            >
-              <span className="model-option-badge model-option-badge--muted" aria-hidden="true"><Icon name="settings" size={11} /></span>
-              <span className="model-option-name">Connect a provider…</span>
-            </button>
+            </div>
           </div>
         )}
       </div>
@@ -1787,6 +2034,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
                     showTimer
                     fontSize={12.5}
                     steps={turnSteps}
+                    defaultOpen={false}
                     className="typing-thoughts"
                   />
                 </div>
@@ -1815,15 +2063,19 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
           </Liquid> : <SuggestionRow onPick={setInput} />}
         </EffectBoundary>
 
-        {attachment && (
-          <div className={`attachment-chip${attachment.error ? ' is-error' : ''}`} role={attachment.error ? 'alert' : undefined}>
-            <Icon name="file" size={12} />
-            <span title={attachment.error || attachment.name}>
-              {attachment.name}
-              {attachment.error ? ` — ${attachment.error}` : attachment.size ? ` · ${formatBytes(attachment.size)}` : ''}
-              {attachment.truncated ? ' · first 12,000 characters' : ''}
-            </span>
-            <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => setAttachment(null)}><Icon name="close" size={12} /></button>
+        {attachments.length > 0 && (
+          <div className="attachment-list">
+            {attachments.map((attachment, index) => (
+              <div className={`attachment-chip${attachment.error ? ' is-error' : ''}`} role={attachment.error ? 'alert' : undefined} key={`${attachment.name}-${index}`}>
+                <Icon name="file" size={12} />
+                <span title={attachment.error || attachment.name}>
+                  {attachment.name}
+                  {attachment.error ? ` — ${attachment.error}` : attachment.size ? ` · ${formatBytes(attachment.size)}` : ''}
+                  {attachment.truncated ? ' · first 12,000 characters' : ''}
+                </span>
+                <button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={12} /></button>
+              </div>
+            ))}
           </div>
         )}
 

@@ -35,6 +35,7 @@ const Collaboration = (await import('@tiptap/extension-collaboration')).default
 const { Markdown } = await import('@tiptap/markdown')
 const { TextStyle } = await import('@tiptap/extension-text-style')
 const Y = await import('yjs')
+const { normaliseMarkdownContent } = await import('../src/editor/markdownContent.js')
 
 const FRAGMENT = 'quill-body'
 
@@ -167,5 +168,29 @@ test('getMarkdown does not mutate the shared document', () => {
   const second = editor.getMarkdown()
   assert.equal(first, second, 'serialisation must be deterministic')
   assert.deepEqual(editor.getJSON(), before, 'the document must be unchanged')
+  editor.destroy()
+})
+
+test('nested emphasis produces one mark per type', () => {
+  // `*a _b_*` is italic inside italic. Both spans map to the same mark, and the
+  // markdown parser used to apply it to the inner text twice. ProseMirror
+  // rejects that collection, which disabled collaboration for the document.
+  const editor = makeEditor()
+  const parsed = normaliseMarkdownContent(
+    editor.markdown.parse('The *gain _Av_* is high'),
+    editor.schema,
+  )
+  editor.commands.setContent(parsed)
+
+  assert.doesNotThrow(() => editor.state.doc.check())
+
+  const italicText = []
+  editor.state.doc.descendants((node) => {
+    if (!node.isText) return
+    const italics = node.marks.filter((mark) => mark.type.name === 'italic')
+    assert.ok(italics.length <= 1, `${node.text} carries ${italics.length} italic marks`)
+    if (italics.length) italicText.push(node.text)
+  })
+  assert.deepEqual(italicText, ['gain Av'])
   editor.destroy()
 })

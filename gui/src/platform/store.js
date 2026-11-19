@@ -171,8 +171,8 @@ export async function pickDocumentPaths() {
   if (!isTauri) return []
   const { open } = await import('@tauri-apps/plugin-dialog')
   const picked = await open({
-    title: 'Attach a document',
-    multiple: false,
+    title: 'Attach documents',
+    multiple: true,
     directory: false,
     filters: [
       {
@@ -186,7 +186,8 @@ export async function pickDocumentPaths() {
       { name: 'All files', extensions: ['*'] },
     ],
   })
-  return picked ? [picked] : []
+  if (!picked) return []
+  return Array.isArray(picked) ? picked : [picked]
 }
 
 /** Convert one chosen document to Markdown through MarkItDown. */
@@ -423,6 +424,23 @@ export async function getProviderSecretStatus(provider) {
   }
 }
 
+/**
+ * Runs OpenRouter's OAuth PKCE flow through Rust.
+ *
+ * The command opens the system browser, waits on a loopback callback, exchanges
+ * the code and stores the key in the OS credential vault. The webview never
+ * receives the verifier or the key.
+ */
+export async function connectOpenRouter() {
+  if (!isTauri) throw new Error('OpenRouter sign-in needs the desktop app.')
+  return (await tauriInvoke())('openrouter_connect')
+}
+
+export async function disconnectOpenRouter() {
+  if (!isTauri) return
+  await (await tauriInvoke())('openrouter_disconnect')
+}
+
 export async function deleteProviderSecret(provider) {
   if (isTauri) {
     await (await tauriInvoke())('delete_provider_secret', { provider })
@@ -467,6 +485,8 @@ const BROWSER_PROVIDER = {
   protocol: 'openai_chat',
   baseUrl: '',
   defaultModel: 'preview',
+  thinkingModel: '',
+  writingModel: '',
   models: ['preview'],
   isActive: true,
 }
@@ -499,6 +519,8 @@ function normalizeProvider(row) {
     protocol: row.protocol ?? 'openai_chat',
     baseUrl: row.baseUrl ?? row.base_url ?? '',
     defaultModel: row.defaultModel ?? row.default_model ?? '',
+    thinkingModel: row.thinkingModel ?? row.thinking_model ?? '',
+    writingModel: row.writingModel ?? row.writing_model ?? '',
     models: Array.isArray(row.models) ? row.models : [],
     isActive: Boolean(row.isActive ?? row.is_active),
   }
@@ -861,15 +883,22 @@ export async function startRun({ prompt, documentId, sessionName, conceptMode } 
  */
 let activeChatTurn = null
 
-export async function chat({ messages, draft, conceptMode, task, variant, tokenSaving, naturalVoice, writingProfile, onStage } = {}) {
+export async function chat({ messages, draft, conceptMode, task, documentType, variant, tokenSaving, naturalVoice, writingProfile, onStage, onDraft } = {}) {
   if (!isTauri) throw new Error('The assistant needs the desktop app.')
   const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   activeChatTurn = turnId
-  const release = typeof onStage === 'function'
+  const releaseStage = typeof onStage === 'function'
     ? subscribe('quill://chat-stage', (payload) => {
       if (payload?.turnId !== turnId) return
       const step = String(payload?.step || '').trim()
       if (step) onStage({ step, t: Number(payload?.t) || 0 })
+    })
+    : () => {}
+  const releaseDraft = typeof onDraft === 'function'
+    ? subscribe('quill://chat-draft', (payload) => {
+      if (payload?.turnId !== turnId) return
+      const markdown = String(payload?.markdown || '')
+      if (markdown) onDraft({ markdown, task: String(payload?.task || '') })
     })
     : () => {}
   try {
@@ -883,10 +912,12 @@ export async function chat({ messages, draft, conceptMode, task, variant, tokenS
       naturalVoice: Boolean(naturalVoice),
       writingProfile: writingProfile || null,
       task: task || 'auto',
+      documentType: documentType || 'auto',
     })
   } finally {
     if (activeChatTurn === turnId) activeChatTurn = null
-    release()
+    releaseStage()
+    releaseDraft()
   }
 }
 
@@ -1035,7 +1066,15 @@ function subscribe(event, callback) {
 export function describeFailure(error) {
   const message = String(error?.message ?? error ?? '').trim()
   if (!message) return 'The writing service did not answer.'
-  if (/offline|unreachable|connect/i.test(message)) {
+  // Only an absent pipeline gets this sentence. Matching every message that
+  // contains "connect" turned a provider's "could not connect to OpenRouter"
+  // into "the writing service is not running", which sent the reader to restart
+  // a service that was already healthy.
+  if (
+    /offline|unreachable/i.test(message)
+    || /connection refused/i.test(message)
+    || /writing service.*not running/i.test(message)
+  ) {
     return 'The writing service is not running. Start it, then try again.'
   }
   return message

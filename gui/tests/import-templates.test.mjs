@@ -11,7 +11,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { JSDOM } from 'jsdom'
 
-import { DOCUMENT_TEMPLATES, templateById } from '../src/library/templates.js'
+import { DOCUMENT_TEMPLATES, templateById, templateSections, templateTitle } from '../src/library/templates.js'
 import {
   cleanupImportedHtml,
   fileExtension,
@@ -23,6 +23,7 @@ import {
   textToHtml,
   titleFromName,
 } from '../src/library/importFile.js'
+
 
 test('the thesis template carries the sections an examiner expects', () => {
   const thesis = templateById('thesis')
@@ -178,4 +179,38 @@ test('file names and support are read without trusting the path', () => {
   assert.equal(isSupportedImport('paper.pdf'), true)
   assert.equal(isSupportedImport('report.docx'), true)
   assert.equal(isSupportedImport('photo.png'), false)
+})
+
+
+test('cleanup removes leaked chat text and broken bullets', () => {
+  const previous = globalThis.DOMParser
+  globalThis.DOMParser = new JSDOM().window.DOMParser
+  try {
+    const html = cleanupImportedHtml([
+    '<p>Real paragraph.</p>',
+    '<p><em>Write II. for: assistant: New conversation. user: can rewrite this.</em></p>',
+      '<ul><li>*- a bullet that lost its emphasis</li></ul>',
+    ].join(''))
+    assert.match(html, /Real paragraph/)
+    assert.doesNotMatch(html, /assistant:|New conversation/)
+    assert.match(html, /- a bullet that lost its emphasis/)
+  } finally {
+    if (previous === undefined) delete globalThis.DOMParser
+    else globalThis.DOMParser = previous
+  }
+})
+
+test('template previews are drawn as the sheets they open', () => {
+  const thesis = templateById('thesis')
+  assert.equal(templateTitle(thesis), 'Thesis title')
+  assert.deepEqual(
+    templateSections(thesis).slice(0, 3),
+    ['Abstract', 'Acknowledgements', '1. Introduction'],
+  )
+
+  assert.deepEqual(templateSections(templateById('blank')), ['New section'])
+  for (const template of DOCUMENT_TEMPLATES) {
+    assert.ok(templateTitle(template), `${template.id} has a paper title`)
+    assert.ok(templateSections(template).length, `${template.id} shows at least one section`)
+  }
 })

@@ -397,6 +397,7 @@ async fn operations_on_a_provider_that_does_not_exist_are_reported() {
 // ---------------------------------------------------------------------------
 
 const MIGRATION: &str = include_str!("../../migrations/0005_providers.sql");
+const MIGRATION_ROLES: &str = include_str!("../../migrations/0007_provider_roles.sql");
 
 /// The exact column shape. This is the test that catches a migration which
 /// applied successfully but produced a table the module cannot read -- a
@@ -421,6 +422,8 @@ async fn the_providers_table_has_the_expected_column_shape() {
         ("default_model", "TEXT", 1, Some("''".to_string())),
         ("models", "TEXT", 1, Some("'[]'".to_string())),
         ("is_active", "INTEGER", 1, Some("0".to_string())),
+        ("thinking_model", "TEXT", 1, Some("''".to_string())),
+        ("writing_model", "TEXT", 1, Some("''".to_string())),
     ]
     .into_iter()
     .map(|(name, ty, notnull, default)| (name.to_string(), ty.to_string(), notnull, default))
@@ -468,6 +471,10 @@ async fn the_migration_preserves_rows_written_by_earlier_migrations() {
         .execute(&pool)
         .await
         .expect("migration 0005 should apply to a populated database");
+    sqlx::raw_sql(MIGRATION_ROLES)
+        .execute(&pool)
+        .await
+        .expect("migration 0007 should apply after 0005");
 
     let title: String = sqlx::query_scalar("SELECT title FROM documents WHERE id = 'doc-1'")
         .fetch_one(&pool)
@@ -505,7 +512,7 @@ async fn applying_the_migrations_twice_changes_nothing() {
             .fetch_all(&pool)
             .await
             .expect("read applied versions");
-    assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+    assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
 
     assert_eq!(list(&pool).await.expect("list").len(), 1);
 }
@@ -928,4 +935,40 @@ mod legacy_settings {
         );
         assert_eq!(ids(&list(&pool).await.expect("list")), vec!["anthropic"]);
     }
+}
+
+#[tokio::test]
+async fn role_models_round_trip_and_can_be_cleared() {
+    let pool = test_pool().await;
+    let created = create(
+        &pool,
+        NewProvider {
+            id: "openrouter".into(),
+            thinking_model: Some("reason-model".into()),
+            writing_model: Some("prose-model".into()),
+            ..Default::default()
+        },
+    )
+    .await
+    .expect("create");
+    assert_eq!(created.thinking_model, "reason-model");
+    assert_eq!(created.writing_model, "prose-model");
+
+    let stored = get(&pool, "openrouter").await.expect("get");
+    assert_eq!(stored.thinking_model, "reason-model");
+    assert_eq!(stored.writing_model, "prose-model");
+
+    let cleared = update(
+        &pool,
+        ProviderPatch {
+            id: "openrouter".into(),
+            thinking_model: Some(String::new()),
+            writing_model: Some(String::new()),
+            ..ProviderPatch::default()
+        },
+    )
+    .await
+    .expect("clear");
+    assert_eq!(cleared.thinking_model, "");
+    assert_eq!(cleared.writing_model, "");
 }

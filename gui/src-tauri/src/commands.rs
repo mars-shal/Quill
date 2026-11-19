@@ -129,6 +129,21 @@ pub async fn set_provider_secret(
     Ok(status)
 }
 
+/// Runs the OpenRouter OAuth PKCE flow and stores the resulting key.
+#[tauri::command]
+pub async fn openrouter_connect(
+    app: tauri::AppHandle,
+    state: SharedState<'_>,
+) -> AppResult<Provider> {
+    crate::openrouter::connect(&app, &state.pool).await
+}
+
+/// Removes the OpenRouter credential; the provider row stays for a reconnect.
+#[tauri::command]
+pub async fn openrouter_disconnect(state: SharedState<'_>) -> AppResult<()> {
+    crate::openrouter::disconnect(&state.pool).await
+}
+
 #[tauri::command]
 pub async fn get_provider_secret_status(
     state: SharedState<'_>,
@@ -398,6 +413,23 @@ pub async fn read_image_as_data_url(path: String) -> AppResult<ImageData> {
 /// version and the release link. Signed in-place updates need a release
 /// signing key and a published latest.json, which this repository does not
 /// have yet.
+/// The semantic version a release tag names.
+///
+/// This repository publishes platform builds under tags like
+/// `linux-build-35` rather than a semver tag, while the app carries a semver
+/// version. Comparing `0.1.0` with `linux-build-35` made every release look
+/// older than the app. Map the build number to `0.<build>.0` so both sides
+/// compare on one scale; a real `v0.36.0` tag still wins.
+fn release_version(tag: &str) -> String {
+    let trimmed = tag.trim();
+    if trimmed.contains("-build-") {
+        if let Some(build) = trimmed.rsplit('-').next().and_then(|part| part.parse::<u32>().ok()) {
+            return format!("0.{build}.0");
+        }
+    }
+    trimmed.trim_start_matches('v').to_string()
+}
+
 #[tauri::command]
 pub async fn check_updates() -> AppResult<serde_json::Value> {
     let current = env!("CARGO_PKG_VERSION");
@@ -442,10 +474,11 @@ pub async fn check_updates() -> AppResult<serde_json::Value> {
             .map(|part| part.split('-').next().unwrap_or("0").parse().unwrap_or(0))
             .collect()
     };
-    let available = !tag.is_empty() && key(tag) > key(current);
+    let latest = release_version(tag);
+    let available = !latest.is_empty() && key(&latest) > key(current);
     Ok(serde_json::json!({
         "current": current,
-        "latest": tag.trim_start_matches('v'),
+        "latest": latest,
         "available": available,
         "url": release.get("html_url").and_then(|value| value.as_str()).unwrap_or(""),
         "notes": release.get("body").and_then(|value| value.as_str()).unwrap_or(""),
@@ -498,4 +531,23 @@ pub async fn read_text_file(
     }
 
     crate::import::read_text_file(&path)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::release_version;
+
+    #[test]
+    fn a_platform_build_tag_maps_to_its_build_version() {
+        assert_eq!(release_version("linux-build-35"), "0.35.0");
+        assert_eq!(release_version("windows-build-35"), "0.35.0");
+    }
+
+    #[test]
+    fn a_semver_tag_keeps_its_version() {
+        assert_eq!(release_version("v0.36.0"), "0.36.0");
+        assert_eq!(release_version("0.36.0"), "0.36.0");
+        assert_eq!(release_version(""), "");
+    }
 }

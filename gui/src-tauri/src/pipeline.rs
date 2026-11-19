@@ -323,6 +323,8 @@ pub(crate) struct ResolvedProvider {
     pub protocol: String,
     pub base_url: String,
     pub model: String,
+    pub thinking_model: String,
+    pub writing_model: String,
     pub api_key: String,
 }
 
@@ -365,6 +367,8 @@ async fn resolve_provider(pool: &sqlx::SqlitePool) -> AppResult<ResolvedProvider
         protocol: provider.protocol.as_str().to_string(),
         base_url: provider.base_url,
         model: provider.default_model,
+        thinking_model: provider.thinking_model,
+        writing_model: provider.writing_model,
         api_key,
     })
 }
@@ -794,6 +798,7 @@ pub async fn api_chat(
     natural_voice: Option<bool>,
     writing_profile: Option<String>,
     task: Option<String>,
+    document_type: Option<String>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -810,6 +815,7 @@ pub async fn api_chat(
         "natural_voice": natural_voice.unwrap_or(false),
         "writing_profile": writing_profile.unwrap_or_default(),
         "task": task.unwrap_or_else(|| "auto".into()),
+        "document_type": document_type.unwrap_or_else(|| "auto".into()),
     });
 
     chat_via_sidecar_or_direct(&payload).await
@@ -874,6 +880,7 @@ pub async fn api_chat_stream(
     natural_voice: Option<bool>,
     writing_profile: Option<String>,
     task: Option<String>,
+    document_type: Option<String>,
 ) -> AppResult<ChatReply> {
     if messages.is_empty() {
         return Err(AppError::Validation("no messages to answer".into()));
@@ -890,6 +897,7 @@ pub async fn api_chat_stream(
         "natural_voice": natural_voice.unwrap_or(false),
         "writing_profile": writing_profile.unwrap_or_default(),
         "task": task.unwrap_or_else(|| "auto".into()),
+        "document_type": document_type.unwrap_or_else(|| "auto".into()),
     });
 
     match stream_chat(&app, &turn_id, &payload).await {
@@ -972,6 +980,23 @@ async fn stream_chat(
                             "turnId": turn_id,
                             "step": step,
                             "t": value.get("t").cloned().unwrap_or(serde_json::Value::Null),
+                        }),
+                    );
+                }
+                // A write reports the sections it has finished. The panel can
+                // put that partial document in the editor while the rest is
+                // still being written, instead of waiting for the last section.
+                "draft" => {
+                    let markdown = value.get("markdown").and_then(|v| v.as_str()).unwrap_or("");
+                    if markdown.is_empty() {
+                        continue;
+                    }
+                    let _ = app.emit(
+                        "quill://chat-draft",
+                        serde_json::json!({
+                            "turnId": turn_id,
+                            "markdown": markdown,
+                            "task": value.get("task").and_then(|v| v.as_str()).unwrap_or(""),
                         }),
                     );
                 }
@@ -1390,6 +1415,7 @@ mod tests {
             base_url: Some("https://api.example.test/v1".into()),
             default_model: Some("test-model".into()),
             models: None,
+            ..Default::default()
         }
     }
 
@@ -1474,6 +1500,8 @@ mod tests {
             protocol: "openai_chat".into(),
             base_url: "https://api.example.test/v1".into(),
             model: "gpt-4o-mini".into(),
+            thinking_model: String::new(),
+            writing_model: String::new(),
             api_key: "test-key".into(),
         }
     }
@@ -1481,7 +1509,7 @@ mod tests {
     /// The exact provider block every run carries. Extracted because it appears in
     /// three assertions and a drift in any one of them is a real regression, not
     /// a copy-paste slip to be tidied away individually.
-    const PROVIDER_JSON: &str = r#""provider":{"id":"openai","vendor":"compatible","protocol":"openai_chat","base_url":"https://api.example.test/v1","model":"gpt-4o-mini","api_key":"test-key"}"#;
+    const PROVIDER_JSON: &str = r#""provider":{"id":"openai","vendor":"compatible","protocol":"openai_chat","base_url":"https://api.example.test/v1","model":"gpt-4o-mini","thinking_model":"","writing_model":"","api_key":"test-key"}"#;
 
     /// Exact bytes, in declaration order.
     #[test]

@@ -56,6 +56,15 @@ jobs:
         run: |
           Remove-Item -Recurse -Force dist, src-tauri/target, src-tauri/gen -ErrorAction SilentlyContinue
 
+      - name: Set the app version from the build number
+        run: |
+          $version = "0.$env:GITHUB_RUN_NUMBER.0"
+          npm version $version --no-git-tag-version
+          (Get-Content src-tauri/Cargo.toml -Raw) -replace '(?m)^version = ".*"', "version = `"$version`"" | Set-Content src-tauri/Cargo.toml
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $conf.version = $version
+          $conf | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
+
       - name: Tauri Windows build
         run: npm run tauri:build
 

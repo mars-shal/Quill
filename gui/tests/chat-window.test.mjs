@@ -114,12 +114,17 @@ assert.equal(
 )
 const MESSAGE_WINDOW = PINNED_WINDOW
 
-test('the transcript is keyed by document', () => {
+test('conversations are keyed by document and kept as sessions', () => {
   // One window-wide transcript meant a conversation about one draft was still
   // on screen when another was opened. Persistence now names the document.
-  assert.match(source, /const transcriptKey = \(documentId\) =>/, 'ChatPanel derives a key from the document')
-  assert.match(source, /localStorage\.getItem\(key\)/, 'the restore reads that key')
-  assert.match(source, /localStorage\.setItem\(key,/, 'and the save writes it')
+  const sessions = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'library', 'chatSessions.js'),
+    'utf8',
+  )
+  assert.match(sessions, /export const SESSIONS_KEY = 'quill:chat-sessions:v1'/, 'sessions have their own key')
+  assert.match(sessions, /const scoped = \(base, documentId\) =>/, 'the key is scoped to the document')
+  assert.match(source, /loadChatSessions\(/, 'ChatPanel restores the document\'s sessions')
+  assert.match(source, /saveChatSessions\(/, 'and saves the whole list')
   assert.match(source, /function ChatPanel\(\{ documentId,/, 'the panel takes the document it belongs to')
 
   const editor = readFileSync(
@@ -344,9 +349,12 @@ test('the chat picker opens a listbox naming the active provider’s model', asy
   handlers.update_provider = (args) => { providerCalls.push(args); return workingProvider(args) }
   try {
     await clickAndSettle(trigger)
-    const listbox = root.querySelector('.model-popover')
-    assert.ok(listbox, 'the click should open the listbox')
-    assert.equal(listbox.getAttribute('role'), 'listbox', 'the popover carries the listbox role')
+    const popover = root.querySelector('.model-popover')
+    assert.ok(popover, 'the click should open the picker')
+    const listbox = popover.querySelector('.model-list')
+    assert.ok(listbox, 'the picker holds a listbox')
+    assert.equal(listbox.getAttribute('role'), 'listbox', 'the list carries the listbox role')
+    assert.ok(popover.querySelector('input[aria-label="Search models"]'), 'the list is searchable')
 
     const options = [...listbox.querySelectorAll('[role="option"]')]
     const modelRows = options
@@ -381,6 +389,19 @@ test('the chat picker opens a listbox naming the active provider’s model', asy
     false,
     'the retired settings.model field must not be written',
   )
+})
+
+test('the model list is bounded and searchable', () => {
+  const css = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'styles.css'),
+    'utf8',
+  )
+  assert.match(source, /className="model-search"/, 'the picker renders a search row')
+  assert.match(source, /placeholder="Search models"/, 'and names what it searches')
+  assert.match(source, /filteredModels\.map/, 'the rendered rows are the filtered set')
+  const listRule = css.match(/\.model-list \{([^}]*)\}/)?.[1] || ''
+  assert.match(listRule, /max-height:\s*288px/, 'the list shows about eight rows')
+  assert.match(listRule, /overflow-y:\s*auto/, 'and scrolls the rest')
 })
 
 test('a question the transport refuses is reported, not answered anyway', async () => {
@@ -489,7 +510,8 @@ test('a WRITE turn lands in the document, and the bubble says so', async () => {
 
     const last = [...root.querySelectorAll('.chat-message')].at(-1)
     assert.ok(last.classList.contains('is-written'), 'the bubble must mark the document write')
-    assert.match(last.textContent, /written to the document/i)
+    assert.match(last.textContent, /draft was written/i)
+    assert.match(last.textContent, /words/i, 'the summary counts what was written')
     assert.equal(
       last.textContent.includes('won his first title'),
       false,
@@ -526,7 +548,7 @@ test('a REWRITE turn lands in the document too', async () => {
 
     const last = [...root.querySelectorAll('.chat-message')].at(-1)
     assert.ok(last.classList.contains('is-written'), 'the rewrite is marked as a document write')
-    assert.match(last.textContent, /written to the document/i)
+    assert.match(last.textContent, /draft was rewritten/i)
     assert.match(
       root.querySelector('.editor-surface .ProseMirror').textContent,
       /Lando Norris/,
@@ -623,6 +645,40 @@ test('a conversation belongs to one document, not the window', async () => {
   const transcript = root.querySelector('.chat-scroll')?.textContent || ''
   assert.doesNotMatch(transcript, /what is missing from this draft\?/, 'another document has its own conversation')
   assert.match(transcript, /second pair of eyes/, 'and opens on its own welcome message')
+})
+
+test('the header lists and switches chat sessions', async () => {
+  const sessionsButton = () => root.querySelector('[aria-label="Chat sessions"]')
+  assert.ok(sessionsButton(), 'the header offers a session list')
+
+  await send('session one question')
+  await tick(80)
+  await click(sessionsButton())
+  await tick(30)
+  assert.ok(root.querySelector('.session-popover'), 'the list opens')
+  assert.equal(root.querySelectorAll('.session-row').length, 1, 'the current conversation is listed')
+  assert.match(root.querySelector('.session-title').textContent, /session one question/)
+
+  await click(root.querySelector('[aria-label="New chat"]'))
+  await tick(50)
+  const fresh = root.querySelector('.chat-scroll').textContent
+  assert.match(fresh, /second pair of eyes/, 'a new session opens on the welcome line')
+  assert.doesNotMatch(fresh, /session one question/, 'and does not carry the previous conversation')
+  await send('session two question')
+  await tick(80)
+
+  await click(sessionsButton())
+  await tick(30)
+  const rows = [...root.querySelectorAll('.session-row')]
+  assert.equal(rows.length, 2, 'both conversations are kept')
+  const first = rows.find((row) => /session one question/.test(row.textContent))
+  assert.ok(first, 'the older conversation keeps its title')
+  await click(first.querySelector('.session-pick'))
+  await tick(60)
+
+  const transcript = root.querySelector('.chat-scroll').textContent
+  assert.match(transcript, /session one question/, 'switching restores the older conversation')
+  assert.doesNotMatch(transcript, /session two question/, 'and does not merge the other one into it')
 })
 
 /** Picks a file on the composer's hidden input, the way the dialog does. */
@@ -747,4 +803,70 @@ test('the send button becomes a stop control while a turn is running', async () 
   } finally {
     handlers.api_chat = working
   }
+})
+
+test('multiple attachments travel together', async () => {
+  const before = chatCalls.length
+  const input = root.querySelector('.chat-box input[type="file"]')
+  assert.ok(input, 'the composer offers a file input')
+  assert.equal(input.multiple, true, 'the browser fallback accepts more than one file')
+  const files = [
+    new window.File(['first attachment body'], 'first.md', { type: 'text/markdown' }),
+    new window.File(['second attachment body'], 'second.md', { type: 'text/markdown' }),
+  ]
+  Object.defineProperty(input, 'files', { value: files, configurable: true })
+  input.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await tick(100)
+
+  assert.equal(root.querySelectorAll('.attachment-chip').length, 2, 'both files get chips')
+  await send('compare these')
+  await tick(120)
+
+  assert.equal(chatCalls.length, before + 1, 'the turn reaches the transport')
+  const { messages } = chatCalls.at(-1)
+  assert.match(messages.at(-1).content, /first attachment body/)
+  assert.match(messages.at(-1).content, /second attachment body/)
+  const bubble = [...root.querySelectorAll('.chat-message.user')].at(-1)
+  assert.match(bubble.textContent, /Attached: first\.md, second\.md/)
+})
+
+test('five large attachments stay inside one context budget', async () => {
+  const before = chatCalls.length
+  const input = root.querySelector('.chat-box input[type="file"]')
+  const files = Array.from({ length: 5 }, (_, index) => (
+    new window.File([`${index}:`.padEnd(12000, 'x')], `large-${index}.md`, { type: 'text/markdown' })
+  ))
+  Object.defineProperty(input, 'files', { value: files, configurable: true })
+  input.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await tick(140)
+
+  assert.equal(root.querySelectorAll('.attachment-chip').length, 5, 'all five files are attached')
+  await send('summarize these')
+  await tick(120)
+  assert.equal(chatCalls.length, before + 1, 'the turn reaches the transport')
+  const content = chatCalls.at(-1).messages.at(-1).content
+  assert.equal((content.match(/Attached file:/g) || []).length, 5)
+  assert.ok(content.length < 16000, `attachment prompt stayed bounded (${content.length} chars)`)
+})
+
+test('search mode sends a document search turn', async () => {
+  const before = chatCalls.length
+  const toggle = root.querySelector('button[aria-label="Chat mode: Auto"]')
+  assert.ok(toggle, 'the composer offers a mode control')
+  await clickAndSettle(toggle)
+  const searching = root.querySelector('button[aria-label="Chat mode: Search"]')
+  assert.ok(searching, 'the mode control switches to Search')
+  assert.match(searching.textContent, /Search/)
+
+  await send('did you remove the Miller effect?')
+  await tick(80)
+
+  assert.equal(chatCalls.length, before + 1, 'the search turn reaches the transport')
+  assert.equal(chatCalls.at(-1).task, 'search', 'the turn is a document search, not a write')
+
+  await clickAndSettle(searching)
+  assert.ok(
+    root.querySelector('button[aria-label="Chat mode: Auto"]'),
+    'the mode returns to Auto for the next turn',
+  )
 })

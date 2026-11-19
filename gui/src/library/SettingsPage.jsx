@@ -16,7 +16,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon.jsx";
 import { ModalLayer } from "../ModalLayer.jsx";
-import { isLocalEndpoint, listProviderModels, slugify, usageStats } from "../platform/store.js";
+import { getProviderSecretStatus, isLocalEndpoint, listProviderModels, slugify, usageStats } from "../platform/store.js";
 import { resolveTheme } from "./themes.js";
 
 // The three appearance choices from the Paper reference. "System" is the OS
@@ -69,6 +69,13 @@ const SETTINGS_SECTIONS = [
     title: "Bring your own provider",
     note: "Use your own key for assistant actions.",
     Panel: AssistantPanel,
+  },
+  {
+    id: "settings-connectors",
+    label: "Connectors",
+    title: "Connectors",
+    note: "Connect services that provide models, data or an account.",
+    Panel: ConnectorsPanel,
   },
   {
     id: "settings-usage",
@@ -314,6 +321,233 @@ function DetailsDialog({ doc, labels = [], onClose, onSave }) {
  * return to wherever it was opened from, and there is no scrim to click because
  * there is nothing behind it to dismiss.
  */
+const AVAILABLE_CONNECTORS = [
+  {
+    id: "drive",
+    name: "Google Drive",
+    icon: "google-drive",
+    description: "Import and export documents without leaving the desk.",
+    setup: "https://drive.google.com",
+  },
+  {
+    id: "dropbox",
+    name: "Dropbox",
+    icon: "dropbox",
+    description: "Back up the library and restore older versions.",
+    setup: "https://www.dropbox.com/home",
+  },
+  {
+    id: "zotero",
+    name: "Zotero",
+    mark: "Z",
+    color: "#cc2936",
+    description: "Pull references and citations straight into the bibliography.",
+    setup: "https://www.zotero.org/settings/keys",
+  },
+  {
+    id: "orcid",
+    name: "ORCID",
+    mark: "iD",
+    color: "#6f8f1f",
+    description: "Link your author identity and publication record.",
+    setup: "https://orcid.org/",
+  },
+]
+
+function ConnectorsPanel({
+  providers = [],
+  onConnectOpenRouter,
+  onDisconnectOpenRouter,
+}) {
+  const [state, setState] = useState("idle");
+  const [error, setError] = useState("");
+  const [connected, setConnected] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState("");
+  const [lastChecked, setLastChecked] = useState("");
+  const openrouter = providers.find((provider) => /openrouter\.ai/i.test(provider.baseUrl || ""));
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!openrouter) {
+      setConnected(false);
+      return undefined;
+    }
+    getProviderSecretStatus(openrouter.id)
+      .then((status) => {
+        if (!cancelled) setConnected(Boolean(status.hasCredential));
+      })
+      .catch(() => {
+        if (!cancelled) setConnected(false);
+      });
+    return () => { cancelled = true; };
+  }, [openrouter?.id, state]);
+
+  const connect = async () => {
+    setState("waiting");
+    setError("");
+    setTestResult("");
+    try {
+      await onConnectOpenRouter?.();
+      setConnected(true);
+      setLastChecked("just now");
+      setState("ready");
+    } catch (failure) {
+      setError(failure?.message || "OpenRouter sign-in failed.");
+      setState("error");
+    }
+  };
+
+  const disconnect = async () => {
+    if (typeof window !== "undefined" && typeof window.confirm === "function"
+      && !window.confirm("Disconnect OpenRouter? The key will be removed from this machine.")) {
+      return;
+    }
+    setState("waiting");
+    setError("");
+    setTestResult("");
+    try {
+      await onDisconnectOpenRouter?.();
+      setConnected(false);
+      setState("idle");
+    } catch (failure) {
+      setError(failure?.message || "Could not disconnect OpenRouter.");
+      setState("error");
+    }
+  };
+
+  const test = async () => {
+    if (!openrouter) return;
+    setTesting(true);
+    setTestResult("");
+    try {
+      const status = await getProviderSecretStatus(openrouter.id);
+      if (!status.hasCredential) {
+        setConnected(false);
+        setTestResult("No key is stored. Connect OpenRouter again.");
+        return;
+      }
+      const models = await listProviderModels(openrouter.id);
+      setConnected(true);
+      setLastChecked("just now");
+      setTestResult(`Connection OK · ${Array.isArray(models) ? models.length : 0} models available`);
+    } catch (failure) {
+      setTestResult(failure?.message || "The connection test failed.");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const manage = () => openExternal("https://openrouter.ai/keys");
+  const summaryConnected = connected ? 1 : 0;
+
+  return (
+    <>
+      <div className="connector-summary">
+        <div className="connector-summary-copy">
+          <strong>{summaryConnected} connected</strong>
+          <span>· {AVAILABLE_CONNECTORS.length} available</span>
+        </div>
+        <div className="connector-meter" aria-hidden="true">
+          <i className="is-connected" data-on={summaryConnected ? "" : undefined} />
+          <i className="is-idle" data-on={summaryConnected ? undefined : ""} />
+        </div>
+      </div>
+
+      <div className="connectors-grid">
+        <article className={`keys-card connector-card${connected ? " is-connected" : ""}`}>
+          <div className="connector-head">
+            <div className="connector-mark connector-mark--logo" aria-hidden="true"><Icon name="openrouter-icon" size={26} /></div>
+            <div className="connector-copy">
+              <div className="connector-title-row">
+                <strong>OpenRouter</strong>
+                <button className="connector-link" type="button" onClick={manage}>
+                  Account settings <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+              <p>Use your own OpenRouter account and pay for your own model usage. No client registration and no Quill backend.</p>
+            </div>
+            <span className={`connector-pill ${connected ? "is-connected" : "is-idle"}`}>
+              {connected ? "Connected" : "Not connected"}
+            </span>
+          </div>
+          <div className="connector-meta">
+            <span>{connected ? `Last checked: ${lastChecked || "just now"}` : "Connect to write with your own models"}</span>
+            <span>Key stored in the system credential vault</span>
+          </div>
+          {!connected && (
+            <p className="connector-note">
+              OpenRouter issues keys only to a signed-in account. New here?{' '}
+              <button className="link-button" type="button" onClick={() => openExternal("https://openrouter.ai/sign-up")}>
+                Create an OpenRouter account
+              </button>
+              {' '}first, then connect.
+            </p>
+          )}
+          <div className="connector-footer">
+            <label className="connector-toggle" title={connected ? "Disconnect OpenRouter" : "Connect OpenRouter"}>
+              <input
+                type="checkbox"
+                checked={connected}
+                disabled={state === "waiting"}
+                onChange={() => { if (connected) disconnect(); else connect(); }}
+              />
+              <span className="connector-switch" aria-hidden="true" />
+              <span className="connector-toggle-label">{connected ? "Enabled" : "Disabled"}</span>
+            </label>
+            <div className="connector-actions">
+              <button className="connector-action" type="button" onClick={manage}>
+                <Icon name="settings" size={13} /> Manage access
+              </button>
+              <button className="connector-action" type="button" onClick={test} disabled={!connected || testing || state === "waiting"}>
+                <Icon name="check" size={13} /> {testing ? "Testing…" : "Test connection"}
+              </button>
+            </div>
+          </div>
+          {!connected && (
+            <button className="connector-cta" type="button" onClick={connect} disabled={state === "waiting"}>
+              <Icon name="sparkle" size={14} />
+              {state === "waiting" ? "Waiting for your browser…" : "Connect with OpenRouter"}
+            </button>
+          )}
+          {error && <p className="settings-profile-error" role="alert">{error}</p>}
+          {testResult && <p className={`connector-result${/OK/.test(testResult) ? " is-ok" : ""}`} role="status">{testResult}</p>}
+        </article>
+
+        {AVAILABLE_CONNECTORS.map((connector) => (
+          <article className="keys-card connector-card" key={connector.id}>
+            <div className="connector-head">
+              <div
+                className={`connector-mark${connector.icon ? " connector-mark--logo" : ""}`}
+                style={connector.icon ? undefined : { background: connector.color }}
+                aria-hidden="true"
+              >
+                {connector.icon ? <Icon name={connector.icon} size={26} /> : connector.mark}
+              </div>
+              <div className="connector-copy">
+                <div className="connector-title-row">
+                  <strong>{connector.name}</strong>
+                </div>
+                <p>{connector.description}</p>
+              </div>
+              <span className="connector-pill is-idle">Available</span>
+            </div>
+            <div className="connector-footer">
+              <span className="connector-soon">Setup required</span>
+              <div className="connector-actions">
+                <button className="connector-action" type="button" onClick={() => openExternal(connector.setup)}>
+                  <Icon name="share" size={13} /> Open {connector.name}
+                </button>
+              </div>
+            </div>
+          </article>
+        ))}
+
+      </div>
+    </>
+  );
+}
+
 function SettingsPage({
   settings,
   theme,
@@ -334,7 +568,8 @@ function SettingsPage({
   onAdoptTool,
   onSaveProvider,
   onCreateProvider,
-  onReplayOnboarding,
+  onConnectOpenRouter,
+  onDisconnectOpenRouter,
   documents = [],
 }) {
   const [draft, setDraft] = useState(settings);
@@ -595,7 +830,8 @@ function SettingsPage({
               onAdoptTool,
               onSaveProvider,
               onCreateProvider,
-              onReplayOnboarding,
+              onConnectOpenRouter,
+              onDisconnectOpenRouter,
               documents,
             };
             return SETTINGS_SECTIONS.map((section) => {
@@ -804,6 +1040,11 @@ function AssistantPanel({
       ].filter((option) => option && (option === activeProvider?.defaultModel || !NON_CHAT_MODEL.test(option))),
     ),
   );
+  const roleModelOptions = Array.from(new Set([
+    activeProvider?.thinkingModel,
+    activeProvider?.writingModel,
+    ...modelOptions,
+  ].filter(Boolean)));
   const local = isLocalEndpoint(activeProvider?.baseUrl);
 
   const providerMonogram = (provider) => {
@@ -986,6 +1227,43 @@ function AssistantPanel({
                 Retry
               </button>
             )}
+          </div>
+          <div className="keys-field">
+            <label className="keys-label" htmlFor="thinking-model">Thinking model</label>
+            <Select
+              value={activeProvider?.thinkingModel || "__same__"}
+              disabled={!providerId || !modelOptions.length}
+              onValueChange={(value) => onSaveProvider?.({ thinkingModel: value === "__same__" ? "" : value })}
+            >
+              <SelectTrigger id="thinking-model" className="keys-select">
+                <SelectValue placeholder="Same as chat model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__same__">Same as chat model</SelectItem>
+                {roleModelOptions.map((option) => (
+                  <SelectItem key={`thinking-${option}`} value={option}>{option}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="keys-field">
+            <label className="keys-label" htmlFor="writing-model">Writing model</label>
+            <Select
+              value={activeProvider?.writingModel || "__same__"}
+              disabled={!providerId || !modelOptions.length}
+              onValueChange={(value) => onSaveProvider?.({ writingModel: value === "__same__" ? "" : value })}
+            >
+              <SelectTrigger id="writing-model" className="keys-select">
+                <SelectValue placeholder="Same as chat model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__same__">Same as chat model</SelectItem>
+                {roleModelOptions.map((option) => (
+                  <SelectItem key={`writing-${option}`} value={option}>{option}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="keys-hint">Leave both on “Same as chat model” to use one model for thinking and writing.</p>
           </div>
           <div className="keys-field">
             <label className="keys-label" htmlFor="endpoint">Endpoint</label>
@@ -1387,7 +1665,7 @@ function ChoiceBadge() {
   );
 }
 
-function WritingPanel({ draft, update, onReplayOnboarding, documents = [] }) {
+function WritingPanel({ draft, update, documents = [] }) {
   const [profileState, setProfileState] = useState("idle");
   const [profileError, setProfileError] = useState("");
   const [updateState, setUpdateState] = useState("idle");
@@ -1517,10 +1795,10 @@ function WritingPanel({ draft, update, onReplayOnboarding, documents = [] }) {
         <div className="settings-profile-head">
           <div>
             <strong>Writing profile</strong>
-            <p>Studies only the documents in this library. The profile stays local and is used to steer generated prose.</p>
+            <p>Studies only the documents in this library. It refreshes automatically each week and when your library changes, and is used to steer generated prose.</p>
           </div>
           <button className="soft-button" type="button" onClick={studyWriting} disabled={profileState === "loading"}>
-            {profileState === "loading" ? "Studying…" : "Study my writing"}
+            {profileState === "loading" ? "Studying…" : "Refresh now"}
           </button>
         </div>
         {profileState === "error" && <p className="settings-profile-error">{profileError}</p>}
@@ -1555,15 +1833,6 @@ function WritingPanel({ draft, update, onReplayOnboarding, documents = [] }) {
         </div>
         <button className="soft-button" type="button" onClick={lookForUpdates} disabled={updateState === "loading"}>
           {updateState === "loading" ? "Checking…" : "Check for updates"}
-        </button>
-      </div>
-      <div className="settings-replay">
-        <div>
-          <strong>Welcome flow</strong>
-          <p>Show the first-run screens again. Your documents and settings are untouched.</p>
-        </div>
-        <button className="soft-button" type="button" onClick={onReplayOnboarding}>
-          Replay onboarding
         </button>
       </div>
     </>

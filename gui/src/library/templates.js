@@ -188,3 +188,20 @@ export const DOCUMENT_TEMPLATES = [blank, thesis, essay, report, cv, notes, chap
 export function templateById(id) {
   return DOCUMENT_TEMPLATES.find((template) => template.id === id) || blank
 }
+
+
+/** The first section headings a template opens with, for the preview sheet. */
+export function templateSections(template) {
+  const headings = [...String(template.content || '').matchAll(/<h[12][^>]*>(.*?)<\/h[12]>/gi)]
+    .map((match) => match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  if (template.id === 'blank') return ['New section']
+  return headings.slice(1, 5)
+}
+
+/** The title printed on the preview sheet, as the template would open it. */
+export function templateTitle(template) {
+  const match = /<h1[^>]*>(.*?)<\/h1>/i.exec(String(template.content || ''))
+  const title = match?.[1]?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return title || template.title
+}

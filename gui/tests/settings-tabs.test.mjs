@@ -77,6 +77,7 @@ const { window } = dom
  */
 const SECTIONS = [
   { id: 'settings-assistant', label: 'Assistant' },
+  { id: 'settings-connectors', label: 'Connectors' },
   { id: 'settings-usage', label: 'Usage' },
   { id: 'settings-appearance', label: 'Appearance' },
   { id: 'settings-writing', label: 'Writing' },

@@ -127,6 +127,7 @@ where
             base_url: Some(base_url),
             default_model: Some(model),
             models: Some(Vec::new()),
+            ..NewProvider::default()
         },
     )
     .await?;
@@ -318,6 +319,7 @@ async fn adopt_legacy_provider(
                 base_url: Some(endpoint.to_string()),
                 default_model: Some(model.to_string()),
                 models: Some(Vec::new()),
+                ..NewProvider::default()
             },
         )
         .await?;
@@ -465,6 +467,8 @@ pub struct Provider {
     pub protocol: Protocol,
     pub base_url: String,
     pub default_model: String,
+    pub thinking_model: String,
+    pub writing_model: String,
     pub models: Vec<String>,
     pub is_active: bool,
 }
@@ -478,6 +482,8 @@ impl Default for Provider {
             protocol: Protocol::OpenaiChat,
             base_url: String::new(),
             default_model: String::new(),
+            thinking_model: String::new(),
+            writing_model: String::new(),
             models: Vec::new(),
             is_active: false,
         }
@@ -498,6 +504,8 @@ pub struct NewProvider {
     pub protocol: Option<Protocol>,
     pub base_url: Option<String>,
     pub default_model: Option<String>,
+    pub thinking_model: Option<String>,
+    pub writing_model: Option<String>,
     pub models: Option<Vec<String>>,
 }
 
@@ -516,10 +524,12 @@ pub struct ProviderPatch {
     pub protocol: Option<Protocol>,
     pub base_url: Option<String>,
     pub default_model: Option<String>,
+    pub thinking_model: Option<String>,
+    pub writing_model: Option<String>,
     pub models: Option<Vec<String>>,
 }
 
-const COLUMNS: &str = "id, label, vendor, protocol, base_url, default_model, models, is_active";
+const COLUMNS: &str = "id, label, vendor, protocol, base_url, default_model, thinking_model, writing_model, models, is_active";
 
 /// Rejects anything that is not a slug of `[a-z0-9-]`.
 ///
@@ -614,8 +624,8 @@ pub async fn create(pool: &SqlitePool, input: NewProvider) -> AppResult<Provider
     }
 
     sqlx::query(
-        "INSERT INTO providers (id, label, vendor, protocol, base_url, default_model, models)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO providers (id, label, vendor, protocol, base_url, default_model, thinking_model, writing_model, models)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )
     .bind(&input.id)
     .bind(input.label.unwrap_or_default())
@@ -623,6 +633,8 @@ pub async fn create(pool: &SqlitePool, input: NewProvider) -> AppResult<Provider
     .bind(protocol.as_str())
     .bind(input.base_url.unwrap_or_default())
     .bind(input.default_model.unwrap_or_default())
+    .bind(input.thinking_model.unwrap_or_default())
+    .bind(input.writing_model.unwrap_or_default())
     .bind(models_json)
     .execute(&mut *tx)
     .await?;
@@ -648,8 +660,10 @@ pub async fn update(pool: &SqlitePool, input: ProviderPatch) -> AppResult<Provid
             vendor        = COALESCE(?3, vendor),
             protocol      = COALESCE(?4, protocol),
             base_url      = COALESCE(?5, base_url),
-            default_model = COALESCE(?6, default_model),
-            models        = COALESCE(?7, models)
+            default_model  = COALESCE(?6, default_model),
+            thinking_model = COALESCE(?7, thinking_model),
+            writing_model  = COALESCE(?8, writing_model),
+            models         = COALESCE(?9, models)
          WHERE id = ?1",
     )
     .bind(&input.id)
@@ -658,6 +672,8 @@ pub async fn update(pool: &SqlitePool, input: ProviderPatch) -> AppResult<Provid
     .bind(input.protocol.map(Protocol::as_str))
     .bind(input.base_url.as_deref())
     .bind(input.default_model.as_deref())
+    .bind(input.thinking_model.as_deref())
+    .bind(input.writing_model.as_deref())
     .bind(models_json.as_deref())
     .execute(&mut *tx)
     .await?
@@ -718,6 +734,8 @@ fn row_to_provider(row: &sqlx::sqlite::SqliteRow) -> AppResult<Provider> {
         protocol: Protocol::try_from(protocol_raw.as_str())?,
         base_url: row.try_get("base_url")?,
         default_model: row.try_get("default_model")?,
+        thinking_model: row.try_get("thinking_model")?,
+        writing_model: row.try_get("writing_model")?,
         models: decode_models(&id, &models_raw)?,
         is_active: is_active == 1,
         id,

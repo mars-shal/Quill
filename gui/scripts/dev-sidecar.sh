@@ -169,9 +169,30 @@ PY
 
 # A port already held would make the sidecar fail to bind, and the failure would
 # look like the script hanging until its readiness timeout. Say so immediately.
+port_listening() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn "sport = :$PORT" 2>/dev/null | grep -q LISTEN
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1
+  else
+    return 1
+  fi
+}
+
 if health_ok; then
   echo "error: a sidecar is already answering on 127.0.0.1:$PORT." >&2
   echo "  stop it, or choose another port:  $0 --port 8099" >&2
+  exit 1
+fi
+
+if port_listening; then
+  echo "error: port $PORT is already in use by another process." >&2
+  if command -v docker >/dev/null 2>&1; then
+    owner=$(docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep ":$PORT->" | head -1 || true)
+    [ -n "$owner" ] && echo "  docker container: $owner" >&2
+  fi
+  echo "  stop it, or choose another port:  $0 --port 8099" >&2
+  echo "  the script exports QUILL_API_URL, so Tauri follows the chosen port." >&2
   exit 1
 fi
 

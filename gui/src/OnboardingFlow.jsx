@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Icon } from './Icon.jsx'
 import { PROVIDER_PRESETS } from './library/SettingsPage.jsx'
+import { openExternal } from './platform/store.js'
 
 /**
  * The first-run sequence.
@@ -165,6 +166,7 @@ export function OnboardingFlow({
   onTestTool,
   onSaveKey,
   onCreateProvider,
+  onConnectOpenRouter,
   onFinish,
   obscured = false,
 }) {
@@ -180,6 +182,7 @@ export function OnboardingFlow({
   const [keySaving, setKeySaving] = useState(false)
   const [keySaved, setKeySaved] = useState(false)
   const [keyError, setKeyError] = useState('')
+  const [openRouterState, setOpenRouterState] = useState('idle')
 
   const modelOptions = useMemo(() => {
     const options = []
@@ -259,6 +262,19 @@ export function OnboardingFlow({
     ...providers.map((provider) => ({ id: provider.id, label: provider.label || provider.id, preset: null })),
     ...PROVIDER_PRESETS.map((preset) => ({ id: `preset:${preset.key}`, label: preset.label, preset })),
   ]
+
+  const connectOpenRouter = async () => {
+    setOpenRouterState('waiting')
+    setKeyError('')
+    try {
+      await onConnectOpenRouter?.()
+      setKeySaved(true)
+      setOpenRouterState('ready')
+    } catch (failure) {
+      setKeyError(failure?.message || 'OpenRouter sign-in failed.')
+      setOpenRouterState('error')
+    }
+  }
 
   const saveKey = async () => {
     const secret = keyValue.trim()
@@ -467,6 +483,27 @@ export function OnboardingFlow({
                       <option key={choice.id} value={choice.id}>{choice.label}</option>
                     ))}
                   </select>
+                  <button
+                    type="button"
+                    className="onboarding-v2-openrouter"
+                    onClick={connectOpenRouter}
+                    disabled={openRouterState === 'waiting' || keySaved}
+                  >
+                    <Icon name="sparkle" size={14} />
+                    {openRouterState === 'waiting'
+                      ? 'Waiting for your browser…'
+                      : keySaved
+                        ? 'OpenRouter connected'
+                        : 'Connect with OpenRouter'}
+                  </button>
+                  <span className="onboarding-v2-keynote">
+                    OpenRouter keys need a signed-in account.{' '}
+                    <button className="link-button" type="button" onClick={() => openExternal('https://openrouter.ai/sign-up')}>
+                      Create one first
+                    </button>
+                    .
+                  </span>
+                  <span className="onboarding-v2-divider">or paste a key</span>
                   <label htmlFor="onboarding-api-key">API key</label>
                   <div className="onboarding-v2-keyrow">
                     <input

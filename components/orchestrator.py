@@ -34,6 +34,12 @@ _NEW_SUBJECT_INTENT = re.compile(
     r"summari[sz]e|analyse|analyze|critique|review)\b",
     re.IGNORECASE,
 )
+# The verbs that ask for a new work. "write a thesis about X in LaTeX" mentions
+# LaTeX, but it is not an edit of the open draft.
+_NEW_WORK_INTENT = re.compile(
+    r"\b(write|draft|compose|generate|create|produce)\b",
+    re.IGNORECASE,
+)
 
 
 def is_format_request(text: str) -> bool:
@@ -44,6 +50,155 @@ def is_format_request(text: str) -> bool:
     document about definition formatting.
     """
     return bool(_FORMAT_INTENT.search(text or ""))
+
+
+# A request that points back at the open document. The verb alone is not
+# enough: "rewrite the history of Rome" asks for a new subject. What makes the
+# turn an edit is a document noun ("the document", "my draft"), or a pronoun
+# that is not attached to some other object -- "simplify this equation" is a
+# question about an equation, not an edit of the draft.
+_DOCUMENT_NOUN = (
+    r"(?:the|my|this|that|our)\s+(?:document|draft|text|note|notes|section|"
+    r"paragraph|essay|chapter|wording|prose|writing|language|content)"
+)
+_BARE_OBJECT = (
+    r"(?:this|that|it|above)\b"
+    r"(?=\s*(?:[?.!,;:]|$|\b(?:to|for|in|so|and|but|please|now)\b))"
+)
+# Verbs that can only mean "change the text that is already here". A bare
+# pronoun is safe with these; it is not safe with `explain` or `summarise`,
+# which usually ask for an answer in the chat rather than a rewritten draft.
+_TRANSFORM_VERB = (
+    r"(?:rewrite|reword|rephrase|simplify|paraphrase|shorten|condense|"
+    r"expand|edit|revise|proofread|format|reformat|clean\s*up|tidy|translate|make)"
+)
+# The gate also stands down when the reader is talking about the document in
+# general ("explain the document"), because a self-referential prompt carries no
+# competing subject for the relevance check to compare.
+_EDIT_VERB = (
+    r"(?:rewrite|reword|rephrase|simplify|paraphrase|shorten|condense|expand|"
+    r"summari[sz]e|explain|clarify|edit|revise|proofread|format|reformat|"
+    r"clean\s*up|tidy|translate|make)"
+)
+_DOCUMENT_EDIT_INTENT = re.compile(
+    rf"\b{_EDIT_VERB}\b"
+    r"(?:(?!\b(?:a|an|the)\s+(?:new|different)\b).){0,80}?"
+    rf"\b{_DOCUMENT_NOUN}\b"
+    rf"|\b{_TRANSFORM_VERB}\b"
+    r"(?:(?!\b(?:a|an|the)\s+(?:new|different)\b).){0,40}?"
+    rf"\b{_BARE_OBJECT}",
+    re.IGNORECASE | re.DOTALL,
+)
+# "Rewrite in the words of a 10 year old" names no object, but the style is
+# still an edit of whatever is open. Only verbs that cannot mean "produce a new
+# work" are here, so "write a story in the words of a child" stays a write.
+_DOCUMENT_STYLE_INTENT = re.compile(
+    r"\b(?:rewrite|reword|rephrase|simplify|paraphrase)\b"
+    r".{0,80}?\b(?:in\s+(?:the\s+)?words\s+of|in\s+(?:simple|plain|everyday))\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_DOCUMENT_TRANSFORM_INTENT = re.compile(
+    rf"\b{_TRANSFORM_VERB}\b"
+    r"(?:(?!\b(?:a|an|the)\s+(?:new|different)\b).){0,80}?"
+    rf"\b(?:{_DOCUMENT_NOUN}|{_BARE_OBJECT})",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def is_document_edit_request(text: str) -> bool:
+    """True when the reader is asking to change the open document itself.
+
+    This is the wider form of `is_format_request`: "format this" and "rewrite
+    the document in the words of a 10 year old" are both edits of the draft,
+    while "rewrite the history of Rome" asks for a new subject. The write gate
+    uses this form because a self-referential prompt carries no competing
+    subject for the relevance check.
+    """
+    value = str(text or "")
+    return bool(
+        _DOCUMENT_EDIT_INTENT.search(value) or _DOCUMENT_STYLE_INTENT.search(value)
+    )
+
+
+def is_document_transform_request(text: str) -> bool:
+    """True when a chat turn should edit the draft instead of answering it.
+
+    Narrower than `is_document_edit_request`: "explain the document" is a
+    question for the chat, while "rewrite this" is a write-back. Routing a
+    question through FORMAT would replace the reader's document with prose they
+    never asked to keep.
+    """
+    value = str(text or "")
+    formats_existing = bool(_FORMAT_INTENT.search(value)) and not _NEW_WORK_INTENT.search(value)
+    return bool(
+        formats_existing
+        or _DOCUMENT_TRANSFORM_INTENT.search(value)
+        or _DOCUMENT_STYLE_INTENT.search(value)
+    )
+
+
+_QUESTION_START = re.compile(
+    r"^\s*(?:did|does|do|is|are|was|were|has|have|had|can|could|would|will|"
+    r"should|where|when|why|how|what|which|who|whose)\b",
+    re.IGNORECASE,
+)
+_DOCUMENT_REFERENCE = re.compile(
+    r"\b(?:it|this|that|above|"
+    r"the\s+(?:document|draft|text|note|notes|section|paragraph|essay|chapter|"
+    r"outline|run|generation|corpus|evidence|conclusion|introduction|abstract|"
+    r"argument|wording|prose)|"
+    r"my\s+(?:document|draft|text|note|notes|essay|chapter)|"
+    r"you\s+(?:remove|removed|keep|kept|change|changed|delete|deleted|add|added|"
+    r"write|wrote|include|included|use|used|fix|fixed|miss|missed)|"
+    r"in\s+the\s+(?:document|draft|text))\b",
+    re.IGNORECASE,
+)
+_NEW_WORK_QUESTION = re.compile(
+    r"\b(?:write|draft|compose|generate|create|produce|rewrite|reword|rephrase|"
+    r"simplify|expand|shorten|format|reformat|translate)\b",
+    re.IGNORECASE,
+)
+
+
+def is_document_question(text: str) -> bool:
+    """True for a question about the open draft rather than a new document.
+
+    The classifier read "did you remove the Miller effect?" as a rewrite and
+    wrote a halt stub over the document. A question-shaped turn that refers to
+    the draft, and carries no verb that asks for a new work, belongs in Search:
+    it reads the document and answers in the chat.
+    """
+    value = str(text or "")
+    return bool(
+        _QUESTION_START.search(value)
+        and _DOCUMENT_REFERENCE.search(value)
+        and not _NEW_WORK_QUESTION.search(value)
+    )
+
+
+def _research_effort(variant: str) -> dict:
+    """Research limits for the model-effort variant.
+
+    Fast is a different budget, not just a shorter answer: one planning and
+    validation pass, a handful of pages, and no questionnaire or gap rounds.
+    Deep spends more time and more pages; balanced keeps the engine defaults.
+    """
+    effort = str(variant or "balanced").strip().lower()
+    if effort == "fast":
+        return {
+            "max_iterations": 1,
+            "pages_per_query": 2,
+            "max_pages_total": 8,
+            "max_question_rounds": 0,
+        }
+    if effort == "deep":
+        return {
+            "max_iterations": 4,
+            "pages_per_query": 6,
+            "max_pages_total": 48,
+            "max_question_rounds": 1,
+        }
+    return {}
 
 
 def _research_note(research: dict) -> str:
@@ -89,6 +244,105 @@ You are a formatting editor working on an existing document.
 - Do not rewrite clear prose merely to change its style.
 - Return Markdown only, with the document's existing title and structure.
 """
+
+
+DOCUMENT_TYPE_RULES = {
+    "thesis": (
+        "DOCUMENT TYPE — THESIS: write as a formal thesis. Use numbered chapters "
+        "and sections, a literature review, methodology, results, discussion and "
+        "references. Keep a consistent academic register."
+    ),
+    "paper": (
+        "DOCUMENT TYPE — ACADEMIC PAPER: use an abstract, related work, method, "
+        "results, discussion and references. Write for a specialist reader."
+    ),
+    "report": (
+        "DOCUMENT TYPE — REPORT: lead with a summary, then context, findings, "
+        "recommendations and next steps. Prefer clear headings and concrete actions."
+    ),
+    "meeting": (
+        "DOCUMENT TYPE — MEETING NOTES: capture attendees, agenda, decisions, "
+        "open questions and action items with owners. Keep it terse and scannable."
+    ),
+    "essay": (
+        "DOCUMENT TYPE — ESSAY: state a claim, develop it in movements, answer the "
+        "strongest objection and return to the claim in a conclusion."
+    ),
+    "proposal": (
+        "DOCUMENT TYPE — PROPOSAL: describe the problem, approach, scope, "
+        "deliverables, timeline, risks and budget. Be concrete and decision-ready."
+    ),
+    "chapter": (
+        "DOCUMENT TYPE — BOOK CHAPTER: write in scenes or movements, carry voice "
+        "and continuity, and end somewhere the next chapter can begin."
+    ),
+}
+_TYPE_HINTS = (
+    ("meeting", re.compile(r"\bmeeting|minutes|agenda|attendees|action items|stand[- ]?up\b", re.I)),
+    ("proposal", re.compile(r"\bproposal|statement of work|deliverables|timeline|budget\b", re.I)),
+    ("report", re.compile(r"\breport|findings|recommendations|executive summary|assessment\b", re.I)),
+    ("paper", re.compile(r"\bpaper|journal article|abstract|related work|peer[- ]reviewed\b", re.I)),
+    ("essay", re.compile(r"\bessay|counterargument|thesis statement\b", re.I)),
+    ("thesis", re.compile(r"\bthesis|dissertation|doctoral|master'?s degree|literature review|methodology\b", re.I)),
+    ("chapter", re.compile(r"\bchapter|novel|scene|protagonist|narrative\b", re.I)),
+)
+
+
+def infer_document_type(prompt: str) -> str:
+    """Infer the document type from the request, not from a control.
+
+    The reader should not have to classify their own sentence. "Write my
+    thesis", "draft the meeting minutes" and "a short report on X" each name a
+    form; the first hint wins, then the open document's kind is the fallback.
+    """
+    text = str(prompt or "")
+    for name, pattern in _TYPE_HINTS:
+        if pattern.search(text):
+            return name
+    return ""
+
+
+_KIND_TO_TYPE = {
+    "thesis": "thesis",
+    "paper": "paper",
+    "report": "report",
+    "notes": "meeting",
+    "meeting": "meeting",
+    "essay": "essay",
+    "proposal": "proposal",
+    "chapter": "chapter",
+}
+
+
+def document_type_style(
+    document_type: str = "auto", kind: str = "", prompt: str = "",
+) -> str:
+    """The structural brief for the inferred document type.
+
+    An explicit value wins; otherwise the request names the form ("a thesis",
+    "meeting minutes", "a report"), and the open document's kind is the last
+    fallback. No control in the chat has to ask the reader to classify it.
+    """
+    key = str(document_type or "auto").strip().lower()
+    if key in ("", "auto"):
+        key = infer_document_type(prompt) or _KIND_TO_TYPE.get(
+            str(kind or "").strip().lower(), ""
+        )
+    return DOCUMENT_TYPE_RULES.get(key, "")
+
+
+_LEAKED_CHAT = re.compile(
+    r"\b(?:assistant:\s*New conversation|user:\s*(?:can|could|please|rewrite|write))\b",
+    re.IGNORECASE,
+)
+
+
+def _strip_generated_noise(text: str) -> str:
+    """Remove chat text and broken bullets a failed plan wrote into the draft."""
+    blocks = re.split(r"\n{2,}", str(text or ""))
+    kept = [block for block in blocks if not _LEAKED_CHAT.search(block)]
+    cleaned = re.sub(r"(?m)^[ \t]*\*-[ \t]+", "- ", "\n\n".join(kept))
+    return cleaned.strip()
 
 
 def _format_chunks(text: str, limit: int = 12000) -> list[str]:
@@ -153,11 +407,13 @@ class Task:
         ):
             return ""
         # "can u format this and use latex" carries no competing subject; the
-        # gate exists for prompts that ask for one. Only a formatting request
-        # without a write verb stands down, so "write a thesis about X, in
-        # LaTeX" is still checked.
-        if _FORMAT_INTENT.search(prompt) and not _NEW_SUBJECT_INTENT.search(prompt):
-            logger.info("prompt/document relevance check skipped: formatting request")
+        # gate exists for prompts that ask for one. Only a formatting or
+        # document-edit request without a write verb stands down, so "write a
+        # thesis about X, in LaTeX" is still checked.
+        if is_document_edit_request(prompt) or (
+            _FORMAT_INTENT.search(prompt) and not _NEW_SUBJECT_INTENT.search(prompt)
+        ):
+            logger.info("prompt/document relevance check skipped: document edit request")
             return ""
         floor = 0.0
         try:
@@ -299,6 +555,7 @@ class Task:
         self, prompt: str, document_id: str, session_name: str = "",
         concept_mode: str = "reference", token_saving: bool = False,
         natural_voice: bool = False, writing_profile: str = "",
+        variant: str = "balanced", on_draft=None, document_type: str = "auto",
     ):
         document = self.database.get(document_id) or {}
         if not document:
@@ -325,7 +582,9 @@ class Task:
             agent=self.agent,
             concept_mode=concept_mode,
         ).run(document, prompt_hint=prompt)
-        research_engine = ResearchEngine(agent=self.agent)
+        research_engine = ResearchEngine(
+            agent=self.agent, **_research_effort(variant)
+        )
         research = research_engine.run(concept["concept"], document_id, prompt=prompt)
         plan = WritingEngine(model=self.agent).planner(concept["concept"])
         # The reader's own headings win over the planner's invented ones. This
@@ -345,6 +604,9 @@ class Task:
         research_note = _research_note(research)
         evidence = _evidence_of(research)
         style_parts = []
+        type_style = document_type_style(document_type, str(document.get("kind") or ""), prompt)
+        if type_style:
+            style_parts.append(type_style)
         if natural_voice:
             style_parts.append(NATURAL_VOICE_STYLE)
         if writing_profile.strip():
@@ -353,10 +615,12 @@ class Task:
             model=self.agent,
             style="\n".join(style_parts),
         )
-        written = writer.writer(plan, context, research_note, evidence=evidence)
+        written = writer.writer(
+            plan, context, research_note, evidence=evidence, on_draft=on_draft,
+        )
 
         gap = None
-        if gap_research_enabled() and not token_saving:
+        if gap_research_enabled() and not token_saving and str(variant).lower() != "fast":
             reports = []
             for _round in range(gap_research_rounds()):
                 result = self._close_research_gaps(
@@ -645,7 +909,10 @@ class Task:
         return self.sessions.current()
 
     @timed("Task.Format")
-    def Format(self, prompt: str, document_id: str = ""):
+    def Format(
+        self, prompt: str, document_id: str = "", on_draft=None,
+        document_type: str = "auto",
+    ):
         """Format the existing document, in place, without research.
 
         This is deliberately separate from Write: a formatting request has no
@@ -653,9 +920,18 @@ class Task:
         """
         document_id = document_id or self._last_document_id
         document = self.database.get(document_id) or {}
-        text = str(document.get("markdown") or "").strip()
+        text = _strip_generated_noise(str(document.get("markdown") or ""))
         if not text:
             return {"error": "No document to format. Open a document first."}
+        if "Generation Halted" in text or "THIS RUN PRODUCED NO CONTENT" in text:
+            return {
+                "error": (
+                    "This document is a generation stub, not a draft: it contains "
+                    "the 'Generation Halted' notice. Restore a previous version or "
+                    "rewrite it from its source; formatting the stub would only "
+                    "preserve the notice."
+                )
+            }
         chunks = _format_chunks(text)
         outputs: list[str] = []
         for index, chunk in enumerate(chunks, start=1):
@@ -664,8 +940,11 @@ class Task:
                 "Do not add a document title that is not already in this part."
                 if len(chunks) > 1 else ""
             )
+            type_style = document_type_style(
+                document_type, str(document.get("kind") or ""), prompt
+            )
             body = self.agent.Quill(
-                f"REQUEST: {prompt}\n{part_note}\nDOCUMENT:\n{chunk}",
+                f"REQUEST: {prompt}\n{type_style}\n{part_note}\nDOCUMENT:\n{chunk}",
                 skill=FORMAT_RULES,
             ) or ""
             body = body.strip()
@@ -674,6 +953,11 @@ class Task:
                 body = re.sub(r"\s*```$", "", body).strip()
             if body:
                 outputs.append(body)
+                if on_draft is not None:
+                    try:
+                        on_draft("\n\n".join(outputs).strip())
+                    except Exception:
+                        logger.debug("live format sink failed", exc_info=True)
         formatted = "\n\n".join(outputs).strip()
         if not formatted:
             return {"error": "The formatting pass returned no document."}
@@ -690,7 +974,7 @@ class Task:
     @timed("Task.ReWrite")
     def ReWrite(
         self, prompt: str, document_id: str = "", natural_voice: bool = False,
-        writing_profile: str = "",
+        writing_profile: str = "", on_draft=None, document_type: str = "auto",
     ):
         document_id = document_id or self._last_document_id
         if not document_id:
@@ -708,26 +992,39 @@ class Task:
         source_plan = self._source_plan(document, prompt)
         if source_plan:
             plan = source_plan
-        context = (
-            f"{prompt_text}\n\nRESEARCH:\n{research.get('corpus', '')}"
-            if research.get("corpus")
-            else prompt_text
+        # A rewrite is grounded in the document it rewrites. The web corpus, if
+        # there is one, is extra context -- never the thing that decides whether
+        # the rewrite may run. Passing only the corpus made "rewrite this in
+        # simpler words" halt with "insufficient research" while the source
+        # text sat unused in the same row.
+        source_text = _strip_generated_noise(
+            str(existing.get("markdown") or document.get("markdown") or "")
         )
+        web_corpus = str(research.get("corpus") or "").strip()
+        corpus = "\n\n".join(part for part in (source_text, web_corpus) if part)
+        context = f"{prompt_text}\n\nRESEARCH:\n{corpus}" if corpus else prompt_text
         evidence = {
-            "corpus_chars": len(research.get("corpus") or ""),
-            "relevant_pages": int(research.get("relevant_pages") or 0),
+            "corpus_chars": len(corpus),
+            "relevant_pages": max(
+                int(research.get("relevant_pages") or 0), 1 if source_text else 0
+            ),
             "quality": float(research.get("quality") or 0.0),
             "page_titles": [p.get("title", "") for p in (research.get("pages") or [])],
+            "source_grounded": bool(source_text),
         }
         style_parts = []
+        type_style = document_type_style(document_type, str(document.get("kind") or ""), prompt)
+        if type_style:
+            style_parts.append(type_style)
         if natural_voice:
             style_parts.append(NATURAL_VOICE_STYLE)
         if writing_profile.strip():
             style_parts.append(writing_profile.strip())
-        written = WritingEngine(
+        writer = WritingEngine(
             model=self.agent,
             style="\n".join(style_parts),
-        ).writer(plan, context, evidence=evidence)
+        )
+        written = writer.writer(plan, context, evidence=evidence, on_draft=on_draft)
         plagiarism = PlagiarismEngine(agent=self.agent).run(
             written,
             sources=[prompt_text, research.get("corpus", "")] if research.get("corpus") else [prompt_text],
@@ -744,14 +1041,17 @@ class Task:
                 str(section.get("title") or "")
                 for section in (source_plan.get("sections") or [])
             ] if source_plan else [],
+            "write_gate": getattr(writer, "last_gate", {}) or {},
             "plagiarism": plagiarism,
         }
         self.database.set(f"written:{document_id}", payload)
         return payload
 
     @timed("Task.Research")
-    def Research(self, prompt: str):
-        payload = ResearchEngine(agent=self.agent).run(prompt, prompt=prompt)
+    def Research(self, prompt: str, variant: str = "balanced"):
+        payload = ResearchEngine(
+            agent=self.agent, **_research_effort(variant)
+        ).run(prompt, prompt=prompt)
         return payload
 
     @timed("Task.Critique")
@@ -776,6 +1076,86 @@ class Task:
         }
         self.database.set(f"critique:{document_id}", payload)
         return payload
+
+    @timed("Task.Search")
+    def Search(self, prompt: str, context: str = ""):
+        """Answer a question about the open document, not the web.
+
+        The whole draft is searched; the model only sees the passages that
+        matched. A structural question -- a halt stub, an outline, a broken
+        section -- is answered deterministically, because those answers must be
+        exact and a model must not invent a cause.
+        """
+        from components.documentSearch import (
+            audit_document,
+            is_structural_question,
+            is_yes_no_question,
+            render_audit,
+            render_no_hits,
+            render_presence,
+            search_document,
+        )
+
+        text = (context or "").strip()
+        if not text:
+            return {"error": "No document to search. Open a document first."}
+
+        found = search_document(text, prompt)
+        audit = audit_document(text)
+
+        # A reader often pastes the halt stub into the chat instead of leaving
+        # it in the draft. Audit that copy too, or the answer would describe a
+        # healthy document while the evidence of the failure sits in the prompt.
+        if not audit.get("gate"):
+            pasted = audit_document(prompt)
+            if pasted.get("halted") or pasted.get("gate"):
+                audit = pasted
+
+        if is_structural_question(prompt) or audit.get("halted"):
+            return {"answer": render_audit(audit, prompt, found), "sources": []}
+
+        if not found["has_evidence"]:
+            return {"answer": render_no_hits(found, audit), "sources": []}
+
+        if is_yes_no_question(prompt) and found.get("missing"):
+            missing = ", ".join(f"“{term}”" for term in found["missing"])
+            lines = [f"The current draft does not contain {missing}."]
+            if found["hits"]:
+                lines.extend(["", "**Related passages it does contain**", ""])
+                for hit in found["hits"]:
+                    where = hit.get("heading") or "top of document"
+                    lines.append(f"- **{where}** (line {hit['line']}): {hit['text']}")
+            return {"answer": "\n".join(lines), "sources": []}
+
+        evidence = "\n".join(
+            f"[{hit.get('heading') or 'top of document'}, line {hit['line']}] {hit['text']}"
+            for hit in found["hits"]
+        )
+        audit_note = render_audit(audit) if audit.get("issues") else ""
+        if len(audit_note) > 1800:
+            audit_note = audit_note[:1800] + "…"
+        answer = self.agent.model(
+            f"QUESTION: {prompt}\n\n"
+            f"{audit_note}\n\n"
+            "EXCERPTS FROM THE OPEN DOCUMENT:\n"
+            f"{evidence}\n\n"
+            "Answer only from these excerpts. Name the heading and line for each "
+            "fact. If the term is still present, say so plainly; if it is absent, "
+            "say that instead of guessing.",
+            system_prompt=(
+                "You answer questions about one document using only the excerpts "
+                "you are given."
+            ),
+        ) or ""
+        answer = str(answer).strip()
+        presence = render_presence(found)
+        if not answer:
+            lines = [presence, "", "**Matching passages**", ""]
+            for hit in found["hits"]:
+                where = hit.get("heading") or "top of document"
+                lines.append(f"- **{where}** (line {hit['line']}): {hit['text']}")
+            return {"answer": "\n".join(lines), "sources": []}
+        return {"answer": f"{presence}\n\n{answer}".strip(), "sources": []}
 
     @timed("Task.SmallTalk")
     def SmallTalk(self, prompt: str):
