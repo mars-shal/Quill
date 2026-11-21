@@ -13,7 +13,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Build on the oldest supported Ubuntu so the binary's glibc floor stays
+    # low. `ubuntu-latest` is 24.04, whose binary needs GLIBC 2.39 and will not
+    # start on the 22.04 machines many readers use; a CI runner that is newer
+    # than the target machine is not a compatibility test.
+    runs-on: ubuntu-22.04
     defaults:
       run:
         working-directory: ./gui
