@@ -706,6 +706,10 @@ function attachmentPrompt(attachments = []) {
 
 /** The message box, its controls and the send button. */
 function ChatComposer({ input, setInput, send, mode, setMode, variant, setVariant, interview, setInterview, attachments = [], setAttachments, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
+  // Converting a PDF/DOCX is a separate process and can take seconds. Without
+  // this the picker simply closed and nothing appeared until every file had
+  // been read, which reads as a failed upload.
+  const [importing, setImporting] = useState(false)
   // The desktop picker goes through MarkItDown, which covers PDF, DOCX,
   // PPTX, XLSX, HTML and more. The hidden input remains the browser fallback.
   const pickDocument = async () => {
@@ -713,6 +717,7 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
       fileRef.current?.click()
       return
     }
+    setImporting(true)
     try {
       const paths = (await pickDocumentPaths()).flat()
       if (!paths.length) return
@@ -737,6 +742,8 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
       const message = reasonFor(error)
       setAttachments((current) => [...current, { name: 'Document', size: 0, error: message }].slice(0, MAX_ATTACHMENTS))
       notify(message)
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -747,15 +754,20 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
     const files = [...(inputElement.files || [])]
     inputElement.value = ''
     if (!files.length) return
-    const picked = []
-    for (const file of files) {
-      try {
-        picked.push(await readAttachment(file))
-      } catch (error) {
-        picked.push({ name: file.name, size: file.size, error: reasonFor(error) })
+    setImporting(true)
+    try {
+      const picked = []
+      for (const file of files) {
+        try {
+          picked.push(await readAttachment(file))
+        } catch (error) {
+          picked.push({ name: file.name, size: file.size, error: reasonFor(error) })
+        }
       }
+      setAttachments((current) => [...current, ...picked].slice(0, MAX_ATTACHMENTS))
+    } finally {
+      setImporting(false)
     }
-    setAttachments((current) => [...current, ...picked].slice(0, MAX_ATTACHMENTS))
   }
 
   return (
@@ -778,7 +790,9 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
             accept=".txt,.text,.md,.markdown,.mdx,.csv,.tsv,.json,.ndjson,.html,.htm,.xml,.rtf,.tex,.yaml,.yml,.toml,.ini,.cfg,.log,.rst,.org,.js,.jsx,.ts,.tsx,.py,.rs,.go,.c,.cc,.cpp,.h,.hpp,.css,.scss,.sass,.sql,.sh,.bash,.zsh,.rb,.java,.kt,.swift,.php,.lua,.r,text/*"
             onChange={pickFile}
           />
-          <button className="chat-control" type="button" aria-label="Attach a document" title="Attach a document (PDF, DOCX, Markdown, text…)" onClick={pickDocument}><Icon name="attach" size={15} /></button>
+          <button className="chat-control" type="button" aria-label={importing ? 'Reading attached document' : 'Attach a document'} title="Attach a document (PDF, DOCX, Markdown, text…)" onClick={pickDocument} disabled={importing || busy} aria-busy={importing || undefined}>
+            {importing ? <span className="chat-spinner" aria-hidden="true" /> : <Icon name="attach" size={15} />}
+          </button>
           <button
             className={`chat-control chat-voice${voiceState === 'recording' ? ' is-recording' : ''}`}
             type="button"
@@ -793,6 +807,12 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
           {voiceState !== 'idle' && (
             <span className="chat-voice-status" role="status">
               {voiceState === 'recording' ? 'Listening…' : voiceState === 'transcribing' ? 'Transcribing…' : voiceError || 'Microphone'}
+            </span>
+          )}
+          {importing && (
+            <span className="chat-import-status" role="status">
+              <span className="chat-spinner" aria-hidden="true" />
+              Reading file…
             </span>
           )}
           <button
@@ -1254,6 +1274,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   // so the picker reads the active provider: the old `settings.model` fallback
   // was dead *and* vendor-specific -- it named a hardcoded model for a Groq row.
   const model = activeProvider?.defaultModel || ''
+  const isPuter = /api\.puter\.com\/puterai\/openai\/v1/i.test(activeProvider?.baseUrl || '')
   // With no provider row there is no model to name and nothing the menu could
   // offer, so the trigger says which of those it is and its click opens the page
   // that fixes it. It used to read "No model" inside a disabled button, which is
@@ -1358,7 +1379,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         setModelsError(reasonFor(error))
       })
     return () => { cancelled = true }
-  }, [activeProvider?.id, modelsRevision])
+  }, [activeProvider?.id, modelsRevision, activeProvider?.models?.join('\u0000')])
 
   const selectModel = (value) => {
     onSelectModel?.(value)
@@ -1880,7 +1901,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
               {!filteredModels.length && (
                 <p className="model-empty">No models match “{modelQuery.trim()}”.</p>
               )}
-              {modelsState === 'error' && (
+              {modelsState === 'error' && !isPuter && (
                 <button
                   type="button"
                   role="option"

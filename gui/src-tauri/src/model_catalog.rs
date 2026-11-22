@@ -21,10 +21,13 @@ const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 /// Lists the model ids the provider offers, sorted and deduplicated.
 pub async fn list(pool: &sqlx::SqlitePool, provider_id: &str) -> AppResult<Vec<String>> {
     let provider = providers::get(pool, provider_id).await?;
-    // A CLI provider has no endpoint to ask: its one "model" is the tool
-    // itself, recorded on the row at adopt time. A refresh therefore returns
-    // what is stored rather than an error the picker would show as a failure.
+    // A CLI provider has no endpoint to ask: its model list is what detection
+    // read from the tool's own `models` command. An older row has only the
+    // tool id, so the default is the fallback.
     if provider.protocol == Protocol::Cli {
+        if !provider.models.is_empty() {
+            return Ok(provider.models.clone());
+        }
         let own = if provider.default_model.trim().is_empty() {
             provider.id.clone()
         } else {

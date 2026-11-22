@@ -444,6 +444,7 @@ impl TryFrom<&str> for Protocol {
             "openai_responses" => Ok(Protocol::OpenaiResponses),
             "anthropic_messages" => Ok(Protocol::AnthropicMessages),
             "google_generative" => Ok(Protocol::GoogleGenerative),
+            "cli" => Ok(Protocol::Cli),
             other => Err(AppError::Validation(format!("unknown protocol {other:?}"))),
         }
     }

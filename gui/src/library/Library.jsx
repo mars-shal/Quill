@@ -73,6 +73,7 @@ const Library = memo(function Library({
   onPurgeMany,
   onPurge,
   onSettings,
+  onShowOnboarding,
   onDetails,
   onDownload,
   onDelete,
@@ -264,7 +265,7 @@ const Library = memo(function Library({
         </div>
       </aside>
       <main className="library-main">
-        <header className="library-main-head"><div><div className="eyebrow">Workspace / Personal</div><h1>{title}</h1><p>{subtitle}</p></div><div className="library-main-tools"><button className="soft-button" type="button" aria-label="Open a PDF, Word, Markdown, text or HTML file" title="Open PDF, DOCX, Markdown, text or HTML" onClick={onImport}><Icon name="upload" size={14} /><span>Open file</span></button><button className="soft-button" type="button" onClick={onSort}><Icon name="sort" size={14} /><span>{sortAscending ? 'Oldest' : 'Recent'}</span></button><button className="soft-button settings-fallback" type="button" onClick={onSettings}><Icon name="settings" size={14} /><span>Settings</span></button><button className="soft-button primary" type="button" onClick={startNew}><Icon name="plus" size={14} /><span>New document</span></button></div></header>
+        <header className="library-main-head"><div><div className="eyebrow">Workspace / Personal</div><h1>{title}</h1><p>{subtitle}</p></div><div className="library-main-tools"><button className="soft-button" type="button" aria-label="Open a PDF, Word, Markdown, text or HTML file" title="Open PDF, DOCX, Markdown, text or HTML" onClick={onImport}><Icon name="upload" size={14} /><span>Open file</span></button><button className="soft-button" type="button" onClick={onSort}><Icon name="sort" size={14} /><span>{sortAscending ? 'Oldest' : 'Recent'}</span></button><button className="soft-button settings-fallback" type="button" onClick={onSettings}><Icon name="settings" size={14} /><span>Settings</span></button><button className="soft-button" type="button" aria-label="Show getting started" title="Show the getting-started tour" onClick={onShowOnboarding}><Icon name="sparkle" size={14} /><span>Getting started</span></button><button className="soft-button primary" type="button" onClick={startNew}><Icon name="plus" size={14} /><span>New document</span></button></div></header>
         <div className="library-toolbar">
           {selecting ? (
             <div className="library-selection" role="toolbar" aria-label="Selected documents">
@@ -328,16 +329,23 @@ const Library = memo(function Library({
                 <div className="tile-copy"><span className="skeleton-line" /></div>
               </div>
             ))
+          ) : filteredDocs.length === 0 && !isTrash && docs.length === 0 && !query.trim() ? (
+            /* A genuinely empty library is the blank sheet below, and nothing
+               else. The illustration, title, copy and two buttons all repeated
+               the top bar, and because the block spanned the whole grid they
+               pushed the one actionable tile onto a second row at the bottom of
+               the page. */
+            null
           ) : filteredDocs.length === 0 ? (
             <EmptyState
               className="library-empty"
-              title={isTrash ? 'Trash is empty' : docs.length === 0 ? 'Your library is empty' : query.trim() ? 'No matches' : 'Nothing here yet'}
+              title={isTrash ? 'Trash is empty' : query.trim() ? 'No matches' : 'Nothing here yet'}
               copy={isTrash
                 ? 'Documents you delete appear here until you restore them.'
-                : docs.length === 0
-                  ? 'Create a document from a template, or open a PDF, Word, Markdown or text file from another folder.'
-                  : query.trim()
-                    ? `Nothing in this view matches “${query.trim()}”.`
+                : query.trim()
+                  ? `Nothing in this view matches “${query.trim()}”.`
+                  : docs.length === 0
+                    ? 'Create a document from a template, or open a PDF, Word, Markdown or text file from another folder.'
                     : `No documents in ${filter.value.toLowerCase()}. Try another label, or start something new.`}
             >
               {!isTrash && (

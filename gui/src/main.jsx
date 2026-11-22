@@ -244,6 +244,14 @@ function App() {
   const [providerReady, setProviderReady] = useState(false)
   const [activeProvider, setActiveProvider] = useState(null)
   const [providers, setProviders] = useState([])
+  // Detection refreshes a CLI provider's model list from the tool itself. The
+  // effect below deliberately does not depend on `providers` (that would loop:
+  // the sync changes providers, which re-runs detection), so it reads the
+  // latest rows through this ref.
+  const providersRef = useRef(providers)
+  useEffect(() => {
+    providersRef.current = providers
+  }, [providers])
   // Tools found on this machine, and whether the last look found any. Detection
   // shells out and probes two ports, so it runs when Settings is opened rather
   // than on every mount, and never blocks the first paint.
@@ -738,13 +746,48 @@ function App() {
     }
     let cancelled = false
     setToolsLoading(true)
+    // Detection returns the CLI's real model ids. An existing provider row
+    // written before that was available still carries the single tool id, so
+    // merge the discovered list into it here. This is the difference between
+    // "the model list is empty" and the reader having to know to press a
+    // refresh button they have never seen.
+    const syncCliModels = async (tools) => {
+      const known = providersRef.current
+      let changed = false
+      for (const tool of tools) {
+        if (!tool?.exec || !Array.isArray(tool.models) || !tool.models.length) continue
+        const existing = known.find((provider) => provider.id === tool.id)
+        if (!existing) continue
+        const same = existing.models?.length === tool.models.length
+          && existing.models.every((model, index) => model === tool.models[index])
+        if (same) continue
+        const own = tool.models.find((model) => model.startsWith(`${tool.id}/`)) || tool.models[0]
+        const defaultModel = tool.models.includes(existing.defaultModel) ? existing.defaultModel : own
+        try {
+          await store.updateProvider({ id: tool.id, models: tool.models, defaultModel })
+          changed = true
+        } catch (error) {
+          console.warn('Could not refresh the local model list', error)
+        }
+      }
+      if (cancelled || !changed) return
+      const list = await store.listProviders()
+      const active = await store.getActiveProvider()
+      setProviders(list)
+      setActiveProvider(active)
+      if (active?.protocol === 'cli' || store.isLocalEndpoint(active?.baseUrl)) {
+        setProviderReady(true)
+      }
+    }
+
     store
       .detectCliTools()
-      .then((tools) => {
-        if (!cancelled) {
-          setLocalTools(Array.isArray(tools) ? tools : [])
-          setToolsLoading(false)
-        }
+      .then(async (tools) => {
+        if (cancelled) return
+        const list = Array.isArray(tools) ? tools : []
+        setLocalTools(list)
+        setToolsLoading(false)
+        await syncCliModels(list)
       })
       .catch((error) => {
         if (!cancelled) {
@@ -772,6 +815,10 @@ function App() {
       .catch((error) => console.error('Failed to record onboarding state', error))
   }, [])
 
+  // Stable for the same reason as `toggleSort`: `Library` is memoised, and this
+  // is its "Getting started" entry point.
+  const showOnboarding = useCallback(() => setOnboarding(true), [])
+
   /**
    * Reads the registry once so the panel works from the provider the core will
    * actually use.
@@ -795,9 +842,10 @@ function App() {
         if (cancelled) return null
         setActiveProvider(provider)
         if (!provider) return null
-        // A local server needs no key, so `hasCredential: false` must not be
-        // reported as "not connected" for one pointed at loopback.
-        if (store.isLocalEndpoint(provider.baseUrl)) {
+        // A local server needs no key, and a CLI tool authenticates through
+        // its own login, so `hasCredential: false` must not be reported as
+        // "not connected" for either.
+        if (provider.protocol === 'cli' || store.isLocalEndpoint(provider.baseUrl)) {
           if (!cancelled) setProviderReady(true)
           return null
         }
@@ -985,17 +1033,32 @@ function App() {
     if (!tool.models?.length && !tool.exec) return false
     try {
       const existing = providers.find((provider) => provider.id === tool.id)
-      if (!tool.models?.length) {
+      // `exec` is what makes a tool a CLI, and it is the discriminator now that
+      // a CLI can also report its own model list. Checking `models` first sent
+      // opencode down the HTTP branch with an empty base URL, so the real ids
+      // detection had just read were stored as if they came from an endpoint.
+      if (tool.exec) {
+        const models = Array.isArray(tool.models) && tool.models.length ? tool.models : [tool.id]
+        // The CLI's own ids come before the other providers it can reach:
+        // `opencode models` also lists Google/Ollama ids, and defaulting to the
+        // alphabetically first one would pick a model the reader did not ask
+        // for. The tool's own namespace is the safe default.
+        const ownModel = models.find((candidate) => candidate.startsWith(`${tool.id}/`)) || models[0]
+        const model = preferredModel && models.includes(preferredModel)
+          ? preferredModel
+          : existing && models.includes(existing.defaultModel)
+            ? existing.defaultModel
+            : ownModel
         const written = existing
-          ? await store.updateProvider({ id: tool.id, protocol: 'cli', baseUrl: tool.exec, defaultModel: tool.id, models: [tool.id] })
+          ? await store.updateProvider({ id: tool.id, label: tool.label, protocol: 'cli', baseUrl: tool.exec, defaultModel: model, models })
           : await store.createProvider({
               id: tool.id,
               label: tool.label,
               vendor: 'compatible',
               protocol: 'cli',
               baseUrl: tool.exec,
-              defaultModel: tool.id,
-              models: [tool.id],
+              defaultModel: model,
+              models,
             })
         const active = await store.setActiveProvider(written.id)
         const list = await store.listProviders()
@@ -1004,6 +1067,7 @@ function App() {
         setProviderReady(true)
         return true
       }
+      if (!tool.models?.length) return false
       // Prefer the model the reader picked on the onboarding row. Falling back
       // to the existing default then the first model keeps Settings' one-click
       // adoption working, but a deliberate choice is never silently replaced.
@@ -1035,30 +1099,6 @@ function App() {
     }
   }, [providers])
 
-  /**
-   * Re-probes one local tool for the onboarding "Test connection" action.
-   *
-   * It asks the same detector that found the row rather than sending a prompt:
-   * a test that spends the reader's model budget before they have even finished
-   * onboarding is not a connection test, and the detector already proves the
-   * endpoint answers with the model list the next step will use.
-   */
-  const testTool = useCallback(async (tool, model = '') => {
-    if (!tool?.id) return false
-    try {
-      const found = await store.detectCliTools()
-      const current = Array.isArray(found) ? found : []
-      setLocalTools(current)
-      const match = current.find((entry) => entry.id === tool.id)
-      if (!match) return false
-      if (match.exec && !match.models?.length) return true
-      return !model || Boolean(match.models?.includes(model))
-    } catch (error) {
-      console.error('Failed to test the local tool', error)
-      return false
-    }
-  }, [])
-
   /** Edits the active provider's default model, so the chat picker and every
    * run resolve one and the same field from the registry. */
   const selectModel = useCallback(async (model) => {
@@ -1087,7 +1127,7 @@ function App() {
   return (
     <div className={`app-shell ${leftOpen ? 'left-open' : ''} ${rightOpen ? 'right-open' : ''} ${zen ? 'zen' : ''} ${settingsOpen ? 'settings-open' : ''}`} data-theme={theme.id} data-view={view}>
       <div className="library-layer">
-        <Library docs={docs} trashed={trashed} filter={filter} onFilter={applyFilter} onOpenDoc={openDoc} onNew={createDocument} onImport={importDocuments} onRestore={restoreDocument} onRestoreMany={restoreDocuments} onDeleteMany={deleteDocuments} onPurgeMany={purgeDocuments} onPurge={purgeDocument} onSettings={toggleSettings} onDetails={setDetailsId} onDownload={downloadDoc} onDelete={deleteDocument} sortAscending={sortAscending} onSort={toggleSort} viewMode={viewMode} onView={setViewMode} density={density} onDensity={setDensity} loading={!bootstrapped} />
+        <Library docs={docs} trashed={trashed} filter={filter} onFilter={applyFilter} onOpenDoc={openDoc} onNew={createDocument} onImport={importDocuments} onRestore={restoreDocument} onRestoreMany={restoreDocuments} onDeleteMany={deleteDocuments} onPurgeMany={purgeDocuments} onPurge={purgeDocument} onSettings={toggleSettings} onShowOnboarding={showOnboarding} onDetails={setDetailsId} onDownload={downloadDoc} onDelete={deleteDocument} sortAscending={sortAscending} onSort={toggleSort} viewMode={viewMode} onView={setViewMode} density={density} onDensity={setDensity} loading={!bootstrapped} />
       </div>
       {currentDoc && (
         <div key={currentDoc.id} className="editor-layer" style={{ pointerEvents: view === 'editor' ? 'auto' : 'none' }}>
@@ -1106,10 +1146,9 @@ function App() {
           onPickTheme={applyOnboardingTheme}
           tools={localTools}
           toolsLoading={toolsLoading}
-          providerReady={providerReady}
           onAdoptTool={adoptTool}
-          onTestTool={testTool}
           onSaveKey={saveOnboardingKey}
+          onSaveProvider={saveProvider}
           onCreateProvider={createProvider}
           onConnectOpenRouter={connectOpenRouter}
           activeProvider={activeProvider}

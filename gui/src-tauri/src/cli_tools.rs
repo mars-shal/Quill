@@ -37,6 +37,11 @@ const VERSION_TIMEOUT: Duration = Duration::from_secs(3);
 /// not running, and waiting longer only delays the answer.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// `opencode models` prints a few hundred ids but starts a local server first;
+/// it is normally under a second, and eight is the point where the settings
+/// page has waited long enough.
+const MODELS_TIMEOUT: Duration = Duration::from_secs(8);
+
 /// One promoted tool: what to look for, and where it serves models from.
 ///
 /// `base_url` is the OpenAI-compatible root a provider row would store, which is
@@ -57,6 +62,10 @@ struct Spec {
     /// provider's own `/models`; the rest are native APIs that name the same
     /// models in a shape `model_catalog::parse_models` already understands.
     probes: &'static [&'static str],
+    /// Subcommand that prints the CLI's models, one id per line, or empty.
+    /// `opencode models` is the one these CLIs agree on today; the rest either
+    /// have no list command or print a table a shared parser cannot trust.
+    models_args: &'static str,
 }
 
 const SPECS: &[Spec] = &[
@@ -70,6 +79,7 @@ const SPECS: &[Spec] = &[
             "http://127.0.0.1:11434/v1/models",
             "http://127.0.0.1:11434/api/tags",
         ],
+        models_args: "",
     },
     Spec {
         id: "lmstudio",
@@ -78,6 +88,7 @@ const SPECS: &[Spec] = &[
         base_url: "http://127.0.0.1:1234/v1",
         exec_args: "",
         probes: &["http://127.0.0.1:1234/v1/models"],
+        models_args: "",
     },
     Spec {
         id: "claude",
@@ -86,6 +97,7 @@ const SPECS: &[Spec] = &[
         base_url: "",
         exec_args: "-p --output-format json",
         probes: &[],
+        models_args: "",
     },
     Spec {
         id: "codex",
@@ -94,6 +106,7 @@ const SPECS: &[Spec] = &[
         base_url: "",
         exec_args: "exec --json",
         probes: &[],
+        models_args: "",
     },
     Spec {
         id: "gemini",
@@ -102,6 +115,7 @@ const SPECS: &[Spec] = &[
         base_url: "",
         exec_args: "-p",
         probes: &[],
+        models_args: "",
     },
     Spec {
         id: "aider",
@@ -110,6 +124,7 @@ const SPECS: &[Spec] = &[
         base_url: "",
         exec_args: "--message",
         probes: &[],
+        models_args: "",
     },
     Spec {
         id: "llm",
@@ -118,6 +133,7 @@ const SPECS: &[Spec] = &[
         base_url: "",
         exec_args: "",
         probes: &[],
+        models_args: "",
     },
     Spec {
         id: "opencode",
@@ -126,6 +142,7 @@ const SPECS: &[Spec] = &[
         base_url: "",
         exec_args: "run --format json",
         probes: &[],
+        models_args: "models",
     },
 ];
 
@@ -157,11 +174,19 @@ pub async fn detect() -> Vec<DetectedTool> {
     let mut found = Vec::new();
     for spec in SPECS {
         let command = find_in_path(spec.bin);
-        let models = if spec.probes.is_empty() {
+        let mut models = if spec.probes.is_empty() {
             Vec::new()
         } else {
             probe_models(spec.probes).await
         };
+        // A CLI has no `/models` endpoint, but some of them can print their
+        // own list. Asking is what turns the single "opencode" pseudo-model
+        // into the real ids a reader can choose in Settings.
+        if models.is_empty() && !spec.models_args.is_empty() {
+            if let Some(path) = command.as_ref() {
+                models = list_cli_models(path, spec.models_args).await;
+            }
+        }
         if command.is_none() && models.is_empty() {
             continue;
         }
@@ -218,6 +243,7 @@ fn find_in_path(bin: &str) -> Option<PathBuf> {
             ".volta/bin",
             ".local/share/pnpm",
             ".npm-global/bin",
+            ".opencode/bin",
         ] {
             dirs.push(home.join(relative));
         }
@@ -278,6 +304,40 @@ fn version_token(line: &str) -> String {
         .find(|word| word.contains('.') && word.chars().any(|c| c.is_ascii_digit()))
         .unwrap_or(line);
     token.chars().take(40).collect()
+}
+
+/// A CLI's own model list, when it has a subcommand for it.
+async fn list_cli_models(path: &Path, args: &str) -> Vec<String> {
+    let mut command = Command::new(path);
+    command.args(args.split_whitespace());
+    command.kill_on_drop(true);
+    let output = match tokio::time::timeout(MODELS_TIMEOUT, command.output()).await {
+        Ok(Ok(output)) if output.status.success() => output,
+        _ => return Vec::new(),
+    };
+    parse_cli_models(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Model ids out of a CLI's line-oriented list.
+///
+/// `opencode models` prints one `provider/model` per line. Keeping only the
+/// single-token ids with a slash drops banners, blank lines and any table
+/// header, and the bound keeps a misbehaving subcommand from making the
+/// provider row unusable. Sorted so the picker is stable between probes.
+fn parse_cli_models(stdout: &str) -> Vec<String> {
+    let mut models: Vec<String> = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && line.split_whitespace().count() == 1)
+        .filter(|line| line.contains('/') && line.len() <= 160)
+        .map(|line| line.trim_start_matches(|c: char| !c.is_ascii_alphanumeric()))
+        .filter(|line| line.contains('/'))
+        .take(500)
+        .map(str::to_string)
+        .collect();
+    models.sort();
+    models.dedup();
+    models
 }
 
 /// Models served by a running local server, or an empty list.
@@ -367,6 +427,20 @@ mod tests {
         assert_eq!(version_token("aider 0.86.1-dev"), "0.86.1-dev");
         // Nothing version-shaped: keep the line rather than reporting nothing.
         assert_eq!(version_token("unknown"), "unknown");
+    }
+
+    #[test]
+    fn cli_model_ids_are_read_from_one_per_line() {
+        let sample = "google/gemini-2.5-pro\nopencode/big-pickle\n\n\
+                      > build · opencode\nnot-a-model\nopencode/beam-free\n";
+        assert_eq!(
+            parse_cli_models(sample),
+            vec![
+                "google/gemini-2.5-pro",
+                "opencode/beam-free",
+                "opencode/big-pickle",
+            ]
+        );
     }
 
     #[test]

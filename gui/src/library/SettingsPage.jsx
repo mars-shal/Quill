@@ -358,6 +358,9 @@ function ConnectorsPanel({
   providers = [],
   onConnectOpenRouter,
   onDisconnectOpenRouter,
+  onCreateProvider,
+  onSelectProvider,
+  onOpenAssistant,
 }) {
   const [state, setState] = useState("idle");
   const [error, setError] = useState("");
@@ -365,7 +368,46 @@ function ConnectorsPanel({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState("");
   const [lastChecked, setLastChecked] = useState("");
+  const [puterConnected, setPuterConnected] = useState(false);
   const openrouter = providers.find((provider) => /openrouter\.ai/i.test(provider.baseUrl || ""));
+  const puter = providers.find((provider) => /api\.puter\.com\/puterai\/openai\/v1/i.test(provider.baseUrl || ""));
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!puter) {
+      setPuterConnected(false);
+      return undefined;
+    }
+    getProviderSecretStatus(puter.id)
+      .then((status) => {
+        if (!cancelled) setPuterConnected(Boolean(status.hasCredential));
+      })
+      .catch(() => {
+        if (!cancelled) setPuterConnected(false);
+      });
+    return () => { cancelled = true; };
+  }, [puter?.id, state]);
+
+  const setupPuter = async () => {
+    setError("");
+    if (puter) {
+      await onSelectProvider?.(puter.id);
+      onOpenAssistant?.();
+      return;
+    }
+    const row = await onCreateProvider?.({
+      id: "puter",
+      label: "Puter",
+      vendor: "compatible",
+      protocol: "openai_chat",
+      baseUrl: PUTER_BASE_URL,
+      defaultModel: PUTER_DEFAULT_MODEL,
+      models: PUTER_MODELS,
+    });
+    if (!row) return;
+    await onSelectProvider?.(row.id);
+    onOpenAssistant?.();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -439,7 +481,7 @@ function ConnectorsPanel({
   };
 
   const manage = () => openExternal("https://openrouter.ai/keys");
-  const summaryConnected = connected ? 1 : 0;
+  const summaryConnected = (connected ? 1 : 0) + (puterConnected ? 1 : 0);
 
   return (
     <>
@@ -512,6 +554,48 @@ function ConnectorsPanel({
           )}
           {error && <p className="settings-profile-error" role="alert">{error}</p>}
           {testResult && <p className={`connector-result${/OK/.test(testResult) ? " is-ok" : ""}`} role="status">{testResult}</p>}
+        </article>
+
+        <article className={`keys-card connector-card${puterConnected ? " is-connected" : ""}`}>
+          <div className="connector-head">
+            <div className="connector-mark" style={{ background: "#6d5dfc" }} aria-hidden="true">P</div>
+            <div className="connector-copy">
+              <div className="connector-title-row">
+                <strong>Puter</strong>
+                <button className="connector-link" type="button" onClick={() => openExternal("https://docs.puter.com/user-pays-model/")}>
+                  User-pays model <span aria-hidden="true">↗</span>
+                </button>
+              </div>
+              <p>Use 500+ models through your own Puter account. Your account covers the usage; Quill never holds a developer key.</p>
+            </div>
+            <span className={`connector-pill ${puterConnected ? "is-connected" : "is-idle"}`}>
+              {puterConnected ? "Connected" : "Not connected"}
+            </span>
+          </div>
+          <div className="connector-meta">
+            <span>{puterConnected ? "Token stored in the system credential vault" : "Create a Puter auth token, then paste it in Assistant"}</span>
+            <span>No developer key</span>
+          </div>
+          {!puterConnected && (
+            <p className="connector-note">
+              Puter's user-pays model means each reader pays for their own model usage.{' '}
+              <button className="link-button" type="button" onClick={() => openExternal("https://puter.com/dashboard#account")}>
+                Create a token
+              </button>
+              {' '}in your dashboard.
+            </p>
+          )}
+          <div className="connector-footer">
+            <span className="connector-soon">{puter ? "Provider added" : "OpenAI-compatible"}</span>
+            <div className="connector-actions">
+              <button className="connector-action" type="button" onClick={() => openExternal("https://puter.com/dashboard#account")}>
+                <Icon name="share" size={13} /> Create token
+              </button>
+              <button className="connector-action" type="button" onClick={setupPuter}>
+                <Icon name="sparkle" size={13} /> {puter ? "Manage in Assistant" : "Set up Puter"}
+              </button>
+            </div>
+          </div>
         </article>
 
         {AVAILABLE_CONNECTORS.map((connector) => (
@@ -832,6 +916,7 @@ function SettingsPage({
               onCreateProvider,
               onConnectOpenRouter,
               onDisconnectOpenRouter,
+              onOpenAssistant: () => setActiveTab("settings-assistant"),
               documents,
             };
             return SETTINGS_SECTIONS.map((section) => {
@@ -892,6 +977,28 @@ function SettingsPage({
  * cells break them into four unrelated questions.
  */
 /**
+ * Puter exposes an OpenAI-compatible endpoint on the user-pays model: the
+ * reader's own Puter account covers the model usage, so Quill never holds a
+ * developer key. The auth token is created in the Puter dashboard.
+ * https://docs.puter.com/user-pays-model/
+ */
+const PUTER_BASE_URL = "https://api.puter.com/puterai/openai/v1";
+const PUTER_DEFAULT_MODEL = "gpt-5.4-nano";
+// Puter's OpenAI-compatible endpoint implements chat/completions but not
+// GET /models, so the picker cannot discover the full catalogue. These are
+// stable starter ids from the public model list; the custom-model field in
+// Assistant accepts any other id the reader finds.
+const PUTER_MODELS = [
+  "gpt-5.4-nano",
+  "gpt-5.5",
+  "claude-sonnet-5-5",
+  "gemini-3-flash-preview",
+  "deepseek-chat",
+  "grok-4",
+  "moonshotai/kimi-k3",
+];
+
+/**
  * BYOK shortcuts. Each materialises a *real* registry row (endpoint, vendor,
  * default model) when chosen -- the key typed next then files under the row a
  * run will actually use, which is what the old name-only slots never did.
@@ -900,6 +1007,13 @@ const PROVIDER_PRESETS = [
   { key: "groq", label: "Groq", baseUrl: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
   { key: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   { key: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", model: "openai/gpt-4o-mini" },
+  {
+    key: "puter",
+    label: "Puter",
+    baseUrl: PUTER_BASE_URL,
+    model: PUTER_DEFAULT_MODEL,
+    models: PUTER_MODELS,
+  },
   { key: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
   { key: "mistral", label: "Mistral", baseUrl: "https://api.mistral.ai/v1", model: "mistral-small-latest" },
 ];
@@ -935,12 +1049,21 @@ function AssistantPanel({
   onAdoptTool,
   onSaveProvider,
   onCreateProvider,
+  onConnectOpenRouter,
 }) {
   const [liveModels, setLiveModels] = useState([]);
   const [modelsState, setModelsState] = useState("idle");
+  const [openRouterState, setOpenRouterState] = useState("idle");
   const [micState, setMicState] = useState("idle");
   const [modelsError, setModelsError] = useState("");
   const [modelsRevision, setModelsRevision] = useState(0);
+  const [customModel, setCustomModel] = useState("");
+  // A key that has just been stored makes the model list readable. Re-read it
+  // once the connection turns ready; otherwise the Retry link stays on screen
+  // even though the only reason the first read failed is gone.
+  useEffect(() => {
+    if (connectionState === "ready") setModelsRevision((value) => value + 1);
+  }, [connectionState]);
   const providerId = activeProvider?.id;
   // The page's one primary action scrolls to the key field rather than opening
   // a dialog: the form is already here, and a modal would hide the provider it
@@ -1029,7 +1152,7 @@ function AssistantPanel({
     return () => {
       cancelled = true;
     };
-  }, [providerId, modelsRevision]);
+  }, [providerId, modelsRevision, activeProvider?.models?.join("\u0000")]);
 
   const NON_CHAT_MODEL = /whisper|orpheus|prompt-guard/i
   const modelOptions = Array.from(
@@ -1046,6 +1169,30 @@ function AssistantPanel({
     ...modelOptions,
   ].filter(Boolean)));
   const local = isLocalEndpoint(activeProvider?.baseUrl);
+  // A CLI provider authenticates through the tool's own login, so there is no
+  // key to store and no secret status to wait for. Reading `providerReady`
+  // alone painted the opencode card "Inactive / Not connected" even while the
+  // pipeline was using it.
+  const isCli = activeProvider?.protocol === "cli";
+  const ready = connectionState === "ready" || isCli;
+  // OpenRouter is the one provider with an OAuth path, so it gets a button
+  // where its key would otherwise be pasted. The same handler backs the
+  // Connectors page; keeping the entry point here means a reader who chose an
+  // OpenRouter model is not sent to another tab to make it work.
+  const isOpenRouter = /openrouter\.ai/i.test(activeProvider?.baseUrl || "") || /openrouter/i.test(activeProvider?.id || "");
+  const isPuter = /api\.puter\.com\/puterai\/openai\/v1/i.test(activeProvider?.baseUrl || "");
+  const connectOpenRouter = async () => {
+    if (!onConnectOpenRouter) return;
+    setOpenRouterState("waiting");
+    try {
+      await onConnectOpenRouter();
+      setConnectionState("ready");
+      setModelsRevision((value) => value + 1);
+      setOpenRouterState("ready");
+    } catch {
+      setOpenRouterState("error");
+    }
+  };
 
   const providerMonogram = (provider) => {
     const label = provider?.label || provider?.id || "P";
@@ -1056,25 +1203,33 @@ function AssistantPanel({
     <>
       <div className="keys-head">
         <div className="keys-head-copy">
-          <h2 className="keys-title">API keys</h2>
-          <p className="keys-sub">Manage your BYOK (Bring Your Own Key) vault securely.</p>
+          <h2 className="keys-title">{isCli ? "Provider" : "API keys"}</h2>
+          <p className="keys-sub">
+            {isCli
+              ? "This tool runs on this machine and uses its own login."
+              : "Manage your BYOK (Bring Your Own Key) vault securely."}
+          </p>
         </div>
-        <button type="button" className="keys-primary" onClick={focusKeyField}>
-          <Icon name="plus" size={15} />
-          <span>Add API key</span>
-        </button>
+        {!isCli && (
+          <button type="button" className="keys-primary" onClick={focusKeyField}>
+            <Icon name="plus" size={15} />
+            <span>Add API key</span>
+          </button>
+        )}
       </div>
 
       <div className="keys-banners">
-        <div className="settings-banner keys-banner" role="note">
-          <span className="settings-banner-mark" aria-hidden="true">
-            <Icon name="check" size={16} />
-          </span>
-          <div>
-            <strong>Your keys are encrypted at rest</strong>
-            <div className="settings-banner-sub">API keys are stored in a secure vault and never exposed in logs.</div>
+        {!isCli && (
+          <div className="settings-banner keys-banner" role="note">
+            <span className="settings-banner-mark" aria-hidden="true">
+              <Icon name="check" size={16} />
+            </span>
+            <div>
+              <strong>Your keys are encrypted at rest</strong>
+              <div className="settings-banner-sub">API keys are stored in a secure vault and never exposed in logs.</div>
+            </div>
           </div>
-        </div>
+        )}
         <div className="settings-banner keys-banner is-violet" role="note">
           <span className="settings-banner-mark" aria-hidden="true">
             <Icon name="sparkle" size={16} />
@@ -1103,51 +1258,90 @@ function AssistantPanel({
             </div>
           </div>
           <div className="keys-provider-status">
-            <span className={`keys-pill ${connectionState === "ready" ? "is-active" : ""}`}>
-              {connectionState === "ready" && <Icon name="check" size={12} />}
-              {connectionState === "ready" ? "Active" : "Inactive"}
+            <span className={`keys-pill ${ready ? "is-active" : ""}`}>
+              {ready && <Icon name="check" size={12} />}
+              {ready ? (isCli ? "CLI ready" : "Active") : "Inactive"}
             </span>
             <span className="keys-meta-text">
-              {connectionState === "ready" ? "Key ready" : connectionState === "error" ? "Add a key" : "Not connected"}
+              {isCli
+                ? "Uses the tool's own login"
+                : ready
+                  ? "Key ready"
+                  : connectionState === "error"
+                    ? "Add a key"
+                    : "Not connected"}
             </span>
           </div>
-          <div className="keys-secret">
-            <span className="keys-secret-text">
-              {apiKey
-                ? keyVisible
-                  ? apiKey
-                  : "•".repeat(12)
-                : "sk-••••••••••••"}
-            </span>
-            <button
-              type="button"
-              className="keys-iconbtn"
-              onClick={() => setKeyVisible((value) => !value)}
-              aria-label={keyVisible ? "Hide key" : "Show key"}
-            >
-              <Icon name={keyVisible ? "eye-off" : "eye"} size={17} />
-            </button>
-            <CopyButton value={apiKey} className="keys-iconbtn" label="Copy key" />
-          </div>
-          <div className="keys-actions">
-            <Button className="keys-btn keys-btn-solid" type="button" onClick={connect} disabled={!activeProvider}>
-              Connect provider
-            </Button>
-            <Button
-              className="keys-btn"
-              type="button"
-              onClick={onDisconnect}
-              disabled={!activeProvider || connectionState !== "ready"}
-            >
-              Remove key
-            </Button>
-          </div>
+          {isCli ? (
+            <p className="keys-hint">
+              The command below is the tool's one-shot invocation. Its own login
+              is the credential; no API key is stored in Quill.
+            </p>
+          ) : (
+            <>
+              <div className="keys-secret">
+                <span className="keys-secret-text">
+                  {apiKey
+                    ? keyVisible
+                      ? apiKey
+                      : "•".repeat(12)
+                    : "sk-••••••••••••"}
+                </span>
+                <button
+                  type="button"
+                  className="keys-iconbtn"
+                  onClick={() => setKeyVisible((value) => !value)}
+                  aria-label={keyVisible ? "Hide key" : "Show key"}
+                >
+                  <Icon name={keyVisible ? "eye-off" : "eye"} size={17} />
+                </button>
+                <CopyButton value={apiKey} className="keys-iconbtn" label="Copy key" />
+              </div>
+              <div className="keys-actions">
+                <Button className="keys-btn keys-btn-solid" type="button" onClick={connect} disabled={!activeProvider}>
+                  Connect provider
+                </Button>
+                <Button
+                  className="keys-btn"
+                  type="button"
+                  onClick={onDisconnect}
+                  disabled={!activeProvider || !ready}
+                >
+                  Remove key
+                </Button>
+              </div>
+              {isOpenRouter && !ready && (
+                <div className="keys-openrouter">
+                  <p className="keys-hint">
+                    OpenRouter issues keys only to a signed-in account. Connect once and
+                    Quill stores the key it receives.
+                  </p>
+                  <Button
+                    className="keys-btn keys-btn-solid"
+                    type="button"
+                    onClick={connectOpenRouter}
+                    disabled={openRouterState === "waiting"}
+                  >
+                    {openRouterState === "waiting"
+                      ? "Waiting for OpenRouter…"
+                      : openRouterState === "error"
+                        ? "Try OpenRouter again"
+                        : "Connect to OpenRouter"}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </article>
 
         <article className="keys-card keys-form-card">
           <div className="keys-card-head">
-            <h3 className="keys-card-title">Add or update key</h3>
-            <p className="keys-card-sub">Configure the provider, model, endpoint and key.</p>
+            <h3 className="keys-card-title">{isCli ? "Provider and model" : "Add or update key"}</h3>
+            <p className="keys-card-sub">
+              {isCli
+                ? "Choose the model this CLI should run. Its own login is the credential."
+                : "Configure the provider, model, endpoint and key."}
+            </p>
           </div>
           <div className="keys-field">
             <label className="keys-label" htmlFor="provider">Provider</label>
@@ -1169,7 +1363,7 @@ function AssistantPanel({
                       protocol: "openai_chat",
                       baseUrl: preset.baseUrl,
                       defaultModel: preset.model,
-                      models: [],
+                      models: preset.models ?? [],
                     }));
                   if (!row) return;
                   update("provider", row.id);
@@ -1222,10 +1416,57 @@ function AssistantPanel({
                 ))}
               </SelectContent>
             </Select>
-            {modelsState === "error" && (
+            {modelsState === "error" && !isPuter && (
               <button className="keys-link" type="button" onClick={() => setModelsRevision((value) => value + 1)}>
                 Retry
               </button>
+            )}
+          </div>
+          <div className="keys-field">
+            <label className="keys-label" htmlFor="custom-model">Use another model</label>
+            <div className="keys-secret-row">
+              <input
+                id="custom-model"
+                className="keys-input"
+                type="text"
+                autoComplete="off"
+                spellCheck="false"
+                placeholder={isPuter ? "e.g. gpt-5.5 or claude-sonnet-5-5" : "provider/model"}
+                value={customModel}
+                onChange={(event) => setCustomModel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    const value = customModel.trim();
+                    if (value) {
+                      onSelectModel?.(value);
+                      setCustomModel("");
+                    }
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="keys-btn keys-btn-solid"
+                disabled={!customModel.trim()}
+                onClick={() => {
+                  const value = customModel.trim();
+                  if (!value) return;
+                  onSelectModel?.(value);
+                  setCustomModel("");
+                }}
+              >
+                Use
+              </button>
+            </div>
+            {isPuter && (
+              <p className="keys-hint">
+                Puter's full catalogue is at{' '}
+                <button className="link-button" type="button" onClick={() => openExternal("https://developer.puter.com/ai/models/")}>
+                  developer.puter.com/ai/models
+                </button>
+                . Any id there works here.
+              </p>
             )}
           </div>
           <div className="keys-field">
@@ -1266,38 +1507,51 @@ function AssistantPanel({
             <p className="keys-hint">Leave both on “Same as chat model” to use one model for thinking and writing.</p>
           </div>
           <div className="keys-field">
-            <label className="keys-label" htmlFor="endpoint">Endpoint</label>
+            <label className="keys-label" htmlFor="endpoint">{isCli ? "Command" : "Endpoint"}</label>
             <input
               id="endpoint"
               className="keys-input"
-              type="url"
+              type={isCli ? "text" : "url"}
               value={endpointDraft}
-              placeholder="https://api.example.com/v1"
+              placeholder={isCli ? "/path/to/tool run --format json" : "https://api.example.com/v1"}
               onChange={(event) => setEndpointDraft(event.target.value)}
               onBlur={saveEndpoint}
             />
           </div>
-          <div className="keys-field">
-            <label className="keys-label" htmlFor="api-key">API key</label>
-            <div className="keys-secret-row">
-              <input
-                id="api-key"
-                ref={keyFieldRef}
-                className="keys-input keys-input-secret"
-                type={keyVisible ? "text" : "password"}
-                placeholder="Paste a key"
-                value={apiKey}
-                onChange={(event) => {
-                  setApiKey(event.target.value);
-                  setConnectionState("idle");
-                }}
-              />
-              <button type="button" className="keys-iconbtn" onClick={() => setKeyVisible((value) => !value)} aria-label={keyVisible ? "Hide key" : "Show key"}>
-                <Icon name={keyVisible ? "eye-off" : "eye"} size={17} />
-              </button>
-            </div>
-          </div>
-          <p className="keys-note">The key is written to your operating system's credential store and used for requests to the provider above.</p>
+          {!isCli && (
+            <>
+              <div className="keys-field">
+                <label className="keys-label" htmlFor="api-key">API key</label>
+                <div className="keys-secret-row">
+                  <input
+                    id="api-key"
+                    ref={keyFieldRef}
+                    className="keys-input keys-input-secret"
+                    type={keyVisible ? "text" : "password"}
+                    placeholder={isPuter ? "Paste your Puter auth token" : "Paste a key"}
+                    value={apiKey}
+                    onChange={(event) => {
+                      setApiKey(event.target.value);
+                      setConnectionState("idle");
+                    }}
+                  />
+                  <button type="button" className="keys-iconbtn" onClick={() => setKeyVisible((value) => !value)} aria-label={keyVisible ? "Hide key" : "Show key"}>
+                    <Icon name={keyVisible ? "eye-off" : "eye"} size={17} />
+                  </button>
+                </div>
+              </div>
+              <p className="keys-note">The key is written to your operating system's credential store and used for requests to the provider above.</p>
+              {isPuter && (
+                <p className="keys-hint">
+                  Puter bills model usage to your own account.{' '}
+                  <button className="link-button" type="button" onClick={() => openExternal("https://puter.com/dashboard#account")}>
+                    Create an auth token
+                  </button>{' '}
+                  in your dashboard, then paste it here.
+                </p>
+              )}
+            </>
+          )}
         </article>
       </div>
       {/* One card for the behaviour rows, the way the reference closes its keys
@@ -1440,10 +1694,10 @@ function AssistantPanel({
                 <Button
                   className="soft-button"
                   type="button"
-                  disabled={adopted}
                   onClick={() => onAdoptTool?.(tool)}
+                  title={adopted ? "Re-read the tool's model list" : "Use this tool"}
                 >
-                  {adopted ? "In use" : "Use"}
+                  {adopted ? "Refresh models" : "Use"}
                 </Button>
               ) : (
                 <span className="settings-status">Not routable</span>

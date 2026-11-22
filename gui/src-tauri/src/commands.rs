@@ -423,7 +423,11 @@ pub async fn read_image_as_data_url(path: String) -> AppResult<ImageData> {
 fn release_version(tag: &str) -> String {
     let trimmed = tag.trim();
     if trimmed.contains("-build-") {
-        if let Some(build) = trimmed.rsplit('-').next().and_then(|part| part.parse::<u32>().ok()) {
+        if let Some(build) = trimmed
+            .rsplit('-')
+            .next()
+            .and_then(|part| part.parse::<u32>().ok())
+        {
             return format!("0.{build}.0");
         }
     }
@@ -532,7 +536,6 @@ pub async fn read_text_file(
 
     crate::import::read_text_file(&path)
 }
-
 
 #[cfg(test)]
 mod tests {

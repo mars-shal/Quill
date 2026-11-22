@@ -512,7 +512,7 @@ async fn applying_the_migrations_twice_changes_nothing() {
             .fetch_all(&pool)
             .await
             .expect("read applied versions");
-    assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
 
     assert_eq!(list(&pool).await.expect("list").len(), 1);
 }
@@ -971,4 +971,78 @@ async fn role_models_round_trip_and_can_be_cleared() {
     .expect("clear");
     assert_eq!(cleared.thinking_model, "");
     assert_eq!(cleared.writing_model, "");
+}
+
+#[test]
+fn every_protocol_round_trips_through_its_stored_string() {
+    for protocol in [
+        Protocol::OpenaiChat,
+        Protocol::OpenaiResponses,
+        Protocol::AnthropicMessages,
+        Protocol::GoogleGenerative,
+        Protocol::Cli,
+    ] {
+        let stored = protocol.as_str();
+        assert_eq!(
+            Protocol::try_from(stored).expect("known protocol"),
+            protocol,
+            "the registry could write {stored:?} but not read it back"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_cli_provider_round_trips_through_the_database() {
+    let pool = test_pool().await;
+    create(
+        &pool,
+        NewProvider {
+            id: "opencode".into(),
+            label: Some("opencode".into()),
+            protocol: Some(Protocol::Cli),
+            base_url: Some("/home/me/.opencode/bin/opencode run --format json".into()),
+            default_model: Some("opencode".into()),
+            models: Some(vec!["opencode".into()]),
+            ..NewProvider::default()
+        },
+    )
+    .await
+    .expect("create a cli provider");
+
+    let stored = get(&pool, "opencode").await.expect("read the cli provider");
+    assert_eq!(stored.protocol, Protocol::Cli);
+    assert_eq!(
+        stored.base_url,
+        "/home/me/.opencode/bin/opencode run --format json"
+    );
+}
+
+#[tokio::test]
+async fn a_cli_provider_lists_every_stored_model() {
+    let pool = test_pool().await;
+    create(
+        &pool,
+        NewProvider {
+            id: "opencode".into(),
+            protocol: Some(Protocol::Cli),
+            base_url: Some("/usr/bin/opencode run --format json".into()),
+            default_model: Some("opencode/big-pickle".into()),
+            models: Some(vec![
+                "opencode/big-pickle".into(),
+                "opencode/beam-free".into(),
+            ]),
+            ..NewProvider::default()
+        },
+    )
+    .await
+    .expect("create a cli provider");
+
+    let listed = crate::model_catalog::list(&pool, "opencode")
+        .await
+        .expect("list cli models");
+    assert_eq!(
+        listed,
+        vec!["opencode/big-pickle", "opencode/beam-free"],
+        "the picker must see every detected model, not only the default"
+    );
 }

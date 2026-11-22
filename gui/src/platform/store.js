@@ -1066,6 +1066,13 @@ function subscribe(event, callback) {
 export function describeFailure(error) {
   const message = String(error?.message ?? error ?? '').trim()
   if (!message) return 'The writing service did not answer.'
+  // Older sidecars, and any provider error that reaches the UI raw, can carry
+  // the whole 429 body including one copy per upstream attempt. The backend
+  // now sends a short sentence; this keeps the panel readable when the build
+  // predates that fix.
+  if (/free-models-per-day|openrouter_free_tier_daily/i.test(message)) {
+    return 'OpenRouter free tier daily limit reached. Switch to another model/key, wait for the reset, or add credits.'
+  }
   // Only an absent pipeline gets this sentence. Matching every message that
   // contains "connect" turned a provider's "could not connect to OpenRouter"
   // into "the writing service is not running", which sent the reader to restart

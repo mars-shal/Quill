@@ -17,12 +17,14 @@ import assert from 'node:assert/strict'
 
 import {
   awaitBoot,
+  calls,
   clickAndSettle,
   handlers,
   mockFramerMotion,
   onboardingFixtures,
   providerFixtures,
   root,
+  tick,
 } from './support/dom-harness.mjs'
 
 mockFramerMotion()
@@ -82,14 +84,32 @@ test('the second step is the theme, and picking one persists it', async () => {
   assert.equal(dark.getAttribute('aria-checked'), 'true', 'the chosen theme should read as chosen')
 })
 
-test('the last step offers every detected model and adopts the chosen one', async () => {
+test('the connectors step adopts a detected tool and the role step saves models', async () => {
   await clickAndSettle(next())
+
+  const connectors = root.querySelector('.onboarding-v2-connectors')
+  assert.ok(connectors, 'the connectors step sits between the theme and the model')
+  assert.match(connectors.textContent, /Connect your tools/i)
+  assert.match(connectors.textContent, /Ollama|opencode|Codex/i, 'detected local tools are listed')
+  assert.match(connectors.textContent, /OpenRouter/, 'hosted connectors are listed')
+  assert.match(connectors.textContent, /Puter/, 'Puter is listed too')
 
   const addKey = [...root.querySelectorAll('.onboarding-v2-alt-actions button')]
     .find((node) => /Add an API key/i.test(node.textContent))
-  assert.ok(addKey, 'the model step offers an API-key path')
+  assert.ok(addKey, 'the connectors step offers an API-key path')
+  assert.ok(
+    [...root.querySelectorAll('.onboarding-v2-connector-actions button')].some(
+      (node) => /^Connect$/i.test(node.textContent),
+    ),
+    'the OpenRouter connector offers its one-click sign-in',
+  )
   await clickAndSettle(addKey)
   assert.ok(root.querySelector('#onboarding-api-key'), 'the key is entered in onboarding, not Settings')
+  const providerSelect = root.querySelector('#onboarding-provider')
+  assert.ok(providerSelect, 'the key form names a provider')
+  providerSelect.value = 'preset:openrouter'
+  providerSelect.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await tick(20)
   assert.ok(
     [...root.querySelectorAll('.onboarding-v2-keyform button')].some(
       (node) => /Connect with OpenRouter/i.test(node.textContent),
@@ -99,20 +119,43 @@ test('the last step offers every detected model and adopts the chosen one', asyn
   await clickAndSettle(addKey)
 
   const tools = [...root.querySelectorAll('.onboarding-tool')]
-  assert.ok(tools.length >= 2, 'each model the server reports is a choice')
+  assert.ok(tools.length >= 1, 'each detected tool is a connector choice')
   assert.match(tools[0].textContent, /Ollama/)
   assert.match(tools[0].textContent, /2 models/, 'the count is what tells a reader it can be used')
 
-  const chosen = tools.find((node) => /qwen2/i.test(node.textContent))
-  assert.ok(chosen, 'the second reported model should be offered')
+  const chosen = tools.find((node) => /Ollama/i.test(node.textContent))
+  assert.ok(chosen, 'the detected Ollama server should be offered')
   await clickAndSettle(chosen)
   await clickAndSettle(next())
+
+  const roles = root.querySelector('.onboarding-v2-roles')
+  assert.ok(roles, 'the role step follows the model choice')
+  assert.ok(root.querySelector('#onboarding-thinking-model'), 'thinking model selector')
+  assert.ok(root.querySelector('#onboarding-writing-model'), 'writing model selector')
+  const thinking = root.querySelector('#onboarding-thinking-model')
+  thinking.value = 'llama3.2:1b'
+  thinking.dispatchEvent(new window.Event('change', { bubbles: true }))
+  const writing = root.querySelector('#onboarding-writing-model')
+  writing.value = 'qwen2:0.5b'
+  writing.dispatchEvent(new window.Event('change', { bubbles: true }))
+  await tick(20)
+  const finish = [...root.querySelectorAll('.onboarding-next')]
+    .find((node) => /Finish/i.test(node.textContent))
+  assert.ok(finish, 'the role step ends with Finish')
+  await clickAndSettle(finish)
 
   const active = providerFixtures.active()
   assert.equal(active?.id, TOOL.id, 'adopting the server should make it the active provider')
   assert.equal(active?.baseUrl, TOOL.baseUrl, 'the endpoint must be the one that answered')
   assert.deepEqual(active?.models, TOOL.models, 'its real model list travels with the row')
-  assert.equal(active?.defaultModel, 'qwen2:0.5b', 'the model the reader chose is the one stored')
+  assert.equal(active?.defaultModel, 'llama3.2:1b', 'the first detected model is adopted until Settings changes it')
+
+  const roleUpdate = calls
+    .filter((call) => call.command === 'update_provider')
+    .map((call) => call.args?.input)
+    .find((input) => input?.thinkingModel === 'llama3.2:1b')
+  assert.ok(roleUpdate, 'the thinking and writing models are saved')
+  assert.equal(roleUpdate.writingModel, 'qwen2:0.5b')
 })
 
 test('finishing records that it happened, so it never opens again', async () => {
@@ -122,4 +165,12 @@ test('finishing records that it happened, so it never opens again', async () => 
     'true',
     'the flag is what stops the card covering the workspace on every later launch',
   )
+})
+
+test('the library offers a way back to the getting-started tour', async () => {
+  const button = [...root.querySelectorAll('.library-main-tools button')]
+    .find((node) => /Getting started/i.test(node.textContent))
+  assert.ok(button, 'the home screen has a Getting started button')
+  await clickAndSettle(button)
+  assert.ok(card(), 'pressing it opens the onboarding overlay again')
 })

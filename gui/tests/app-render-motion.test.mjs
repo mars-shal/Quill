@@ -303,12 +303,14 @@ test('the ready workspace has no boot overlay', async () => {
   assert.match(root.innerHTML, /library-layout/)
 })
 
-test('an empty library shows a designed empty state rather than a blank window', async () => {
+test('an empty library is the blank sheet, not a second empty state', async () => {
   // The library owns the empty state now; the boot overlay is reserved for a
-  // store failure. The render suite's stub always returns documents, so this is
-  // pinned at the source rather than by clearing a list that is already built.
+  // store failure. A first-run library shows the dashed new-document tile and
+  // nothing else: the illustration, title and two buttons repeated the top bar
+  // and pushed the only actionable tile onto a second row.
   const library = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'library', 'Library.jsx'), 'utf8')
-  assert.match(library, /<EmptyState/, 'the library must render the shared empty state')
-  assert.match(library, /Your library is empty/, 'and say what the state is')
-  assert.match(library, /New document/, 'with the action that leaves it')
+  assert.match(library, /<EmptyState/, 'Trash, a search and an empty label still explain themselves')
+  assert.doesNotMatch(library, /Your library is empty/, 'a blank library is not announced twice')
+  assert.match(library, /new-document-tile/, 'the dashed new-document tile is the way in')
+  assert.match(library, /Create a new document from a template/, 'and it is labelled for assistive tech')
 })

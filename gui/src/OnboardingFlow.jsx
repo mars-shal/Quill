@@ -12,20 +12,21 @@ import { openExternal } from './platform/store.js'
  * the theme choice changes the whole room, and the model choice is a decision
  * about the app, not a dialog over a document.
  *
- * The three steps are deliberate:
+ * The four steps are deliberate:
  *
  *   1. the mark, and one way in
  *   2. what the room looks like
- *   3. what answers when the reader asks it to write
+ *   3. the tools and accounts Quill can use
+ *   4. which of those models handles thinking and which handles prose
  *
  * Everything is skippable. A local-first editor is a perfectly good offline
  * editor, and a first-run flow that traps someone without a model is worse than
- * no flow at all. `completed` is written only when the reader actually leaves,
- * and "Add an API key" opens Settings without marking the flow complete; when
- * Settings closes, this surface is still here.
+ * no flow at all. `completed` is written only when the reader actually leaves;
+ * a key typed here stays in the flow and is stored in the same vault Settings
+ * uses.
  */
 
-const STEPS = 3
+const STEPS = 4
 
 const THEME_FACE = { light: 'Sun', paper: 'Paper', night: 'Moon' }
 const THEME_NOTE = { light: 'Bright room', paper: 'Warm paper', night: 'Low light' }
@@ -159,14 +160,13 @@ export function OnboardingFlow({
   onPickTheme,
   tools = [],
   toolsLoading = false,
-  providerReady = false,
   activeProvider = null,
   providers = [],
   onAdoptTool,
-  onTestTool,
   onSaveKey,
   onCreateProvider,
   onConnectOpenRouter,
+  onSaveProvider,
   onFinish,
   obscured = false,
 }) {
@@ -174,8 +174,6 @@ export function OnboardingFlow({
   const [step, setStep] = useState(0)
   const [adopting, setAdopting] = useState(false)
   const [error, setError] = useState('')
-  const [selectedKey, setSelectedKey] = useState('')
-  const [testState, setTestState] = useState('idle')
   const [keyOpen, setKeyOpen] = useState(false)
   const [keyProvider, setKeyProvider] = useState(() => activeProvider?.id || providers[0]?.id || `preset:${PROVIDER_PRESETS[0].key}`)
   const [keyValue, setKeyValue] = useState('')
@@ -183,85 +181,73 @@ export function OnboardingFlow({
   const [keySaved, setKeySaved] = useState(false)
   const [keyError, setKeyError] = useState('')
   const [openRouterState, setOpenRouterState] = useState('idle')
+  const [thinkingModel, setThinkingModel] = useState('')
+  const [writingModel, setWritingModel] = useState('')
 
-  const modelOptions = useMemo(() => {
-    const options = []
-    for (const tool of tools) {
-      const models = Array.isArray(tool.models) ? tool.models : []
-      if (models.length) {
-        for (const model of models) {
-          options.push({
-            key: `${tool.id}:${model}`,
-            tool,
-            model,
-            title: model,
-            note: tool.label,
-            count: models.length,
-          })
-        }
-      } else if (tool.exec) {
-        // A CLI tool has no model list; its own id is the model the provider
-        // stores, so it is still a real choice.
-        options.push({
-          key: tool.id,
-          tool,
-          model: tool.id,
-          title: tool.label,
-          note: 'Command-line model',
-          count: 1,
-        })
-      }
-    }
-    return options
-  }, [tools])
+  // The role selectors are built from what the chosen provider actually has.
+  // A local tool contributed its model list when it was adopted; a key path
+  // stored one on the provider row.
+  const roleModels = useMemo(() => {
+    const providerModels = Array.isArray(activeProvider?.models) ? activeProvider.models : []
+    return Array.from(new Set([
+      activeProvider?.defaultModel,
+      ...providerModels,
+    ].filter(Boolean)))
+  }, [activeProvider])
 
-  const selected = modelOptions.find((option) => option.key === selectedKey) || null
-
+  // Entering the role step starts from whatever the provider already stores,
+  // so reopening the tour does not silently reset a deliberate split.
   useEffect(() => {
-    if (!modelOptions.length) {
-      if (selectedKey) setSelectedKey('')
-      return
-    }
-    if (!modelOptions.some((option) => option.key === selectedKey)) {
-      setSelectedKey(modelOptions[0].key)
-    }
-  }, [modelOptions, selectedKey])
-
-  useEffect(() => {
-    setTestState('idle')
-  }, [selectedKey])
+    if (step !== 3) return
+    setThinkingModel(activeProvider?.thinkingModel || '')
+    setWritingModel(activeProvider?.writingModel || '')
+  }, [step, activeProvider?.id, activeProvider?.thinkingModel, activeProvider?.writingModel])
 
   const next = () => setStep((value) => Math.min(value + 1, STEPS - 1))
   const back = () => setStep((value) => Math.max(value - 1, 0))
 
-  const connect = async () => {
-    if (keySaved || (providerReady && !selected)) {
-      onFinish?.()
-      return
-    }
-    if (!selected) return
+  // Connecting a tool does not ask which of its models to use. That question
+  // belongs in Settings, where the reader can search a 143-model CLI list; here
+  // one click has to be enough. The tool's own namespace wins when it has one,
+  // then its first model.
+  const adoptTool = async (tool) => {
+    if (!tool?.id) return
+    const models = Array.isArray(tool.models) ? tool.models : []
+    const model = models.find((entry) => entry.startsWith(`${tool.id}/`)) || models[0] || tool.id
     setAdopting(true)
     setError('')
-    const ok = await onAdoptTool?.(selected.tool, selected.model)
+    const ok = await onAdoptTool?.(tool, model)
     setAdopting(false)
     if (!ok) {
-      setError(`Could not connect to ${selected.tool.label}. Start the server and try again.`)
-      return
+      setError(`Could not connect to ${tool.label}. Start the server and try again.`)
+    }
+  }
+
+  const finish = async () => {
+    if (activeProvider && onSaveProvider) {
+      const patch = {}
+      if ((activeProvider.thinkingModel || '') !== thinkingModel) patch.thinkingModel = thinkingModel
+      if ((activeProvider.writingModel || '') !== writingModel) patch.writingModel = writingModel
+      if (Object.keys(patch).length) await onSaveProvider(patch)
     }
     onFinish?.()
   }
 
-  const test = async () => {
-    if (!selected || !onTestTool) return
-    setTestState('testing')
-    const ok = await onTestTool(selected.tool, selected.model)
-    setTestState(ok ? 'ok' : 'fail')
+  const usePuter = () => {
+    setKeyProvider('preset:puter')
+    setKeyOpen(true)
   }
 
   const providerChoices = [
     ...providers.map((provider) => ({ id: provider.id, label: provider.label || provider.id, preset: null })),
     ...PROVIDER_PRESETS.map((preset) => ({ id: `preset:${preset.key}`, label: preset.label, preset })),
   ]
+  const keyChoice = providerChoices.find((choice) => choice.id === keyProvider)
+  const keyBaseUrl = keyChoice?.preset?.baseUrl
+    || providers.find((provider) => provider.id === keyProvider)?.baseUrl
+    || ''
+  const keyIsOpenRouter = /openrouter\.ai/i.test(keyBaseUrl)
+  const keyIsPuter = /api\.puter\.com\/puterai\/openai\/v1/i.test(keyBaseUrl)
 
   const connectOpenRouter = async () => {
     setOpenRouterState('waiting')
@@ -292,7 +278,7 @@ export function OnboardingFlow({
             protocol: 'openai_chat',
             baseUrl: preset.baseUrl,
             defaultModel: preset.model,
-            models: [],
+            models: preset.models ?? [],
           })
         : null
       if (!row) {
@@ -402,60 +388,106 @@ export function OnboardingFlow({
         )}
 
         {step === 2 && (
-          <motion.div key="model" className="onboarding-v2-stage onboarding-v2-model" {...stage}>
+          <motion.div key="connectors" className="onboarding-v2-stage onboarding-v2-connectors" {...stage}>
             <div className="onboarding-v2-top-brand"><Wordmark top /></div>
             <div className="onboarding-v2-model-inner">
-              <h1>Pick a Model</h1>
+              <h1>Connect your tools</h1>
               <p className="onboarding-v2-lede">
-                This is what reads your draft when you ask it to write. It runs on
-                this machine unless you add a provider key later.
+                Pick a CLI agent or local server Quill can use, or connect a hosted
+                account. You can change the exact model later in Settings.
               </p>
 
               {toolsLoading ? (
-                <div className="onboarding-v2-model-list" aria-label="Looking for local models" aria-busy="true">
+                <div className="onboarding-v2-model-list" aria-label="Looking for local tools" aria-busy="true">
                   {Array.from({ length: 5 }, (_, index) => (
                     <div className="onboarding-v2-model onboarding-v2-model--skeleton" key={index}>
                       <span />
                     </div>
                   ))}
                 </div>
-              ) : modelOptions.length ? (
-                <div className="onboarding-v2-model-list" role="radiogroup" aria-label="Model">
-                  {modelOptions.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      role="radio"
-                      aria-checked={option.key === selectedKey}
-                      className="onboarding-tool onboarding-v2-model"
-                      data-on={option.key === selectedKey ? '' : undefined}
-                      onClick={() => { setSelectedKey(option.key); setKeySaved(false) }}
-                    >
-                      <span className="onboarding-v2-model-copy">
-                        <strong>{option.title}</strong>
-                        <small>{option.note}{option.count > 1 ? ` · ${option.count} models` : ''}</small>
-                      </span>
-                      <span className="onboarding-v2-model-check" aria-hidden="true">
-                        {option.key === selectedKey ? <Icon name="check" size={14} /> : null}
-                      </span>
-                    </button>
-                  ))}
-                </div>
               ) : (
-                <p className="onboarding-v2-empty">
-                  No local model server is running. Start Ollama or LM Studio and
-                  reopen this step, or add a provider key.
-                </p>
+                <div className="onboarding-v2-model-list" aria-label="Available connectors">
+                  {tools.length ? tools.map((tool) => {
+                    const active = activeProvider?.id === tool.id
+                    const modelCount = Array.isArray(tool.models) ? tool.models.length : 0
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        className="onboarding-tool onboarding-v2-model"
+                        data-on={active ? '' : undefined}
+                        disabled={adopting}
+                        onClick={() => adoptTool(tool)}
+                      >
+                        <span className="onboarding-v2-model-copy">
+                          <strong>{tool.label}</strong>
+                          <small>
+                            {modelCount
+                              ? `${modelCount} ${modelCount === 1 ? 'model' : 'models'} · change later in Settings`
+                              : tool.exec
+                                ? 'Command-line model'
+                                : 'Local server'}
+                          </small>
+                        </span>
+                        <span className="onboarding-v2-model-check" aria-hidden="true">
+                          {active ? <Icon name="check" size={14} /> : null}
+                        </span>
+                      </button>
+                    )
+                  }) : (
+                    <p className="onboarding-v2-empty">
+                      No local tools found. You can add one later in Settings.
+                    </p>
+                  )}
+                  <div className="onboarding-v2-model onboarding-v2-connector-row">
+                    <span className="onboarding-v2-model-copy">
+                      <strong>OpenRouter</strong>
+                      <small>Hosted models on your own OpenRouter account</small>
+                    </span>
+                    <div className="onboarding-v2-connector-actions">
+                      <button
+                        className="onboarding-v2-test"
+                        type="button"
+                        onClick={connectOpenRouter}
+                        disabled={openRouterState === 'waiting' || openRouterState === 'ready'}
+                      >
+                        {openRouterState === 'waiting' ? 'Waiting…' : openRouterState === 'ready' ? 'Connected' : 'Connect'}
+                      </button>
+                      <button
+                        className="onboarding-v2-test"
+                        type="button"
+                        onClick={() => { setKeyProvider('preset:openrouter'); setKeyOpen(true) }}
+                      >
+                        Use a key
+                      </button>
+                    </div>
+                  </div>
+                  <div className="onboarding-v2-model onboarding-v2-connector-row">
+                    <span className="onboarding-v2-model-copy">
+                      <strong>Puter</strong>
+                      <small>500+ models, billed to your Puter account</small>
+                    </span>
+                    <div className="onboarding-v2-connector-actions">
+                      <button
+                        className="onboarding-v2-test"
+                        type="button"
+                        onClick={() => openExternal('https://puter.com/dashboard#account')}
+                      >
+                        Token
+                      </button>
+                      <button className="onboarding-v2-test" type="button" onClick={usePuter}>
+                        Use Puter
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
-              {selected && onTestTool && (
-                <div className="onboarding-v2-testrow">
-                  <button className="onboarding-v2-test" type="button" onClick={test} disabled={testState === 'testing'}>
-                    {testState === 'testing' ? 'Testing…' : 'Test connection'}
-                  </button>
-                  {testState === 'ok' && <span className="onboarding-v2-test-ok">Reachable</span>}
-                  {testState === 'fail' && <span className="onboarding-v2-test-fail">No answer</span>}
-                </div>
+              {activeProvider && (
+                <p className="onboarding-v2-keynote">
+                  Chat model: {activeProvider.defaultModel || activeProvider.id}. Change it
+                  any time in Settings.
+                </p>
               )}
 
               {error && <p className="onboarding-v2-error" role="alert">{error}</p>}
@@ -463,12 +495,12 @@ export function OnboardingFlow({
               <motion.button
                 className="onboarding-v2-primary onboarding-next"
                 type="button"
-                disabled={adopting || (!selected && !providerReady)}
-                onClick={connect}
-                whileHover={reduced || (!selected && !providerReady) ? undefined : { y: -2 }}
-                whileTap={reduced || (!selected && !providerReady) ? undefined : { scale: 0.985 }}
+                disabled={adopting || (!activeProvider && !keySaved)}
+                onClick={next}
+                whileHover={reduced || adopting || (!activeProvider && !keySaved) ? undefined : { y: -2 }}
+                whileTap={reduced || adopting || (!activeProvider && !keySaved) ? undefined : { scale: 0.985 }}
               >
-                {adopting ? 'Connecting…' : providerReady && !selected ? 'Continue' : 'Continue'}
+                {adopting ? 'Connecting…' : 'Continue'}
               </motion.button>
 
               {keyOpen && (
@@ -483,35 +515,50 @@ export function OnboardingFlow({
                       <option key={choice.id} value={choice.id}>{choice.label}</option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    className="onboarding-v2-openrouter"
-                    onClick={connectOpenRouter}
-                    disabled={openRouterState === 'waiting' || keySaved}
-                  >
-                    <Icon name="sparkle" size={14} />
-                    {openRouterState === 'waiting'
-                      ? 'Waiting for your browser…'
-                      : keySaved
-                        ? 'OpenRouter connected'
-                        : 'Connect with OpenRouter'}
-                  </button>
-                  <span className="onboarding-v2-keynote">
-                    OpenRouter keys need a signed-in account.{' '}
-                    <button className="link-button" type="button" onClick={() => openExternal('https://openrouter.ai/sign-up')}>
-                      Create one first
+                  {keyIsOpenRouter && (
+                    <button
+                      type="button"
+                      className="onboarding-v2-openrouter"
+                      onClick={connectOpenRouter}
+                      disabled={openRouterState === 'waiting' || keySaved}
+                    >
+                      <Icon name="sparkle" size={14} />
+                      {openRouterState === 'waiting'
+                        ? 'Waiting for your browser…'
+                        : keySaved
+                          ? 'OpenRouter connected'
+                          : 'Connect with OpenRouter'}
                     </button>
-                    .
+                  )}
+                  {keyIsOpenRouter && (
+                    <span className="onboarding-v2-keynote">
+                      OpenRouter keys need a signed-in account.{' '}
+                      <button className="link-button" type="button" onClick={() => openExternal('https://openrouter.ai/sign-up')}>
+                        Create one first
+                      </button>
+                      .
+                    </span>
+                  )}
+                  {keyIsPuter && (
+                    <span className="onboarding-v2-keynote">
+                      Puter uses a personal auth token.{' '}
+                      <button className="link-button" type="button" onClick={() => openExternal('https://puter.com/dashboard#account')}>
+                        Create one in your dashboard
+                      </button>
+                      . Your Puter account covers the model usage.
+                    </span>
+                  )}
+                  <span className="onboarding-v2-divider">
+                    {keyIsOpenRouter ? 'or paste a key' : keyIsPuter ? 'then paste the token' : 'or paste a key'}
                   </span>
-                  <span className="onboarding-v2-divider">or paste a key</span>
-                  <label htmlFor="onboarding-api-key">API key</label>
+                  <label htmlFor="onboarding-api-key">{keyIsPuter ? 'Puter auth token' : 'API key'}</label>
                   <div className="onboarding-v2-keyrow">
                     <input
                       id="onboarding-api-key"
                       type="password"
                       autoComplete="off"
                       spellCheck="false"
-                      placeholder="sk-…"
+                      placeholder={keyIsPuter ? 'Puter auth token' : 'sk-…'}
                       value={keyValue}
                       onChange={(event) => { setKeyValue(event.target.value); setKeyError('') }}
                       onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); saveKey() } }}
@@ -521,7 +568,7 @@ export function OnboardingFlow({
                     </button>
                   </div>
                   {keySaved ? (
-                    <p className="onboarding-v2-keyok" role="status">Key saved. Continue to finish.</p>
+                    <p className="onboarding-v2-keyok" role="status">Key saved. Continue to choose role models.</p>
                   ) : keyError ? (
                     <p className="onboarding-v2-error" role="alert">{keyError}</p>
                   ) : (
@@ -532,11 +579,77 @@ export function OnboardingFlow({
                 </div>
               )}
 
+              {!keyOpen && keyError && (
+                <p className="onboarding-v2-error" role="alert">{keyError}</p>
+              )}
+
               <div className="onboarding-v2-alt-actions">
                 <button type="button" onClick={() => setKeyOpen((value) => !value)}>
                   {keyOpen ? 'Hide API key' : 'Add an API key'}
                 </button>
                 <button type="button" onClick={() => onFinish?.()}>Continue without an assistant</button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 3 && (
+          <motion.div key="roles" className="onboarding-v2-stage onboarding-v2-roles" {...stage}>
+            <div className="onboarding-v2-top-brand"><Wordmark top /></div>
+            <div className="onboarding-v2-model-inner">
+              <h1>Thinking and writing</h1>
+              <p className="onboarding-v2-lede">
+                Thinking handles research, planning and critique. Writing handles the
+                prose. Leave both on the chat model unless you want to split them.
+              </p>
+              {activeProvider ? (
+                <>
+                  <label className="onboarding-v2-role" htmlFor="onboarding-thinking-model">
+                    <span>Thinking model</span>
+                    <select
+                      id="onboarding-thinking-model"
+                      value={thinkingModel}
+                      onChange={(event) => setThinkingModel(event.target.value)}
+                    >
+                      <option value="">Same as chat model</option>
+                      {roleModels.map((option) => (
+                        <option key={`thinking-${option}`} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="onboarding-v2-role" htmlFor="onboarding-writing-model">
+                    <span>Writing model</span>
+                    <select
+                      id="onboarding-writing-model"
+                      value={writingModel}
+                      onChange={(event) => setWritingModel(event.target.value)}
+                    >
+                      <option value="">Same as chat model</option>
+                      {roleModels.map((option) => (
+                        <option key={`writing-${option}`} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="onboarding-v2-keynote">
+                    Chat model: {activeProvider.defaultModel || activeProvider.id}
+                  </p>
+                </>
+              ) : (
+                <p className="onboarding-v2-empty">
+                  No provider is connected yet. You can choose role models later in Settings.
+                </p>
+              )}
+              <motion.button
+                className="onboarding-v2-primary onboarding-next"
+                type="button"
+                onClick={finish}
+                whileHover={reduced ? undefined : { y: -2 }}
+                whileTap={reduced ? undefined : { scale: 0.985 }}
+              >
+                Finish
+              </motion.button>
+              <div className="onboarding-v2-alt-actions">
+                <button type="button" onClick={() => onFinish?.()}>Finish without choosing</button>
               </div>
             </div>
           </motion.div>

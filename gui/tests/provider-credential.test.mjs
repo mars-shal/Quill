@@ -14,6 +14,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { awaitBoot, calls, clickAndSettle, root, settle, tick, typeAndSettle } from './support/dom-harness.mjs'
+import { PROVIDER_PRESETS } from '../src/library/SettingsPage.jsx'
 
 // main.jsx mounts itself into #root on import.
 await import('../src/main.jsx')
@@ -134,6 +135,18 @@ test('the connectors section offers OpenRouter sign-in', async () => {
   assert.match(panel.textContent, /Connect with OpenRouter/, 'the sign-in action is present')
   assert.match(panel.textContent, /Manage access/, 'the account link is present')
   assert.match(panel.textContent, /credential vault/i, 'and the storage promise is stated')
+  assert.match(panel.textContent, /Puter/, 'Puter is offered as a connector')
+  assert.match(panel.textContent, /user-pays/i, 'and its billing model is named')
+  assert.match(panel.textContent, /Create token/, 'with the dashboard token path')
+})
+
+test('Puter is a preset for the user-pays OpenAI-compatible endpoint', () => {
+  const puter = PROVIDER_PRESETS.find((preset) => preset.key === 'puter')
+  assert.ok(puter, 'the Provider menu offers Puter')
+  assert.equal(puter.baseUrl, 'https://api.puter.com/puterai/openai/v1')
+  assert.equal(puter.model, 'gpt-5.4-nano')
+  assert.ok(puter.models.includes('gpt-5.4-nano'), 'the starter catalogue includes the default')
+  assert.ok(puter.models.includes('gpt-5.5'), 'and other models the endpoint serves')
 })
 
 test('thinking and writing models default to the chat model', async () => {

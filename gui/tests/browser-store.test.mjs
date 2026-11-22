@@ -273,3 +273,15 @@ test('only an absent pipeline is reported as the writing service being down', ()
     'a timeout is not an absent service',
   )
 })
+
+test('an OpenRouter daily-quota body becomes one actionable sentence', () => {
+  const raw = new Error(
+    "Error code: 429 - {'error': {'message': 'Rate limit exceeded: free-models-per-day. "
+    + "Add 10 credits to unlock 1000 free model requests per day', 'code': 429, "
+    + "'previous_errors': [{'code': 429}, {'code': 429}]}}",
+  )
+  const message = store.describeFailure(raw)
+  assert.match(message, /OpenRouter free tier daily limit reached/)
+  assert.doesNotMatch(message, /[{}]/, 'the raw provider payload must not reach the panel')
+  assert.doesNotMatch(message, /previous_errors/)
+})

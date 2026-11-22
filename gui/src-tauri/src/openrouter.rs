@@ -17,7 +17,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use crate::error::{AppError, AppResult};
-use crate::providers::{self, NewProvider, Provider, Protocol, ProviderPatch, Vendor};
+use crate::providers::{self, NewProvider, Protocol, Provider, ProviderPatch, Vendor};
 use crate::secrets;
 
 const PROVIDER_ID: &str = "openrouter";
@@ -47,7 +47,9 @@ fn auth_url(callback: &str, challenge: &str, state: &str) -> AppResult<String> {
             ("key_label", "Quill"),
         ],
     )
-    .map_err(|error| AppError::Other(format!("cannot build the OpenRouter sign-in URL: {error}")))?;
+    .map_err(|error| {
+        AppError::Other(format!("cannot build the OpenRouter sign-in URL: {error}"))
+    })?;
     Ok(url.to_string())
 }
 
@@ -90,7 +92,9 @@ async fn wait_for_code(listener: TcpListener, expected_state: &str) -> AppResult
 
         if let Some(denial) = denial {
             let _ = write_page(&mut stream, false, "OpenRouter sign-in was cancelled.").await;
-            return Err(AppError::Other(format!("OpenRouter sign-in was cancelled: {denial}")));
+            return Err(AppError::Other(format!(
+                "OpenRouter sign-in was cancelled: {denial}"
+            )));
         }
         // A browser or a health probe may open the callback without a code.
         // That is not the answer; keep waiting rather than ending the attempt.
@@ -99,14 +103,27 @@ async fn wait_for_code(listener: TcpListener, expected_state: &str) -> AppResult
                 &mut stream,
                 true,
                 "Waiting for OpenRouter to finish authorizing Quill…",
-            ).await;
+            )
+            .await;
             continue;
         };
         if state.as_deref() != Some(expected_state) {
-            let _ = write_page(&mut stream, false, "That sign-in response did not match this request.").await;
-            return Err(AppError::Other("OpenRouter sign-in state did not match".into()));
+            let _ = write_page(
+                &mut stream,
+                false,
+                "That sign-in response did not match this request.",
+            )
+            .await;
+            return Err(AppError::Other(
+                "OpenRouter sign-in state did not match".into(),
+            ));
         }
-        let _ = write_page(&mut stream, true, "OpenRouter is connected. You can close this tab.").await;
+        let _ = write_page(
+            &mut stream,
+            true,
+            "OpenRouter is connected. You can close this tab.",
+        )
+        .await;
         return Ok(code);
     }
 }
@@ -232,7 +249,11 @@ pub async fn connect(_app: &AppHandle, pool: &SqlitePool) -> AppResult<Provider>
     let active = providers::set_active(pool, PROVIDER_ID).await?;
     // `set_active` returns the row it activated; keep the provider shape the
     // caller expects even if a future version stops returning it.
-    Ok(if active.id == PROVIDER_ID { active } else { provider })
+    Ok(if active.id == PROVIDER_ID {
+        active
+    } else {
+        provider
+    })
 }
 
 pub async fn disconnect(pool: &SqlitePool) -> AppResult<()> {

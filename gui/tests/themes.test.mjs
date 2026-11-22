@@ -435,6 +435,38 @@ test('no seeded token value would break a CSS declaration', () => {
   }
 })
 
+test('component ink is borrowed from the theme, not hardcoded to one palette', () => {
+  // These two rules were written for the dark card's own colours and then
+  // reused where the theme's accent had replaced its background. The result was
+  // dark ink on a dark accent in the light theme, and on the near-black accent
+  // in Paper. The rule has to name the measured pair instead of either literal.
+  const css = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '')
+  const rule = (selector) => css.match(
+    new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`),
+  )?.[1] || ''
+
+  const modePill = rule('.mode-card.is-dark.is-selected .mode-card-state')
+  assert.ok(modePill, 'the selected dark mode-card pill must have a rule')
+  assert.match(modePill, /color:\s*var\(--on-accent\)/, 'the pill label must use the theme ink')
+  assert.doesNotMatch(modePill, /color:\s*#1d2026/, 'the pill label must not be the dark card ink')
+
+  const primary = rule('.soft-button.primary')
+  assert.match(primary, /color:\s*var\(--on-accent\)/, 'a primary button label is the measured ink')
+  assert.match(primary, /background:\s*var\(--accent\)/, 'and sits on the theme accent')
+
+  // The pointer state has to be visible on a near-black accent as well as a
+  // pastel one; the lift is the part that does not depend on the accent value.
+  const primaryHover = rule('.soft-button.primary:hover')
+  assert.match(primaryHover, /background:\s*var\(--accent-hover\)/)
+  assert.match(primaryHover, /transform:\s*translateY\(-1px\)/)
+
+  // The same class of leak, in two older rules: a focus border and a portrait
+  // glow pinned to the default blue, and a hover border that assumed a light
+  // surface. None of them can be judged from the light theme alone.
+  assert.doesNotMatch(css, /rgba\(61,\s*125,\s*255/, 'focus and portrait colours must follow --accent')
+  assert.doesNotMatch(css, /border-color:\s*rgba\(0,\s*0,\s*0,\s*0\.16\)/, 'hover borders must not assume a white page')
+})
+
 /**
  * The preset rows out of every migration that seeds one.
  *
