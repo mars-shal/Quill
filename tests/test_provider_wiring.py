@@ -65,7 +65,11 @@ def _per_call_env_models():
     it was unset -- while the client it used had been built from the provider.
 
     A `cfg.get(...) or os.getenv(...)` pair is fine; the provider still wins."""
-    pattern = re.compile(r"model\s*=\s*os\.(?:getenv|environ)")
+    # The lookbehind keeps `self._thinking_model = os.environ...` out of the
+    # result. That fallback is intentional for a provider-less sidecar, and it
+    # was being reported because the attribute name ends in "model"; only a
+    # bare `model=` argument is the bug this scans for.
+    pattern = re.compile(r"(?<![_\w])model\s*=\s*os\.(?:getenv|environ)")
     found = []
     for folder in ("components", "utilis"):
         for path in sorted(pathlib.Path(folder).glob("*.py")):

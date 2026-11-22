@@ -10,6 +10,7 @@ import inspect
 import os
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -19,14 +20,15 @@ from components.orchestrator import (
     Task, TaskRouter, _format_chunks, _research_effort, _strip_generated_noise,
     document_type_style, infer_document_type,
     is_document_edit_request, is_document_question,
-    is_document_transform_request, is_format_request,
+    is_document_transform_request, is_format_request, normalize_task_type,
 )
 from components.researchEngine import ResearchEngine as R
-from components.researchEngine import _entity_confirmed, _is_informative
+from components.researchEngine import _entity_confirmed, _is_informative, _usable_query
 from utilis.pydanticModels import SageConcept
 from utilis.store import SqliteDatabase
-from utilis.ratelimit import RateLimitError, TokenBudget, run_with_retry
+from utilis.ratelimit import RateLimitError, TokenBudget, run_with_retry, _quota_message
 from utilis.model import Agent as _Agent, _credit_message, _is_credit_error
+import utilis.model as _model_module
 
 RESULTS: list[tuple[bool, str, str]] = []
 
@@ -285,6 +287,29 @@ chk("the credit message drops the nested provider blob",
     "previous_errors" not in _credit_message(_credit_exc, "openrouter/free")
     and "2,871" in _credit_message(_credit_exc, "openrouter/free")
     and "openrouter.ai/settings/credits" in _credit_message(_credit_exc, "openrouter/free"))
+
+_reset_ms = int((time.time() + 3600) * 1000)
+_quota_exc = RuntimeError(
+    "Error code: 429 - {'error': {'message': 'Rate limit exceeded: "
+    "free-models-per-day. Add 10 credits to unlock 1000 free model requests per "
+    "day: https://openrouter.ai/settings/credits?utm_source=api&utm_campaign="
+    "free_daily_limit', 'code': 429, 'metadata': {'headers': "
+    "{'X-RateLimit-Limit': '50', 'X-RateLimit-Remaining': '0', "
+    f"'X-RateLimit-Reset': '{_reset_ms}'}}, 'previous_errors': "
+    "[{'code': 429}, {'code': 429}]}}"
+)
+_quota_msg = _quota_message(_quota_exc)
+chk("daily quota message drops the raw provider body",
+    len(_quota_msg) < 240
+    and "{" not in _quota_msg
+    and "previous_errors" not in _quota_msg,
+    _quota_msg)
+chk("daily quota message names the limit, reset and action",
+    "OpenRouter free tier" in _quota_msg
+    and "50 requests/day" in _quota_msg
+    and "Resets at" in _quota_msg
+    and "openrouter.ai/settings/credits" in _quota_msg,
+    _quota_msg)
 _saved_writing = os.environ.get("QUILL_WRITING_MODEL")
 os.environ["QUILL_WRITING_MODEL"] = "qwen/qwen3.8-27b"
 try:
@@ -403,6 +428,129 @@ finally:
         os.environ.pop("QUILL_NONINTERACTIVE", None)
     else:
         os.environ["QUILL_NONINTERACTIVE"] = _previous_noninteractive
+
+
+# --- SageConcept tolerates a null/empty completion ---------------------------
+# The live failure: `{"concept": null}` (or no visible content at all) reached
+# pydantic and raised "Input should be a valid string", aborting the run before
+# the concept engine could use its fallback.
+chk("null concept coerces to empty",
+    SageConcept(concept=None).concept == "")
+chk("null concept keeps a usable confidence",
+    SageConcept(concept=None, confidence=None).confidence == 0.5)
+chk("wrapped concept is unwrapped",
+    SageConcept(**{"concept": {"name": "A lighthouse", "summary": "storm log"}}).concept
+    == "A lighthouse")
+chk("out-of-range confidence is clamped",
+    SageConcept(concept="x", confidence=9).confidence == 1.0)
+
+
+_null_agent = _Agent.__new__(_Agent)
+_null_agent._model = "test-model"
+_null_agent._thinking_model = ""
+_null_agent._writing_model = ""
+_null_agent.model = lambda *_a, **_k: None  # type: ignore[method-assign]
+_sage = _null_agent.Sage("a lighthouse keeper logs the storm")
+chk("Sage survives a null completion", _sage.concept == "", repr(_sage.concept))
+
+
+# --- small-model schema echoes must not become the research anchor ------------
+def _agent_returning(payload):
+    agent = _Agent.__new__(_Agent)
+    agent._model = "test-model"
+    agent._thinking_model = "test-model"
+    agent._writing_model = "test-model"
+    agent.model = lambda *_a, **_k: payload  # type: ignore[method-assign]
+    return agent
+
+
+for _payload in (
+    '{"concept": "<UNIFIED OR EXTRACTED CONCEPT>", "confidence": 0.9}',
+    "Unified or Extracted Concept:",
+    '{"concept": "concept", "confidence": 0.8}',
+):
+    _echo = _agent_returning(_payload).Sage("development of a records system")
+    chk(f"schema echo rejected: {_payload[:28]!r}",
+        _echo.concept == "", repr(_echo.concept))
+
+_merged = _agent_returning(
+    '{"concept": "<MERGED CONCEPT>", "confidence": 0.7}'
+).MergeConcepts("distributed records system", ["transcripts", "encryption"])
+chk("merge keeps the master on a schema echo",
+    _merged.concept == "distributed records system", repr(_merged.concept))
+
+
+class _EmptySage:
+    def Sage(self, *_a, **_k):
+        return SageConcept(concept="", confidence=0.0)
+
+
+_ce_empty = C(agent=_EmptySage(), embedder=None)
+_prompt = "development of a distributed student records system"
+_r_empty = _ce_empty._prompt_concept("Doc Title", {}, prompt_hint=_prompt)
+chk("empty concept falls back to the user prompt",
+    _r_empty["concept"] == _prompt, repr(_r_empty))
+
+
+chk("DEVELOPMENT is a writing request",
+    normalize_task_type("DEVELOPMENT") == "WRITE")
+chk("development prompt maps to write",
+    normalize_task_type("development of a distributed records system") == "WRITE")
+chk("unknown label uses the request",
+    normalize_task_type("???", "write an essay about records") == "WRITE")
+chk("search without a draft becomes research",
+    normalize_task_type("SEARCH", allow_search=False) == "RESEARCH")
+chk("draft question is a rewrite",
+    normalize_task_type("???", "summarize this draft", has_draft=True) == "REWRITE")
+chk("template query is not searchable",
+    not _usable_query("<key milestone event> Unified or Extracted Concept:"))
+chk("real query is searchable",
+    _usable_query("distributed student records transcript system"))
+
+
+# --- CLI providers pass a selected model id through ---------------------------
+class _FakeCompleted:
+    returncode = 0
+    stdout = '{"type":"text","part":{"text":"ok"}}\n'
+    stderr = ""
+
+
+_cli_calls = []
+
+
+def _fake_cli_run(argv, **_kwargs):
+    _cli_calls.append(list(argv))
+    return _FakeCompleted()
+
+
+_original_run = _model_module.subprocess.run
+_model_module.subprocess.run = _fake_cli_run
+try:
+    _cli_agent = _Agent({
+        "protocol": "cli",
+        "base_url": "opencode run --format json",
+        "model": "opencode/big-pickle",
+    })
+    _cli_answer = _cli_agent.model("hello")
+    _cli_selected = list(_cli_calls[0])
+
+    _model_module.subprocess.run = _fake_cli_run
+    _cli_default_agent = _Agent({
+        "protocol": "cli",
+        "base_url": "opencode run --format json",
+        "model": "opencode",
+    })
+    _cli_default_agent.model("hello")
+    _cli_default = list(_cli_calls[-1])
+finally:
+    _model_module.subprocess.run = _original_run
+
+chk("CLI model ids are passed with --model",
+    "--model" in _cli_selected and "opencode/big-pickle" in _cli_selected,
+    " ".join(_cli_selected))
+chk("CLI pseudo-model keeps the tool's own default",
+    "--model" not in _cli_default, " ".join(_cli_default))
+chk("CLI jsonl answer is parsed", _cli_answer == "ok", repr(_cli_answer))
 
 
 def main() -> int:

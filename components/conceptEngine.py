@@ -320,6 +320,15 @@ class ConceptEngine:
         concept = str(concept or "").strip()
         if concept and concept.lower() == title.strip().lower():
             concept = ""
+        if not concept:
+            # A weak local model can answer with the Sage prompt's own schema
+            # label (or nothing); `Agent.Sage` now reports that as empty. The
+            # reader's request is the correct anchor and is always available
+            # here, and unlike the title it is what they actually asked for.
+            concept = user_prompt[:240].strip()
+            logger.warning(
+                "concept source: no distilled concept; anchoring on the user prompt"
+            )
         logger.info("concept source: seed prompt={!r} concept={!r}", user_prompt[:60], concept[:60])
         return {
             "concept": concept,

@@ -25,9 +25,11 @@ Usage::
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from collections import deque
+from datetime import datetime
 from functools import wraps
 from typing import Callable, Optional
 
@@ -215,13 +217,88 @@ class DailyQuotaExceeded(RuntimeError):
     """Raised instead of burning retries against an exhausted daily allowance."""
 
 
-def _quota_hint(exc: BaseException) -> str:
-    return (
-        "\n\nThe provider's DAILY token/request allowance for this model is spent. "
-        "Retrying cannot help: the allowance resets on a calendar boundary, not "
-        "in seconds. Stop the run, then either wait for the reset, upgrade the "
-        "tier, or point QUILL at a different model or key."
+def _quota_limit(exc: BaseException) -> Optional[int]:
+    match = re.search(
+        r"X-RateLimit-Limit['\"]?\s*:\s*['\"]?(\d+)", str(exc), re.IGNORECASE
     )
+    return int(match.group(1)) if match else None
+
+
+def _quota_reset(exc: BaseException) -> Optional[datetime]:
+    """The provider's reset instant, parsed from the body or the headers.
+
+    OpenRouter puts it inside ``metadata.headers`` in the error body; the OpenAI
+    SDK often also exposes the same header on the response. Both shapes carry
+    epoch milliseconds, so accept seconds as well.
+    """
+    raw = ""
+    match = re.search(
+        r"X-RateLimit-Reset['\"]?\s*:\s*['\"]?(\d{10,13})", str(exc), re.IGNORECASE
+    )
+    if match:
+        raw = match.group(1)
+    else:
+        headers = getattr(getattr(exc, "response", None), "headers", {}) or {}
+        for key in ("X-RateLimit-Reset", "x-ratelimit-reset"):
+            value = headers.get(key)
+            if value:
+                raw = str(value)
+                break
+    if not raw:
+        return None
+    try:
+        stamp = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if stamp > 10**12:
+        stamp /= 1000.0
+    try:
+        return datetime.fromtimestamp(stamp).astimezone()
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _quota_message(exc: BaseException) -> str:
+    """A short, actionable sentence instead of the provider's raw error body.
+
+    A 429 from OpenRouter repeats its own message once per upstream attempt
+    (``previous_errors``), so the raw exception can run to several hundred
+    characters of JSON. None of that helps the reader: the only facts they need
+    are which allowance is spent, when it resets, and what to do next.
+    """
+    text = str(exc).lower()
+    if "openrouter" in text or "free-models-per-day" in text:
+        provider = "OpenRouter free tier"
+        action = (
+            "Switch to another model/key, or add credits at "
+            "openrouter.ai/settings/credits."
+        )
+    elif "groq" in text:
+        provider = "Groq"
+        action = "Switch to another model/key, or wait for the reset."
+    else:
+        provider = "The provider"
+        action = "Switch to another model/key, or wait for the reset."
+
+    limit = _quota_limit(exc)
+    spent = (
+        f"daily limit reached ({limit} requests/day)"
+        if limit
+        else "daily allowance spent"
+    )
+    reset = _quota_reset(exc)
+    if reset is not None:
+        seconds = int((reset - datetime.now().astimezone()).total_seconds())
+        if seconds > 0:
+            hours, remainder = divmod(seconds, 3600)
+            minutes = remainder // 60
+            left = f"in {hours}h {minutes:02d}m" if hours else f"in {minutes}m"
+            reset_text = f" Resets at {reset:%H:%M %Z} ({left})."
+        else:
+            reset_text = " The reset time has passed; try again."
+    else:
+        reset_text = " It resets at the provider's daily boundary."
+    return f"{provider} {spent}.{reset_text} {action}"
 
 
 def _retry_after(exc: BaseException) -> Optional[float]:
@@ -265,7 +342,7 @@ def run_with_retry(
             except Exception as exc:
                 if is_exhausted_quota(exc):
                     logger.error(f"[ratelimit] daily allowance exhausted: {exc}")
-                    raise DailyQuotaExceeded(str(exc) + _quota_hint(exc)) from exc
+                    raise DailyQuotaExceeded(_quota_message(exc)) from exc
                 # A non-retryable error (402 credits, 400 request shape,
                 # 404 model) must propagate as itself. Wrapping it in a
                 # RateLimitError hid the provider's own reason behind

@@ -260,6 +260,58 @@ def _usage_counts(response) -> dict | None:
     }
 
 
+# A small model can answer a schema question with the schema's own placeholder.
+# The Sage prompt asks for {"concept": "<UNIFIED OR EXTRACTED CONCEPT>"}, and
+# qwen2:0.5b returned that label verbatim. Accepted as a concept it became the
+# anchor for every research query, so eight fetched pages were all off-topic and
+# the writer correctly halted with relevant_pages=0. A label is not an answer.
+_CONCEPT_PLACEHOLDERS = {
+    "unifiedorextractedconcept",
+    "extractedconcept",
+    "unifiedconcept",
+    "mergedconcept",
+    "concept",
+    "theconcept",
+    "coreconcept",
+    "primaryconcept",
+    "conceptname",
+    "na",
+    "none",
+    "null",
+    "unknown",
+    "tbd",
+    "todo",
+}
+
+
+def _is_concept_placeholder(value: object) -> bool:
+    """Whether a concept reply is empty or a verbatim schema placeholder."""
+    text = str(value or "").strip()
+    if not text:
+        return True
+    # The prompt's shape uses angle brackets; a model can return just the token.
+    if text.startswith("<") and text.endswith(">"):
+        return True
+    normalized = re.sub(r"[^a-z0-9]+", "", text.lower())
+    return normalized in _CONCEPT_PLACEHOLDERS
+
+
+def _sage_concept(response: object, fallback: str = "", confidence: float = 0.0) -> SageConcept:
+    """Parse a Sage reply and reject a schema echo.
+
+    ``fallback`` is what the caller knows independently: the user's request in
+    the concept engine, or the master concept in a merge. An echo must never
+    become the thing the rest of the pipeline searches for.
+    """
+    try:
+        concept = SageConcept(**json.loads(response))  # type: ignore[arg-type]
+    except (json.JSONDecodeError, TypeError, ValueError):
+        concept = SageConcept(concept=response)
+    if _is_concept_placeholder(concept.concept):
+        return SageConcept(concept=fallback, confidence=confidence if fallback else 0.0)
+    return concept
+
+
 def _estimated_usage(prompt: str, instructions: str, output: str = "") -> dict:
     """A best-effort split when the provider reports no usage at all."""
     prompt_tokens = estimate_tokens(prompt) + estimate_tokens(instructions)
@@ -460,7 +512,11 @@ class Agent:
                 kwargs["temperature"] = temperature
             kwargs.update(_reasoning_kwargs(name))
             out = self.OpenAi.responses.create(**kwargs)
-            text = out.output_text
+            # `output_text` is None when a reasoning model spent the whole turn
+            # on hidden reasoning. Returning None here made every caller that
+            # treats a reply as a string fail; an empty string is the honest
+            # representation of "no visible answer".
+            text = out.output_text or ""
             counts = _usage_counts(out) or _estimated_usage(prompt, instructions, text)
             if not counts["estimated"] and not counts["prompt"] and not counts["completion"]:
                 counts["prompt"] = estimate_tokens(prompt) + estimate_tokens(instructions)
@@ -480,7 +536,10 @@ class Agent:
             kwargs["temperature"] = temperature
         kwargs.update(_reasoning_kwargs(name))
         resp = self.OpenAi.chat.completions.create(**kwargs)
-        text = resp.choices[0].message.content
+        # `message.content` is null for a completion that carried only hidden
+        # reasoning or a refusal. Coercing at the transport keeps `Sage`,
+        # `compress` and every other caller from calling `.strip()` on None.
+        text = resp.choices[0].message.content or ""
         counts = _usage_counts(resp) or _estimated_usage(prompt, instructions, text)
         if not counts["estimated"] and not counts["prompt"] and not counts["completion"]:
             counts["prompt"] = estimate_tokens(prompt) + estimate_tokens(instructions)
@@ -507,7 +566,15 @@ class Agent:
         The CLI's own login is the credential -- Quill never passes a key.
         """
         message = f"{instructions}\n\n{prompt}".strip() if instructions else prompt
-        argv = shlex.split(self.base_url) + [message]
+        argv = shlex.split(self.base_url)
+        # The provider id is the transport ("opencode"), not a model. When the
+        # reader picked one of the CLI's real ids, hand it over with the flag
+        # these tools share. The old pseudo-model still runs with the CLI's own
+        # configured default, so existing rows keep working unchanged.
+        tool = os.path.basename(argv[0]).lower() if argv else ""
+        if name and "--model" not in argv and name.lower() != tool:
+            argv += ["--model", name]
+        argv.append(message)
         timeout = int(os.environ.get("QUILL_CLI_TIMEOUT", "600"))
         logger.debug(f"[cli] exec: {argv[0]} (turn as {name})")
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
@@ -651,6 +718,11 @@ class Agent:
                 " Answer directly in the required format using only your own knowledge."
             )
             output = run_with_retry(lambda: _call(corrective))()
+        if not isinstance(output, str):
+            # A provider can omit the visible completion entirely (hidden
+            # reasoning, refusal, tool-only turn). Downstream code treats this
+            # as text; None would fail at the first `.strip()` or `json.loads`.
+            output = ""
         log_block(f"LLM RESPONSE [{model_name}]", output)
         return output
 
@@ -830,10 +902,7 @@ class Agent:
             combined_prompt = prompt
 
         response = self.model(combined_prompt, system_prompt=system_prompt, model_name=self._resolve_thinking())
-        try:
-            return SageConcept(**json.loads(response))
-        except (json.JSONDecodeError, TypeError, ValueError):
-            return SageConcept(concept=response)
+        return _sage_concept(response)
 
     @timed("Agent.MergeConcepts")
     def MergeConcepts(self, master: str, concepts: list[str]) -> SageConcept:
@@ -861,10 +930,7 @@ Respond with valid JSON only, no other text, in this exact shape:
         listing = "\n".join(f"- {c}" for c in concepts)
         prompt = f"MASTER CONCEPT:\n{master}\n\nSUPPORTING CONCEPTS:\n{listing}"
         response = self.model(prompt, system_prompt=system_prompt, model_name=self._resolve_thinking())
-        try:
-            return SageConcept(**json.loads(response))
-        except (json.JSONDecodeError, TypeError, ValueError):
-            return SageConcept(concept=response)
+        return _sage_concept(response, fallback=master, confidence=1.0)
 
     @timed("Agent.Scout")
     def Scout(self, concept: str, research: str) -> ScoutReport:

@@ -28,6 +28,43 @@ class SageConcept(pydantic.BaseModel):
     concept: str = ""
     confidence: float = 0.5
 
+    @pydantic.field_validator("concept", mode="before")
+    @classmethod
+    def _coerce_concept(cls, value: object) -> str:
+        """Never reject a provider that answers with a null concept.
+
+        A reasoning model can legitimately finish with no visible content (the
+        whole completion was hidden chain-of-thought), and an empty JSON field
+        comes back as ``None``. Pydantic's string type then raised
+        ``Input should be a valid string`` and the whole run stopped before the
+        concept engine could fall back. An empty concept is recoverable; an
+        exception here is not.
+        """
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        # Some models wrap the answer: {"concept": {"name": "...", "summary": "..."}}.
+        if isinstance(value, dict):
+            for key in ("concept", "name", "title", "summary", "description", "text"):
+                nested = value.get(key)
+                if isinstance(nested, str) and nested.strip():
+                    return nested
+            return ""
+        return str(value)
+
+    @pydantic.field_validator("confidence", mode="before")
+    @classmethod
+    def _coerce_confidence(cls, value: object) -> float:
+        """Clamp a missing or out-of-range confidence to something usable."""
+        if value is None:
+            return 0.5
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            return 0.5
+        return min(1.0, max(0.0, score))
+
 
 class ScoutReport(pydantic.BaseModel):
     status: str = "done"  # done | needs_user_input

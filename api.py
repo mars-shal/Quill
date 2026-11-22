@@ -34,6 +34,7 @@ from loguru import logger
 
 from components.orchestrator import (
     TaskRouter, is_document_question, is_document_transform_request,
+    normalize_task_type,
 )
 from components.sessionManager import SessionManager
 
@@ -862,12 +863,11 @@ def _route_chat_turn(
     if not hasattr(response, "task"):
         raise RuntimeError("the classifier returned no task type")
 
-    task_type = str(response.task or "").strip().upper()
-    if not task_type:
-        raise RuntimeError("the classifier returned an empty task type")
-
-    if task_type not in _DOCUMENT_TASKS + ("RESEARCH", "EXPLAIN", "SEARCH", "SMALLTALK"):
-        raise RuntimeError(f"unsupported task type {task_type!r}")
+    task_type = normalize_task_type(
+        response.task, task,
+        has_draft=bool(draft.strip()),
+        allow_search=bool(draft.strip()),
+    )
 
     return _chat_dispatch(
         provider, task_type, task, draft,

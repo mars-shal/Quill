@@ -379,6 +379,25 @@ Rules:
 - Queries must be specific, searchable strings. No prose, no fences."""
 
 
+# A model that echoes the plan's JSON placeholders produces queries like
+# "<key milestone event> Unified or Extracted Concept:". Those strings reliably
+# return pages about something else, which then fail the relevance gate; the
+# run looks as if the web had no evidence. Drop them and let the anchored query
+# carry the plan.
+_PLACEHOLDER_QUERY = re.compile(
+    r"<[^<>]+>|\bunified\s+or\s+extracted\s+concept\b|\bextracted\s+concept\b",
+    re.IGNORECASE,
+)
+
+
+def _usable_query(query: object) -> bool:
+    """Whether a plan query is a real search string rather than template text."""
+    text = str(query or "").strip()
+    if not text:
+        return False
+    return _PLACEHOLDER_QUERY.search(text) is None
+
+
 class ResearchEngine:
     # Bump to invalidate every cached entity anchor when confirmation changes.
     ENTITY_CACHE_VERSION = "v2"
@@ -1116,6 +1135,25 @@ Respond with JSON only:
                 anchor_all(strat.sub_queries or [])
 
         anchor_all(plan.strategies)
+
+        def prune(strategies):
+            kept = []
+            for strat in strategies:
+                if not _usable_query(strat.query):
+                    continue
+                strat.sub_queries = prune(strat.sub_queries or [])
+                kept.append(strat)
+            return kept
+
+        plan = ResearchPlan(strategies=prune(plan.strategies))
+        if not plan.strategies:
+            logger.warning(
+                "research planner: every model query was template text; "
+                "using the anchored query"
+            )
+            return ResearchPlan(
+                strategies=[ResearchStrategy(query=self._anchor(concept, entity), goal="Main search")]
+            )
         logger.info(
             "anchored plan for {}: {}",
             entity,

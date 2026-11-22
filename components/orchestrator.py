@@ -1192,6 +1192,84 @@ class Task:
         return {"answer": answer, "research": payload}
 
 
+# The classifier is a second model, not an enum. A small local model answers
+# "development of a ..." with "DEVELOPMENT" instead of one of the six labels,
+# and the old dispatch raised "unsupported task type" after the research had
+# already run. The label is advice: map the obvious synonyms, then read the
+# request itself and default to WRITE, which is what this app is for.
+_TASK_TYPE_GROUPS = {
+    "WRITE": (
+        "WRITE", "WRITING", "DRAFT", "GENERATE", "CREATE", "COMPOSE",
+        "DEVELOP", "DEVELOPMENT", "BUILD", "IMPLEMENT", "IMPLEMENTATION",
+        "DESIGN", "PLAN", "PROPOSAL", "DOCUMENT", "DOCUMENTATION",
+        "REPORT", "ESSAY", "ARTICLE", "THESIS", "DISSERTATION", "PAPER",
+    ),
+    "REWRITE": (
+        "REWRITE", "EDIT", "REVISE", "REVISION", "IMPROVE", "REWORD",
+        "PARAPHRASE", "SHORTEN", "EXPAND", "FORMAT", "FORMATTING",
+    ),
+    "RESEARCH": (
+        "RESEARCH", "INVESTIGATE", "INVESTIGATION", "STUDY", "SURVEY",
+        "GATHER", "COLLECT",
+    ),
+    "CRITIQUE": (
+        "CRITIQUE", "ANALYZE", "ANALYSIS", "ANALYSE", "EVALUATE",
+        "EVALUATION", "REVIEW", "ASSESS", "ASSESSMENT",
+    ),
+    "EXPLAIN": (
+        "EXPLAIN", "EXPLANATION", "TEACH", "DEFINE", "DEFINITION",
+        "DESCRIBE", "DESCRIPTION", "SUMMARIZE", "SUMMARY",
+    ),
+    "SMALLTALK": ("SMALLTALK", "CHAT", "GREETING", "GREET", "HELLO"),
+    "SEARCH": ("SEARCH", "LOOKUP", "FIND", "QUESTION", "ASK", "QA", "QUERY"),
+}
+_TASK_ALIASES = {
+    alias: canonical
+    for canonical, aliases in _TASK_TYPE_GROUPS.items()
+    for alias in aliases
+}
+
+
+def normalize_task_type(
+    value: object,
+    task: str = "",
+    *,
+    has_draft: bool = False,
+    allow_search: bool = True,
+) -> str:
+    """Resolve the classifier's answer to a task the dispatcher can run.
+
+    A label the model invents ("DEVELOPMENT" for a prompt that starts with
+    "development of a ...") used to end the run with ``unsupported task type``.
+    The request itself is the better evidence: a request about this draft is a
+    rewrite, a question is an explanation, and everything else is writing.
+    """
+    token = re.sub(r"[^A-Z0-9]+", "_", str(value or "").strip().upper()).strip("_")
+    resolved = _TASK_ALIASES.get(token)
+    if resolved is None and token:
+        resolved = _TASK_ALIASES.get(token.split("_", 1)[0])
+    if resolved is None:
+        text = (task or "").strip()
+        lower = text.lower()
+        if has_draft and re.search(
+            r"\b(this|the|my)\s+(draft|document|section|essay|text|chapter)\b",
+            lower,
+        ):
+            resolved = "REWRITE"
+        elif re.search(
+            r"\b(what|why|how|when|where|who|which|explain|define)\b", lower
+        ) or text.rstrip().endswith("?"):
+            resolved = "EXPLAIN"
+        else:
+            resolved = "WRITE"
+        logger.warning(
+            "task router: {!r} is not a task label; using {}", value, resolved
+        )
+    if resolved == "SEARCH" and not allow_search:
+        return "RESEARCH"
+    return resolved
+
+
 class TaskRouter:
     def __init__(self, provider: dict | None = None):
         self.agent = Agent(provider)
@@ -1217,7 +1295,11 @@ class TaskRouter:
                     f" (got {type(response).__name__})"
                 )
 
-            task_type = (response.task or "").strip().upper()
+            task_type = normalize_task_type(
+                response.task, task,
+                has_draft=bool(document_id),
+                allow_search=False,
+            )
             match task_type:
                 case "WRITE":
                     print(f"Executing WRITE task: {task}")
