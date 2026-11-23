@@ -158,6 +158,25 @@ _NEW_WORK_QUESTION = re.compile(
     r"simplify|expand|shorten|format|reformat|translate)\b",
     re.IGNORECASE,
 )
+_EXPLAIN_LEAD = re.compile(
+    r"^\s*(?:explain|describe|define|summarise|summarize|compare|tell\s+me)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_question(text: str) -> bool:
+    """True for a turn addressed to the reader's understanding, not a new work.
+
+    The classifier can label a bare topic ("development of a ...") as EXPLAIN.
+    Without this distinction an empty document gets a lecture about its own
+    placeholder heading instead of a draft.
+    """
+    value = str(text or "").strip()
+    return bool(
+        value.endswith("?")
+        or _QUESTION_START.search(value)
+        or _EXPLAIN_LEAD.search(value)
+    )
 
 
 def is_document_question(text: str) -> bool:
@@ -1267,6 +1286,16 @@ def normalize_task_type(
         )
     if resolved == "SEARCH" and not allow_search:
         return "RESEARCH"
+    if (
+        resolved in ("EXPLAIN", "CRITIQUE", "REWRITE")
+        and not has_draft
+        and not looks_like_question(task)
+    ):
+        logger.warning(
+            "task router: {!r} needs a draft; using WRITE for {!r}",
+            resolved, str(task or "")[:80],
+        )
+        resolved = "WRITE"
     return resolved
 
 

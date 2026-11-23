@@ -860,6 +860,16 @@ function reasonFor(error) {
   return message || 'That did not work.'
 }
 
+/** True when the open draft is only headings or empty list markers. */
+function isPlaceholderDraft(text) {
+  const plain = String(text || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+.*$/gm, ' ')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s*$/gm, ' ')
+    .replace(/[\W_]+/g, '')
+  return !plain
+}
+
 /** What kind of turn answered, as the line under the answer. */
 function describeTransport(transport, task) {
   if (transport !== 'sidecar') return 'Answered directly by the provider'
@@ -1566,9 +1576,13 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         // the bubble -- appending it would replace the reader's draft with a
         // warning. An older backend omits the flag, hence `!== false`.
         const writesDocument = task === 'WRITE' || task === 'REWRITE' || task === 'FORMAT'
+        // A brand-new document is a placeholder heading. A WRITE turn should
+        // replace that, not append a second document underneath it.
+        const replaceDraft = task === 'FORMAT' || task === 'REWRITE'
+          || (task === 'WRITE' && isPlaceholderDraft(getDraft?.()))
         const wrote = writesDocument && wroteDocument !== false && typeof onWriteToDocument === 'function'
           ? onWriteToDocument(reply, {
-            replace: task === 'FORMAT' || task === 'REWRITE',
+            replace: replaceDraft,
             final: true,
           })
           : false

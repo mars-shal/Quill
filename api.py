@@ -779,6 +779,22 @@ _VARIANT_INSTRUCTIONS = {
 }
 
 
+def _has_substantive_draft(draft: str) -> bool:
+    """Whether the open document has words, not just a placeholder heading.
+
+    A new document is created with ``## New section``. Treating that as a real
+    draft made a topic request look like a question about the document: the
+    classifier answered "the document contains only a single line", and the
+    writing pipeline never ran. Headings, empty list markers and markup are
+    structure, not evidence that there is a draft to discuss.
+    """
+    text = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", " ", str(draft or ""), flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"^\s{0,3}#{1,6}\s+.*$", " ", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*(?:[-*+]|\d+[.)])\s*$", " ", text, flags=re.MULTILINE)
+    return bool(re.sub(r"[\W_]+", "", text))
+
+
 def _route_chat_turn(
     provider: dict,
     transcript: list,
@@ -805,13 +821,14 @@ def _route_chat_turn(
     question = transcript[-1][1]
     history = "\n\n".join(f"{role}: {text}" for role, text in transcript[:-1])
     task = f"{history}\n\nuser: {question}" if history else question
+    draft_has_text = _has_substantive_draft(draft)
 
     # A format or rewrite request is an edit of the open draft, not a new
     # subject. Do this before classification: the classifier has repeatedly
     # read "add definitions" as a request to write about definitions, and it
     # read "rewrite the document in the words of a 10 year old" as a fresh
     # thesis -- which the relevance gate then refused as off-topic.
-    if draft.strip() and is_document_transform_request(question):
+    if draft_has_text and is_document_transform_request(question):
         return _chat_dispatch(
             provider, "FORMAT", task, draft,
             concept_mode=concept_mode, token_saving=token_saving,
@@ -822,7 +839,7 @@ def _route_chat_turn(
     # A question about the open draft is not a request for a new one. The
     # classifier read "did you remove the Miller effect?" as a rewrite and wrote
     # a halt stub over the document; Search reads the draft and answers in chat.
-    if draft.strip() and is_document_question(question):
+    if draft_has_text and is_document_question(question):
         return _chat_dispatch(
             provider, "SEARCH", task, draft,
             concept_mode=concept_mode, token_saving=token_saving,
@@ -839,7 +856,7 @@ def _route_chat_turn(
     if research_mode:
         forced = "research"
     if forced == "search":
-        if draft.strip():
+        if draft_has_text:
             return _chat_dispatch(
                 provider, "SEARCH", task, draft,
                 concept_mode=concept_mode, token_saving=token_saving,
@@ -864,9 +881,9 @@ def _route_chat_turn(
         raise RuntimeError("the classifier returned no task type")
 
     task_type = normalize_task_type(
-        response.task, task,
-        has_draft=bool(draft.strip()),
-        allow_search=bool(draft.strip()),
+        response.task, question,
+        has_draft=draft_has_text,
+        allow_search=draft_has_text,
     )
 
     return _chat_dispatch(

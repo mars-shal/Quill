@@ -507,6 +507,19 @@ chk("template query is not searchable",
 chk("real query is searchable",
     _usable_query("distributed student records transcript system"))
 
+chk("a placeholder heading is not a draft",
+    not _api_module._has_substantive_draft("## New section"))
+chk("placeholder HTML is not a draft",
+    not _api_module._has_substantive_draft("<h2>New section</h2>"))
+chk("real prose is a draft",
+    _api_module._has_substantive_draft("## New section\nA real paragraph about records."))
+chk("a topic phrase with no draft routes to WRITE",
+    normalize_task_type("EXPLAIN", "development of a distributed records system",
+                        has_draft=False) == "WRITE")
+chk("a real question still routes to EXPLAIN",
+    normalize_task_type("EXPLAIN", "what is a distributed database?",
+                        has_draft=False) == "EXPLAIN")
+
 
 # --- CLI providers pass a selected model id through ---------------------------
 class _FakeCompleted:
