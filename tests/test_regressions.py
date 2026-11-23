@@ -7,6 +7,7 @@ No network and no LLM calls: every agent/search dependency is stubbed.
 from __future__ import annotations
 
 import inspect
+import json
 import os
 import sys
 import tempfile
@@ -28,6 +29,7 @@ from utilis.pydanticModels import SageConcept
 from utilis.store import SqliteDatabase
 from utilis.ratelimit import RateLimitError, TokenBudget, run_with_retry, _quota_message
 from utilis.model import Agent as _Agent, _credit_message, _is_credit_error
+from utilis.generations import record_generation
 import utilis.model as _model_module
 
 RESULTS: list[tuple[bool, str, str]] = []
@@ -172,7 +174,7 @@ chk("guard honours SURVEY_FORCE",
 chk("guard reads section limit",
     "_SURVEY_SECTION_LIMIT" in inspect.getsource(Task._survey_guard))
 chk("Task.Write calls guard",
-    "_survey_guard" in inspect.getsource(Task.Write))
+    "_survey_guard" in inspect.getsource(Task._write))
 chk("Task.Write exposes concept_mode",
     "concept_mode" in inspect.signature(Task.Write).parameters)
 chk("Task.Write forwards concept_mode",
@@ -564,6 +566,42 @@ chk("CLI model ids are passed with --model",
 chk("CLI pseudo-model keeps the tool's own default",
     "--model" not in _cli_default, " ".join(_cli_default))
 chk("CLI jsonl answer is parsed", _cli_answer == "ok", repr(_cli_answer))
+
+
+# --- generation ledger stays local and metadata-only -------------------------
+_previous_ledger = os.environ.get("QUILL_GENERATIONS_PATH")
+_previous_convex_url = os.environ.get("QUILL_CONVEX_URL")
+_previous_convex_token = os.environ.get("QUILL_CONVEX_TOKEN")
+try:
+    with tempfile.TemporaryDirectory() as _ledger_tmp:
+        _ledger = os.path.join(_ledger_tmp, "generations.jsonl")
+        os.environ["QUILL_GENERATIONS_PATH"] = _ledger
+        os.environ.pop("QUILL_CONVEX_URL", None)
+        os.environ.pop("QUILL_CONVEX_TOKEN", None)
+        record_generation(
+            run_id="ledger-test", task="WRITE", prompt="a private prompt",
+            totalMs=1200, status="done",
+        )
+        _ledger_text = open(_ledger, encoding="utf-8").read()
+        _ledger_line = json.loads(_ledger_text.strip())
+        chk("generation ledger appends one record",
+            _ledger_line["runId"] == "ledger-test" and _ledger_line["status"] == "done")
+        chk("generation ledger hashes the prompt instead of copying it",
+            len(_ledger_line["promptSha256"]) == 64 and "a private prompt" not in _ledger_text)
+        chk("generation ledger omits null fields", "error" not in _ledger_line)
+finally:
+    if _previous_ledger is None:
+        os.environ.pop("QUILL_GENERATIONS_PATH", None)
+    else:
+        os.environ["QUILL_GENERATIONS_PATH"] = _previous_ledger
+    if _previous_convex_url is None:
+        os.environ.pop("QUILL_CONVEX_URL", None)
+    else:
+        os.environ["QUILL_CONVEX_URL"] = _previous_convex_url
+    if _previous_convex_token is None:
+        os.environ.pop("QUILL_CONVEX_TOKEN", None)
+    else:
+        os.environ["QUILL_CONVEX_TOKEN"] = _previous_convex_token
 
 
 def main() -> int:

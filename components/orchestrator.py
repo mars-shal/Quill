@@ -1,5 +1,7 @@
 import os
 import re
+import time
+import uuid
 
 from loguru import logger
 
@@ -10,6 +12,7 @@ from components.researchEngine import ResearchEngine
 from components.sessionManager import SessionManager
 from components.writingEngine import NATURAL_VOICE_STYLE, WritingEngine
 from utilis.drift import detect_drift
+from utilis.generations import record_generation
 from utilis.coverage import (
     gap_research_enabled,
     gap_research_pages_budget,
@@ -569,13 +572,111 @@ class Task:
             return {}
         return {"sections": sections}
 
-    @timed("Task.Write")
     def Write(
         self, prompt: str, document_id: str, session_name: str = "",
         concept_mode: str = "reference", token_saving: bool = False,
         natural_voice: bool = False, writing_profile: str = "",
         variant: str = "balanced", on_draft=None, document_type: str = "auto",
     ):
+        """Run a long-form write and record one generation ledger entry.
+
+        The ledger wrapper is deliberately outside the engine body: a run that
+        raises, returns a blocked result, or emits a halt stub is still a
+        generation and must be visible in the metrics. The inner ``_write``
+        keeps the timed decorator so the existing timing logs do not move.
+        """
+        started = time.monotonic()
+        day = time.strftime("%Y-%m-%d")
+        usage_before = self.database.get(f"usage:{day}") or {}
+        try:
+            result = self._write(
+                prompt, document_id, session_name,
+                concept_mode=concept_mode, token_saving=token_saving,
+                natural_voice=natural_voice, writing_profile=writing_profile,
+                variant=variant, on_draft=on_draft, document_type=document_type,
+            )
+        except Exception as exc:
+            self._record_generation(
+                prompt, document_id, None, started, usage_before,
+                error=str(exc), status="error",
+            )
+            raise
+        self._record_generation(prompt, document_id, result, started, usage_before)
+        return result
+
+    def _record_generation(
+        self, prompt, document_id, result, started, usage_before,
+        error=None, status=None,
+    ) -> None:
+        payload = result if isinstance(result, dict) else {}
+        markdown = str(payload.get("markdown") or "")
+        gate = payload.get("write_gate") or {}
+        written = int(gate.get("written") or 0) if isinstance(gate, dict) else 0
+        halted = (
+            markdown.lstrip().startswith("# Generation Halted")
+            or "THIS RUN PRODUCED NO CONTENT" in markdown
+        )
+        if status is None:
+            if error:
+                status = "error"
+            elif payload.get("error") or payload.get("blocked"):
+                status = "blocked"
+            elif halted or (gate and written == 0):
+                status = "halted"
+            else:
+                status = "done"
+
+        day = time.strftime("%Y-%m-%d")
+        usage_after = self.database.get(f"usage:{day}") or {}
+
+        def delta(field: str) -> int:
+            total = 0
+            for model, counts in usage_after.items():
+                if not isinstance(counts, dict):
+                    continue
+                prior = usage_before.get(model, {}) if isinstance(usage_before, dict) else {}
+                prior = prior if isinstance(prior, dict) else {}
+                total += max(
+                    0,
+                    int(counts.get(field) or 0) - int(prior.get(field) or 0),
+                )
+            return total
+
+        timings = payload.get("timings") or {}
+        record_generation(
+            run_id=str(payload.get("session_id") or uuid.uuid4().hex),
+            task="WRITE",
+            document_id=document_id,
+            session_id=payload.get("session_id"),
+            title=payload.get("title"),
+            provider=getattr(self.agent, "protocol", ""),
+            model=getattr(self.agent, "_model", ""),
+            status=status,
+            error=str(error or payload.get("error") or payload.get("blocked") or "")[:1000] or None,
+            prompt=prompt,
+            totalMs=round((time.monotonic() - started) * 1000),
+            researchMs=timings.get("research_ms", 0),
+            writingMs=timings.get("writing_ms", 0),
+            corpusChars=len(payload.get("research_corpus") or ""),
+            sources=len(payload.get("research_pages") or []),
+            relevantPages=payload.get("research_relevant_pages", 0),
+            quality=payload.get("research_quality", 0.0),
+            lowResearch=bool(payload.get("low_research")),
+            words=len(re.findall(r"\b\w+\b", markdown)),
+            sections=written,
+            placeholders=int(gate.get("placeholder") or 0) if isinstance(gate, dict) else 0,
+            promptTokens=delta("prompt"),
+            completionTokens=delta("completion"),
+        )
+
+    @timed("Task.Write")
+    def _write(
+        self, prompt: str, document_id: str, session_name: str = "",
+        concept_mode: str = "reference", token_saving: bool = False,
+        natural_voice: bool = False, writing_profile: str = "",
+        variant: str = "balanced", on_draft=None, document_type: str = "auto",
+    ):
+        write_started = time.monotonic()
         document = self.database.get(document_id) or {}
         if not document:
             return {"error": f"No parsed document found for id {document_id}"}
@@ -604,7 +705,9 @@ class Task:
         research_engine = ResearchEngine(
             agent=self.agent, **_research_effort(variant)
         )
+        research_started = time.monotonic()
         research = research_engine.run(concept["concept"], document_id, prompt=prompt)
+        research_ms = round((time.monotonic() - research_started) * 1000)
         plan = WritingEngine(model=self.agent).planner(concept["concept"])
         # The reader's own headings win over the planner's invented ones. This
         # is the difference between filling in a document and replacing it.
@@ -634,6 +737,7 @@ class Task:
             model=self.agent,
             style="\n".join(style_parts),
         )
+        writing_started = time.monotonic()
         written = writer.writer(
             plan, context, research_note, evidence=evidence, on_draft=on_draft,
         )
@@ -691,6 +795,11 @@ class Task:
             "research_quality": research.get("quality", 0.0),
             "research_relevant_pages": research.get("relevant_pages", 0),
             "low_research": bool(research.get("low_research")),
+            "timings": {
+                "research_ms": research_ms,
+                "writing_ms": round((time.monotonic() - writing_started) * 1000),
+                "total_ms": round((time.monotonic() - write_started) * 1000),
+            },
             "write_gate": writer.last_gate,
             "source_structure": [
                 str(section.get("title") or "")

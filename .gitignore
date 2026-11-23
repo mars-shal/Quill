@@ -71,3 +71,6 @@ backend/pocketbase/pb_data/
 output/
 output-api/
 test_output/
+
+# Local agent planning notes
+.omo

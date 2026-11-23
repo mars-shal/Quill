@@ -29,6 +29,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from loguru import logger
 
@@ -1341,6 +1342,24 @@ class Handler(BaseHTTPRequestHandler):
         turn.cancel()
         return self._json(200, {"cancelled": True})
 
+    def _generations(self) -> None:
+        """The last 100 local generation records, for a dashboard or curl."""
+        raw = os.environ.get("QUILL_GENERATIONS_PATH", "").strip()
+        path = Path(raw) if raw else Path("output") / "generations.jsonl"
+        entries = []
+        try:
+            from collections import deque
+
+            with path.open("r", encoding="utf-8") as handle:
+                for line in deque(handle, maxlen=100):
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            pass
+        return self._json(200, {"generations": entries})
+
     def _chat(self, body: dict) -> None:
         """One assistant turn, routed through the task pipeline.
 
@@ -1515,6 +1534,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._profile(body)
         if route == "/transcribe":
             return self._transcribe(body)
+        if route == "/generations":
+            return self._generations()
         if route == "/chat/cancel":
             return self._cancel_chat(body)
         if route == "/chat":
@@ -1587,6 +1608,10 @@ def main() -> int:
 
     if args.bind:
         SessionManager.__init__.__defaults__ = (args.bind,)
+        os.environ.setdefault(
+            "QUILL_GENERATIONS_PATH",
+            os.path.join(args.bind, "generations.jsonl"),
+        )
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     server.daemon_threads = True

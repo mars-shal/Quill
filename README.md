@@ -116,6 +116,39 @@ provider. Embeddings run locally through `fastembed`/ONNX,
 using the same `all-MiniLM-L6-v2` model as before. The model is fetched once
 into the app-data `fastembed` cache, then all inference stays on the machine.
 
+## Generation metrics
+
+Every long-form `WRITE` records one metadata row in
+`output-api/generations.jsonl`. It answers what ran, on which model, how long
+each stage took, what evidence it had, and how much it produced. The prompt is
+never copied into the ledger: the record stores its SHA-256 hash and length, and
+only includes a 280-character preview when `QUILL_TELEMETRY_PROMPT=1`.
+
+When `QUILL_CONVEX_URL` and `QUILL_CONVEX_TOKEN` are set, the same record is
+POSTed to the Convex HTTP action in [`convex/http.ts`](convex/http.ts) and is
+queryable in the dashboard. See [`convex/README.md`](convex/README.md) for the
+deployment. Without those variables the ledger stays local; a failed Convex
+POST is logged and never fails the generation.
+
+A real run (2026-11-23, the distributed student-records book):
+
+| Metric | Value |
+| --- | --- |
+| Research | **15m 27s** |
+| Writing (10 sections) | **2m 33s** |
+| End-to-end | **26m 48s** |
+| Corpus | **103,378 chars** |
+| Sources | **32 retrieved, 21 relevant** |
+| Research quality | **0.599** |
+| Output | **2,527 words / 17,237 chars** |
+| Writing model | `opencode-go/gpt-5.6-luna` |
+
+The first pass used `opencode/big-pickle`, which took about 2m49s for the first
+217-word section; with a 32-section plan that was roughly 90 minutes. It was
+stopped after that section and its completed research corpus was reused for the
+10-section run above. The end-to-end figure includes the aborted pass and the
+model switch; the final writing pass itself was 2m33s.
+
 ## Repository map
 
 ```text
