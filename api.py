@@ -1055,6 +1055,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True, "runs": len(RUNS),
                                     "searxng": os.environ.get("QUILL_SEARXNG_URL", "(default localhost:8080)"),
                                     "gap_research": bool(os.environ.get("QUILL_GAP_RESEARCH"))})
+        if path == "/generations":
+            return self._generations()
         if path == "/usage":
             # Today's token spend per model, accumulated by the model layer on
             # every call (provider-reported totals, estimates as fallback) --
@@ -1534,8 +1536,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._profile(body)
         if route == "/transcribe":
             return self._transcribe(body)
-        if route == "/generations":
-            return self._generations()
         if route == "/chat/cancel":
             return self._cancel_chat(body)
         if route == "/chat":
