@@ -33,3 +33,16 @@ export const recent = query({
       .take(limit);
   },
 });
+
+/** Admin cleanup: remove one run (used to clear smoke-test rows). */
+export const removeByRunId = mutation({
+  args: { runId: v.string() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("generations")
+      .withIndex("by_runId", (q) => q.eq("runId", args.runId))
+      .collect();
+    for (const row of rows) await ctx.db.delete(row._id);
+    return rows.length;
+  },
+});
