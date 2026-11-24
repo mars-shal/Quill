@@ -580,6 +580,7 @@ try:
         os.environ.pop("QUILL_CONVEX_TOKEN", None)
         record_generation(
             run_id="ledger-test", task="WRITE", prompt="a private prompt",
+            document_id="doc-test", session_id="session-test",
             totalMs=1200, status="done",
         )
         _ledger_text = open(_ledger, encoding="utf-8").read()
@@ -589,6 +590,10 @@ try:
         chk("generation ledger hashes the prompt instead of copying it",
             len(_ledger_line["promptSha256"]) == 64 and "a private prompt" not in _ledger_text)
         chk("generation ledger omits null fields", "error" not in _ledger_line)
+        chk("generation ledger uses the Convex field names",
+            _ledger_line.get("documentId") == "doc-test"
+            and _ledger_line.get("sessionId") == "session-test"
+            and "document_id" not in _ledger_line)
 finally:
     if _previous_ledger is None:
         os.environ.pop("QUILL_GENERATIONS_PATH", None)

@@ -32,6 +32,26 @@ def _ledger_path() -> Path:
     return Path("output") / "generations.jsonl"
 
 
+# The pipeline calls this with Python-style names; Convex validators are
+# camelCase. Normalise at the boundary so a new metric cannot be silently
+# rejected by the HTTP action.
+_FIELD_ALIASES = {
+    "document_id": "documentId",
+    "session_id": "sessionId",
+    "prompt_chars": "promptChars",
+    "prompt_sha256": "promptSha256",
+    "prompt_preview": "promptPreview",
+    "total_ms": "totalMs",
+    "research_ms": "researchMs",
+    "writing_ms": "writingMs",
+    "corpus_chars": "corpusChars",
+    "relevant_pages": "relevantPages",
+    "low_research": "lowResearch",
+    "prompt_tokens": "promptTokens",
+    "completion_tokens": "completionTokens",
+}
+
+
 def _prompt_fields(prompt: str) -> dict:
     text = str(prompt or "")
     fields = {
@@ -82,6 +102,7 @@ def record_generation(**metrics) -> dict:
     for key, value in metrics.items():
         if value is None:
             continue
+        key = _FIELD_ALIASES.get(key, key)
         if isinstance(value, float):
             value = round(value, 3)
         payload[key] = value
