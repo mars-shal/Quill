@@ -11,6 +11,7 @@ from components.PlagiarismEngine import PlagiarismEngine
 from components.researchEngine import ResearchEngine
 from components.sessionManager import SessionManager
 from components.writingEngine import NATURAL_VOICE_STYLE, WritingEngine
+from components.humanizer import Humanizer
 from utilis.drift import detect_drift
 from utilis.generations import record_generation
 from utilis.coverage import (
@@ -577,6 +578,7 @@ class Task:
         concept_mode: str = "reference", token_saving: bool = False,
         natural_voice: bool = False, writing_profile: str = "",
         variant: str = "balanced", on_draft=None, document_type: str = "auto",
+        humanize: bool | None = None,
     ):
         """Run a long-form write and record one generation ledger entry.
 
@@ -594,6 +596,7 @@ class Task:
                 concept_mode=concept_mode, token_saving=token_saving,
                 natural_voice=natural_voice, writing_profile=writing_profile,
                 variant=variant, on_draft=on_draft, document_type=document_type,
+                humanize=humanize,
             )
         except Exception as exc:
             self._record_generation(
@@ -675,6 +678,7 @@ class Task:
         concept_mode: str = "reference", token_saving: bool = False,
         natural_voice: bool = False, writing_profile: str = "",
         variant: str = "balanced", on_draft=None, document_type: str = "auto",
+        humanize: bool | None = None,
     ):
         write_started = time.monotonic()
         document = self.database.get(document_id) or {}
@@ -776,6 +780,18 @@ class Task:
                     "reports": reports,
                 }
 
+        # Layer two: correct the paragraphs the screen flagged, then keep the
+        # version whose score is actually lower. Off only when the environment
+        # or the caller says so; token-saving runs skip it because a rewrite
+        # pass is the opposite of saving tokens.
+        humanize_report = None
+        if humanize is None:
+            humanize = os.environ.get("QUILL_HUMANIZE", "1").strip().lower() not in (
+                "0", "false", "no", "off",
+            )
+        if humanize and not token_saving and str(written).strip():
+            written, humanize_report = Humanizer(self.agent).run(written)
+
         plagiarism = PlagiarismEngine(agent=self.agent).run(
             written,
             sources=[concept["concept"], research["corpus"]] if research.get("corpus") else [concept["concept"]],
@@ -788,6 +804,7 @@ class Task:
             "session_name": session["name"],
             "title": document.get("title", ""),
             "markdown": written,
+            "humanize": humanize_report,
             "concept": concept["concept"],
             "research": research["summary"],
             "research_pages": research.get("pages") or [],
@@ -1153,6 +1170,18 @@ class Task:
             style="\n".join(style_parts),
         )
         written = writer.writer(plan, context, evidence=evidence, on_draft=on_draft)
+        # Layer two: correct the paragraphs the screen flagged, then keep the
+        # version whose score is actually lower. Off only when the environment
+        # or the caller says so; token-saving runs skip it because a rewrite
+        # pass is the opposite of saving tokens.
+        humanize_report = None
+        if humanize is None:
+            humanize = os.environ.get("QUILL_HUMANIZE", "1").strip().lower() not in (
+                "0", "false", "no", "off",
+            )
+        if humanize and not token_saving and str(written).strip():
+            written, humanize_report = Humanizer(self.agent).run(written)
+
         plagiarism = PlagiarismEngine(agent=self.agent).run(
             written,
             sources=[prompt_text, research.get("corpus", "")] if research.get("corpus") else [prompt_text],

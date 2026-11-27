@@ -1433,6 +1433,28 @@ class Handler(BaseHTTPRequestHandler):
             "telemetry": telemetry,
         })
 
+    def _humanize(self, body: dict) -> None:
+        """Score a draft and rewrite only its flagged paragraphs.
+
+        This is the same three-layer pass a write runs, exposed on its own so a
+        finished document can be treated without regenerating it. The reply
+        carries both texts and the before/after scores; applying it is the
+        caller's decision, which keeps a destructive replace out of the sidecar.
+        """
+        text = str(body.get("text") or "")
+        if not text.strip():
+            return self._json(400, {"error": "no text to humanise"})
+        from components.humanizer import Humanizer
+        from utilis.aidetect import detect
+
+        before = detect(text)
+        rewritten, report = Humanizer(Agent(_provider_config(body))).run(text)
+        return self._json(200, {
+            "text": rewritten,
+            "before": before,
+            "report": report,
+        })
+
     def _generations(self) -> None:
         """The last 100 local generation records, for a dashboard or curl."""
         raw = os.environ.get("QUILL_GENERATIONS_PATH", "").strip()
@@ -1625,6 +1647,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._profile(body)
         if route == "/transcribe":
             return self._transcribe(body)
+        if route == "/humanize":
+            return self._humanize(body)
         if route == "/chat/cancel":
             return self._cancel_chat(body)
         if route == "/chat":

@@ -210,18 +210,19 @@
  */
 .thought-line__rail {
   position: absolute;
-  left: 0.21em;
+  left: 0.6em;
   top: 0.72em;
   bottom: 0.78em;
   width: 1px;
-  background: color-mix(in srgb, var(--tl-color) 20%, transparent);
+  background: color-mix(in srgb, var(--tl-color) 18%, transparent);
 }
 
 .thought-line__step {
   position: relative;
   display: flex;
   align-items: center;
-  padding: 0.16em 0 0.16em 1.25em;
+  gap: 0.45em;
+  padding: 0.16em 0 0.16em 1.6em;
   opacity: 1;
   transform: translateY(0);
   transition:
@@ -237,44 +238,73 @@
 }
 
 /*
- * A node, centred on the rail.
- *
- * Three states, one shape: a step still to come is barely there, a finished one
- * is a mid grey, and the live one is the brightest thing on the line. The ring
- * on the live node is what makes it read as current at a glance -- a change of
- * shape (the old bullet) would have been a second icon language.
+ * A step marker: an empty dot while the step is still to come, a spinner while
+ * it runs, a drawn tick once it is done. The shape answers "what is happening"
+ * without a colour, which is what keeps the trace readable in every theme.
  */
 .thought-line__node {
   position: absolute;
   left: 0.21em;
   top: 50%;
-  width: 0.4em;
-  height: 0.4em;
-  margin: -0.2em 0 0 -0.2em;
+  display: grid;
+  place-items: center;
+  width: 0.9em;
+  height: 0.9em;
+  margin: -0.45em 0 0;
+  color: currentColor;
+  background: var(--tl-bg, var(--chat, var(--main)));
   border-radius: 50%;
+  opacity: 0.32;
+  transition: opacity 300ms var(--tl-ease-out);
+}
+
+.thought-line__node svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.thought-line__dot {
+  width: 0.22em;
+  height: 0.22em;
   background: currentColor;
-  opacity: 0.2;
-  transition:
-    opacity 300ms var(--tl-ease-out),
-    box-shadow 300ms var(--tl-ease-out);
+  border-radius: 50%;
+}
+
+.thought-line__spin {
+  animation: thought-line-spin 0.9s linear infinite;
+}
+
+@keyframes thought-line-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .thought-line__step[data-done] .thought-line__node {
-  opacity: 0.45;
+  opacity: 0.62;
 }
 
 .thought-line__step[data-current] .thought-line__node {
   opacity: 1;
-  box-shadow: 0 0 0 0.18em color-mix(in srgb, var(--tl-color) 14%, transparent);
+  box-shadow: 0 0 0 0.16em color-mix(in srgb, var(--tl-color) 12%, transparent);
 }
 
-/* The active row keeps the single node, bright with a halo: the loader on
-   screen is the orb at the head of the line (2026-11-02 -- the three-dot
-   cluster that used to sit on this row was removed as a second, competing
-   loader). */
+.thought-line__step[data-current] .thought-line__node .thought-line__spin {
+  color: var(--tl-color);
+}
 .thought-line__step-text {
   opacity: 0.3;
   transition: opacity var(--tl-settle) ease;
+}
+
+.thought-line__step-time {
+  margin-left: 0.35em;
+  color: currentColor;
+  font-family: var(--mono);
+  font-size: 0.86em;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.38;
 }
 
 .thought-line__step[data-done] .thought-line__step-text {
@@ -327,6 +357,10 @@
   .thought-line__step[data-current] .thought-line__step-text {
     background: none;
     -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
+
+  .thought-line__spin {
     animation: none;
   }
 }

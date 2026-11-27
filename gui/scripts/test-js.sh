@@ -74,6 +74,7 @@ node --test --test-force-exit --test-concurrency=1 \
   --test tests/custom-theme-contract.test.mjs \
   --test tests/settings-tabs.test.mjs \
   --test tests/settings-system.test.mjs \
+  --test tests/chat-mention.test.mjs \
   --test tests/provider-fixture.test.mjs \
   --test tests/provider-credential.test.mjs \
   --test tests/editor-ruler.test.mjs || status=1

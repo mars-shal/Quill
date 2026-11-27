@@ -909,8 +909,41 @@ export function mockFramerMotion() {
   const motion = new Proxy(() => {}, {
     get: (_target, tag) => (typeof tag === 'string' || typeof tag === 'function' ? motionComponent(tag) : undefined),
   })
+  // A motion value with the three methods the components call. The springs
+  // themselves are not simulated: these suites assert that the controls render
+  // and react, not the pixels between two frames.
+  const motionValue = (initial) => {
+    let current = initial
+    return {
+      get: () => current,
+      set: (next) => { current = next },
+      jump: (next) => { current = next },
+    }
+  }
+  const animate = (target, next) => {
+    if (target && typeof target.set === 'function') target.set(next)
+    const animation = { stop: () => {} }
+    animation.then = (resolve) => { resolve?.(animation); return Promise.resolve() }
+    return animation
+  }
+  const useMotionValue = (initial) => motionValue(initial)
+  const useTransform = (source, transform) => ({
+    get: () => {
+      if (Array.isArray(source)) return transform(source.map((value) => value.get()))
+      return transform(source.get ? source.get() : source)
+    },
+    set: () => {},
+  })
+
   mock.module('framer-motion', {
-    namedExports: { AnimatePresence: ({ children }) => children, motion, useReducedMotion: () => false },
+    namedExports: {
+      AnimatePresence: ({ children }) => children,
+      motion,
+      useReducedMotion: () => false,
+      useMotionValue,
+      useTransform,
+      animate,
+    },
     defaultExport: { motion },
   })
   mock.module('motion/react', {

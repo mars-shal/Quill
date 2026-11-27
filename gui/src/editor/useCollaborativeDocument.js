@@ -26,6 +26,7 @@ import { TextStyleWithTracking, LineHeight } from './typography.js'
 import { CommentMark } from './commentMark.js'
 import { SuggestionMark, SuggestionMode } from './suggestionMode.js'
 import { GhostText } from './ghostText.js'
+import { MentionNode, MentionPicker } from './writerMention.js'
 import { LocalYDoc } from '../platform/ydoc.js'
 
 /**
@@ -34,8 +35,8 @@ import { LocalYDoc } from '../platform/ydoc.js'
  */
 export const FRAGMENT = 'quill-body'
 
-export function baseExtensions() {
-  return [
+export function baseExtensions(mentionSources) {
+  const extensions = [
     StarterKit.configure({
       // The Collaboration extension supplies its own history; leaving
       // StarterKit's UndoRedo enabled causes duplicated/conflicting undo.
@@ -66,7 +67,14 @@ export function baseExtensions() {
     SuggestionMark,
     SuggestionMode,
     GhostText,
+    MentionNode,
   ]
+  // The picker needs the caller's live sections and files. A ref keeps the
+  // editor from being rebuilt every time a heading is typed.
+  if (mentionSources) {
+    extensions.push(MentionPicker({ getItems: () => mentionSources.current }))
+  }
+  return extensions
 }
 
 
@@ -93,7 +101,7 @@ function seedFromHtml(editor, ydoc, html) {
   }
 }
 
-export function useCollaborativeDocument({ documentId, legacyHtml, onReady, onStatsChange, onStatusChange }) {
+export function useCollaborativeDocument({ documentId, legacyHtml, onReady, onStatsChange, onStatusChange, mentionSources }) {
   const [ydoc] = useState(() => (documentId ? new LocalYDoc(documentId) : null))
   const [ready, setReady] = useState(false)
   const seeded = useRef(false)
@@ -134,7 +142,7 @@ export function useCollaborativeDocument({ documentId, legacyHtml, onReady, onSt
   const editor = useEditor(
     {
       extensions: [
-        ...baseExtensions(),
+        ...baseExtensions(mentionSources),
         Collaboration.configure({ document: ydoc?.doc, field: FRAGMENT }),
       ],
       // Collaboration supplies the document; never seed from a `content` prop

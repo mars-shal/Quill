@@ -623,6 +623,12 @@ chk("diagnostics names the JSON-format failure",
 chk("diagnostics reports the telemetry target",
     "QUILL_CONVEX_URL" in _diagnostics_src)
 
+chk("humanize endpoint is routed",
+    '"/humanize"' in inspect.getsource(_Handler.do_POST))
+chk("humanize returns both texts and the scores",
+    "rewritten" in inspect.getsource(_Handler._humanize)
+    and "report" in inspect.getsource(_Handler._humanize))
+
 
 def main() -> int:
     passed = sum(1 for ok, _, _ in RESULTS if ok)

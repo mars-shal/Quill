@@ -17,6 +17,66 @@ const EMPTY_STEPS = [];
 
 const fmt = ds => (ds < 600 ? `${(ds / 10).toFixed(1)}s` : `${Math.floor(ds / 600)}m ${((ds % 600) / 10).toFixed(1)}s`);
 const spoken = ds => ds < 600 ? `${(ds / 10).toFixed(1)} seconds` : `${Math.floor(ds / 600)} minutes ${((ds % 600) / 10).toFixed(1)} seconds`;
+const fmtStep = seconds => (seconds < 10 ? `${seconds.toFixed(1)}s` : `${Math.round(seconds)}s`);
+
+/**
+ * How long each step took, derived from when the list grew.
+ *
+ * The backend streams step labels; it does not send durations. A step is over
+ * the moment the next one arrives, so the clock between two appends is that
+ * step's time. Clearing back to zero starts a new run without the caller having
+ * to reset anything.
+ */
+function useStepTimes(count, working) {
+  const [times, setTimes] = useState([]);
+  const clock = useRef({ count: 0, start: 0 });
+
+  useEffect(() => {
+    const now = performance.now();
+    const current = clock.current;
+    if (count === 0) {
+      current.count = 0;
+      current.start = 0;
+      setTimes(prev => (prev.length ? [] : prev));
+      return;
+    }
+    if (count < current.count) {
+      current.count = count;
+      current.start = 0;
+      setTimes([]);
+      return;
+    }
+    if (count > current.count) {
+      if (current.count === 0) {
+        current.start = now;
+      } else {
+        const finishedAt = current.count - 1;
+        const elapsed = (now - current.start) / 1000;
+        setTimes(prev => {
+          const next = prev.slice();
+          next[finishedAt] = elapsed;
+          return next;
+        });
+        current.start = now;
+      }
+      current.count = count;
+    }
+  }, [count]);
+
+  useEffect(() => {
+    const current = clock.current;
+    if (working || count === 0 || current.count !== count) return;
+    const last = count - 1;
+    setTimes(prev => {
+      if (prev[last] != null) return prev;
+      const next = prev.slice();
+      next[last] = Math.max(0, (performance.now() - (current.start || performance.now())) / 1000);
+      return next;
+    });
+  }, [working, count]);
+
+  return times;
+}
 
 export default function ThoughtLine({
   label = 'Thinking…',
@@ -48,6 +108,7 @@ export default function ThoughtLine({
   const [autoSettled, setAutoSettled] = useState(false);
   const [open, setOpen] = useState(defaultOpen);
   const isWorking = working && !autoSettled;
+  const stepTimes = useStepTimes(steps.length, isWorking);
   const doneText = doneLabel || (showTimer ? 'Thought for' : 'Done thinking');
   const hasTrace = steps.length > 0;
   const depth = reduce ? Math.min(breathDepth, 0.2) : breathDepth;
@@ -265,8 +326,24 @@ export default function ThoughtLine({
                     data-done={done ? '' : undefined}
                     data-current={current ? '' : undefined}
                   >
-                    <i className="thought-line__node" aria-hidden="true" />
+                    <i className="thought-line__node" aria-hidden="true">
+                      {done ? (
+                        <svg viewBox="0 0 16 16" fill="none" className="thought-line__tick">
+                          <path d="M3.5 8.5 6.5 11.5 12.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : current ? (
+                        <svg viewBox="0 0 16 16" fill="none" className="thought-line__spin">
+                          <circle cx="8" cy="8" r="5.6" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1.6" />
+                          <path d="M8 2.4a5.6 5.6 0 0 1 5.6 5.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        </svg>
+                      ) : (
+                        <span className="thought-line__dot" />
+                      )}
+                    </i>
                     <span className="thought-line__step-text">{text}</span>
+                    {stepTimes[i] != null && (
+                      <span className="thought-line__step-time" aria-hidden="true">{fmtStep(stepTimes[i])}</span>
+                    )}
                   </div>
                 );
               })}

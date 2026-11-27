@@ -1131,7 +1131,7 @@ function App() {
       </div>
       {currentDoc && (
         <div key={currentDoc.id} className="editor-layer" style={{ pointerEvents: view === 'editor' ? 'auto' : 'none' }}>
-          <Editor doc={currentDoc} stats={stats} settings={settings} theme={theme} onSettingsChange={updateSettings} activeProvider={activeProvider} onSelectModel={selectModel} onOpenSettings={() => setSettingsOpen(true)} onStatsChange={setStats} author={accountName} onTitleChange={updateTitle} onBack={goLibrary} onNew={createDocument} onImport={importDocuments} onPanel={setPanel} leftOpen={leftOpen} rightOpen={rightOpen} zen={zen} onZen={toggleZen} onDetails={setDetailsId} onDelete={deleteDocument} onContentSave={updateDoc} reducedMotion={reducedMotion} assistantReducedMotion={assistantReducedMotion} view={view} exportRequest={exportRequest} />
+          <Editor doc={currentDoc} stats={stats} settings={settings} theme={theme} onSettingsChange={updateSettings} activeProvider={activeProvider} onSelectModel={selectModel} onOpenSettings={() => setSettingsOpen(true)} onStatsChange={setStats} author={accountName} onTitleChange={updateTitle} onBack={goLibrary} onNew={createDocument} onImport={importDocuments} onPanel={setPanel} leftOpen={leftOpen} rightOpen={rightOpen} zen={zen} onZen={toggleZen} onDetails={setDetailsId} onDelete={deleteDocument} onContentSave={updateDoc} reducedMotion={reducedMotion} assistantReducedMotion={assistantReducedMotion} view={view} exportRequest={exportRequest} documents={docs} />
         </div>
       )}
       {detailsId && <DetailsDialog key="details-dialog" doc={docs.find((doc) => doc.id === detailsId) || currentDoc} labels={labelOptions} onClose={() => setDetailsId(null)} onSave={(patch) => saveDetails(detailsId, patch)} />}

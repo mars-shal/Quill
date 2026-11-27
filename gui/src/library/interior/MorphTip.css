@@ -1,0 +1,74 @@
+/* The shared morphing tooltip. Fixed-positioned because it portals out of the
+   scrolling toolbar; width and left are driven by springs, so no transition is
+   declared here. */
+
+.morph-tip {
+  position: fixed;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 9px;
+  overflow: hidden;
+  color: var(--main);
+  background: var(--text-1);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.morph-tip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.morph-tip__key {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 17px;
+  padding: 0 4px;
+  color: inherit;
+  background: color-mix(in srgb, var(--main) 16%, transparent);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 9px;
+  opacity: 0.9;
+}
+
+.morph-tip__tail {
+  position: fixed;
+  z-index: 89;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--text-1);
+  border-radius: 2px;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* An off-screen copy with the new label, used to measure the width the springs
+   have to reach. The visible box animates its width, so measuring it would
+   measure the previous frame's value instead. */
+.morph-tip--measure {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: max-content;
+  opacity: 0;
+  visibility: hidden;
+}
+
+[data-mode="dark"] .morph-tip {
+  color: var(--main);
+  background: var(--text-1);
+}
+
+[data-mode="dark"] .morph-tip__tail {
+  background: var(--text-1);
+}

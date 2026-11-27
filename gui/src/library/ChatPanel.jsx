@@ -31,6 +31,7 @@ import { startWavRecording } from './audioRecorder.js'
 import { notify } from './toast.js'
 import { VoiceBeam, useMicrophone } from 'voice-glow'
 import { readTableSize, resizeTable, tableSizes } from '../editor/tableSize.js'
+import { filterMentions } from '../editor/writerMention.js'
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ import {
 } from './ui/select.jsx'
 import { BorderBeam, BotAvatar, Liquid, LiquidItem, MetalFx, ThinkingOrb } from './chat-effects.js'
 import ThoughtLine from './ui/ThoughtLine.jsx'
+import { MorphTip } from './interior/MorphTip.jsx'
 import {
   deleteChatSession,
   loadChatSessions,
@@ -356,10 +358,24 @@ function ToolbarSelect({
  * plus TextStyle and Highlight. Alignment and tables would need extra
  * extensions and are deliberately not stubbed in.
  */
-function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAULT_FONT, tagsOpen, onToggleTags, applyTag, onInsertImage, onInsertMath }) {
-  useSelectionTick(editor)
+/** The four alignment glyphs, drawn once each so the button can change face. */
+function AlignIcon({ align }) {
+  const paths = {
+    left: 'M4 6h16M4 12h10M4 18h13',
+    center: 'M4 6h16M7 12h10M6 18h12',
+    right: 'M4 6h16M10 12h10M7 18h13',
+    justify: 'M4 6h16M4 12h16M4 18h16',
+  }
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d={paths[align] || paths.left} />
+    </svg>
+  )
+}
+
+function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAULT_FONT, tagsOpen, onToggleTags, applyTag }) {  useSelectionTick(editor)
   // Before the early return: hooks must run unconditionally.
-  const [insertChoice, setInsertChoice] = useState('')
+  const toolbarRef = useRef(null)
 
   if (!editor) return null
 
@@ -369,17 +385,10 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
   // shows what the selection actually has rather than the last thing clicked.
   const ALIGNMENTS = ['left', 'center', 'right', 'justify']
   const currentAlign = ALIGNMENTS.find((a) => editor.isActive({ textAlign: a })) || 'left'
-  const currentLineHeight = String(
-    (editor.isActive('heading')
-      ? editor.getAttributes('heading').lineHeight
-      : editor.getAttributes('paragraph').lineHeight) || '',
-  )
-  const currentLetterSpacing = String(editor.getAttributes('textStyle').letterSpacing || '')
-  const spacingValue = currentLineHeight
-    ? `lh-${currentLineHeight}`
-    : currentLetterSpacing
-      ? `ls-${currentLetterSpacing}`
-      : ''
+  const cycleAlign = () => {
+    const at = ALIGNMENTS.indexOf(currentAlign)
+    runCommand('setTextAlign', ALIGNMENTS[(at + 1) % ALIGNMENTS.length])
+  }
 
   // Read the family and size straight off the caret, the same way alignment
   // and spacing are read. Keeping them in local state meant the picker showed
@@ -413,9 +422,9 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
       run: () => runCommand('toggleHeading', { level }),
     })) },
     { kind: 'group', label: 'Text', items: [
-      { key: 'bold', label: 'Bold', text: <strong>B</strong>, active: editor.isActive('bold'), run: () => runCommand('toggleBold') },
-      { key: 'italic', label: 'Italic', text: <em>I</em>, active: editor.isActive('italic'), run: () => runCommand('toggleItalic') },
-      { key: 'underline', label: 'Underline', text: <u>U</u>, active: editor.isActive('underline'), run: () => runCommand('toggleUnderline') },
+      { key: 'bold', label: 'Bold', shortcut: '⌘B', text: <strong>B</strong>, active: editor.isActive('bold'), run: () => runCommand('toggleBold') },
+      { key: 'italic', label: 'Italic', shortcut: '⌘I', text: <em>I</em>, active: editor.isActive('italic'), run: () => runCommand('toggleItalic') },
+      { key: 'underline', label: 'Underline', shortcut: '⌘U', text: <u>U</u>, active: editor.isActive('underline'), run: () => runCommand('toggleUnderline') },
       { key: 'strike', label: 'Strikethrough', text: <s>S</s>, active: editor.isActive('strike'), run: () => runCommand('toggleStrike') },
     ] },
     { kind: 'group', label: 'Blocks', items: [
@@ -426,8 +435,8 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
       { key: 'rule', label: 'Horizontal rule', icon: 'minus', run: () => runCommand('setHorizontalRule') },
     ] },
     { kind: 'group', label: 'History', items: [
-      { key: 'undo', label: 'Undo', icon: 'undo', run: () => runCommand('undo'), enabled: editor.can().undo() },
-      { key: 'redo', label: 'Redo', icon: 'redo', run: () => runCommand('redo'), enabled: editor.can().redo() },
+      { key: 'undo', label: 'Undo', shortcut: '⌘Z', icon: 'undo', run: () => runCommand('undo'), enabled: editor.can().undo() },
+      { key: 'redo', label: 'Redo', shortcut: '⇧⌘Z', icon: 'redo', run: () => runCommand('redo'), enabled: editor.can().redo() },
     ] },
   ]
 
@@ -448,7 +457,8 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
   }
 
   return (
-    <div className="format-toolbar-inner" role="toolbar" aria-label="Formatting">
+    <div className="format-toolbar-inner" role="toolbar" aria-label="Formatting" ref={toolbarRef}>
+      <MorphTip hostRef={toolbarRef} />
       <div className="tool-selects">
         <ToolbarSelect
           label="Font family"
@@ -467,53 +477,19 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
           options={sizeOptions.map((value) => ({ value, label: value }))}
           onChange={onSize}
         />
-        <Select value={currentAlign} onValueChange={(value) => runCommand('setTextAlign', value)}>
-          <SelectTrigger className="tool-select" aria-label="Alignment">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="left">Left</SelectItem>
-            <SelectItem value="center">Center</SelectItem>
-            <SelectItem value="right">Right</SelectItem>
-            <SelectItem value="justify">Justify</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={spacingValue} onValueChange={(value) => {
-          if (value.startsWith('lh-')) runCommand('setLineHeight', value.slice(3))
-          else if (value === 'ls-normal') runCommand('unsetLetterSpacing')
-          else if (value.startsWith('ls-')) runCommand('setLetterSpacing', value.slice(3))
-        }}>
-          <SelectTrigger className="tool-select" aria-label="Line and letter spacing">
-            <SelectValue placeholder="Spacing" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="lh-1">Single spacing</SelectItem>
-            <SelectItem value="lh-1.15">Spacing 1.15</SelectItem>
-            <SelectItem value="lh-1.5">Spacing 1.5</SelectItem>
-            <SelectItem value="lh-2">Double spacing</SelectItem>
-            <SelectItem value="ls-normal">Normal letters</SelectItem>
-            <SelectItem value="ls--0.02em">Tight letters</SelectItem>
-            <SelectItem value="ls-0.06em">Wide letters</SelectItem>
-            <SelectItem value="ls-0.12em">Wider letters</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={insertChoice} onValueChange={(value) => {
-          // Reset immediately: a controlled Select only fires when its value
-          // changes, so without this the same item could not be chosen twice.
-          setInsertChoice('')
-          if (value === 'image') onInsertImage?.()
-          else if (value === 'math') onInsertMath?.()
-          else if (value === 'table') runCommand('insertTable', { rows: 3, cols: 3, withHeaderRow: true })
-        }}>
-          <SelectTrigger className="tool-select" aria-label="Insert">
-            <SelectValue placeholder="Insert" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="image">Image…</SelectItem>
-            <SelectItem value="math">Formula…</SelectItem>
-            <SelectItem value="table">Table (3 × 3)</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Alignment as one icon that cycles, rather than a menu that has to be
+            opened to answer a one-key question. The icon is the state, so the
+            toolbar still says where the paragraph sits. */}
+        <button
+          type="button"
+          className="format-button align-button"
+          data-tip={`Align ${currentAlign}`}
+          aria-label={`Alignment: ${currentAlign}. Click to change.`}
+          onMouseDown={keepSelection}
+          onClick={cycleAlign}
+        >
+          <AlignIcon align={currentAlign} />
+        </button>
       </div>
 
       {tools.map((group) => (
@@ -523,7 +499,8 @@ function FormatToolbar({ editor, runCommand, onFont, onSize, defaultFont = DEFAU
               key={tool.key}
               type="button"
               className={`format-button ${tool.text ? 'letter' : ''} ${tool.active ? 'active' : ''}`}
-              title={tool.title || tool.label}
+              data-tip={tool.label}
+              data-key={tool.shortcut || ''}
               aria-label={tool.label}
               aria-pressed={tool.active ?? false}
               disabled={tool.enabled === false}
@@ -705,11 +682,39 @@ function attachmentPrompt(attachments = []) {
 }
 
 /** The message box, its controls and the send button. */
-function ChatComposer({ input, setInput, send, mode, setMode, variant, setVariant, interview, setInterview, attachments = [], setAttachments, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false }) {
-  // Converting a PDF/DOCX is a separate process and can take seconds. Without
-  // this the picker simply closed and nothing appeared until every file had
-  // been read, which reads as a failed upload.
+function ChatComposer({ input, setInput, send, mode, setMode, variant, setVariant, interview, setInterview, attachments = [], setAttachments, fileRef, sendButton, voiceState, voiceError, onVoiceStart, onVoiceStop, busy = false, mentions }) {
   const [importing, setImporting] = useState(false)
+  const textareaRef = useRef(null)
+  // `@` in the composer references a section or another document. The menu is
+  // local state rather than a portal: it belongs to this box.
+  const [mention, setMention] = useState(null)
+
+  const syncMention = (value, caret) => {
+    const before = value.slice(0, caret)
+    const match = /(?:^|\s)@([\p{L}\p{N} _-]*)$/u.exec(before)
+    if (!match) {
+      setMention(null)
+      return
+    }
+    const query = match[1]
+    const items = filterMentions(mentions?.current || [], query)
+    setMention(items.length ? { start: caret - query.length - 1, query, items, active: 0 } : null)
+  }
+
+  const pickMention = (item) => {
+    const field = textareaRef.current
+    if (!field || !mention) return
+    const caret = field.selectionStart ?? input.length
+    const inserted = `@${item.label} `
+    const next = input.slice(0, mention.start) + inserted + input.slice(caret)
+    setInput(next)
+    setMention(null)
+    const at = mention.start + inserted.length
+    requestAnimationFrame(() => {
+      field.focus()
+      field.setSelectionRange(at, at)
+    })
+  }
   // The desktop picker goes through MarkItDown, which covers PDF, DOCX,
   // PPTX, XLSX, HTML and more. The hidden input remains the browser fallback.
   const pickDocument = async () => {
@@ -772,10 +777,68 @@ function ChatComposer({ input, setInput, send, mode, setMode, variant, setVarian
 
   return (
     <div className="chat-box" data-ready={input.trim() || attachments.some((item) => item.text) ? '' : undefined}>
+      <AnimatePresence>
+        {mention && (
+          <motion.div
+            className="chat-mention"
+            role="listbox"
+            aria-label="Mention a section or file"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          >
+            {mention.items.map((item, index) => (
+              <button
+                key={`${item.kind}-${item.id}`}
+                type="button"
+                role="option"
+                aria-selected={index === mention.active}
+                className="chat-mention__row"
+                data-active={index === mention.active ? '' : undefined}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => pickMention(item)}
+              >
+                <Icon name={item.kind === 'file' ? 'file' : 'sort'} size={13} />
+                <span>{item.label}</span>
+                <em>{item.hint || (item.kind === 'file' ? 'File' : 'Section')}</em>
+              </button>
+            ))}
+            <span className="chat-mention__hint" aria-hidden="true">↑↓ choose · ↵ insert</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <textarea
+        ref={textareaRef}
         value={input}
-        onChange={(event) => setInput(event.target.value)}
-        onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() } }}
+        onChange={(event) => {
+          setInput(event.target.value)
+          syncMention(event.target.value, event.target.selectionStart ?? event.target.value.length)
+        }}
+        onKeyDown={(event) => {
+          if (mention) {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              const step = event.key === 'ArrowDown' ? 1 : -1
+              setMention((current) => (current
+                ? { ...current, active: (current.active + step + current.items.length) % current.items.length }
+                : current))
+              return
+            }
+            if (event.key === 'Enter' || event.key === 'Tab') {
+              event.preventDefault()
+              pickMention(mention.items[mention.active])
+              return
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              setMention(null)
+              return
+            }
+          }
+          if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send() }
+        }}
+        onBlur={() => setMention(null)}
         placeholder={busy ? 'Working…' : mode === 'Search' ? 'Ask about this draft…' : 'Suggest a revision…'}
         rows="1"
         disabled={busy}
@@ -1011,7 +1074,7 @@ function writtenMessage(summary, task) {
   return `**The draft was ${verb}** — ${summary.words.toLocaleString()} words${headingPart}.${titlePart}`
 }
 
-function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, rightOpen, effectsActive, getDraft, onWriteToDocument }) {
+function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSettingsChange, activeProvider, onSelectModel, onOpenSettings, rightOpen, effectsActive, getDraft, onWriteToDocument, mentions }) {
   const [sessionState, setSessionState] = useState(() => loadChatSessions(
     documentId,
     import.meta.env ? localStorage : null,
@@ -1534,7 +1597,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
       task,
       variant,
       tokenSaving: Boolean(settings?.tokenSaving),
-      naturalVoice: Boolean(settings?.naturalVoice),
+      naturalVoice: settings?.naturalVoice !== false,
       writingProfile: (() => {
         try {
           return JSON.parse(settings?.writingProfile || 'null')?.prompt || ''
@@ -1755,7 +1818,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     variant, setVariant, interview, setInterview,
     attachments, setAttachments,
     fileRef, busy: typing, voiceState, voiceError, onVoiceStart: startVoice,
-    onVoiceStop: stopVoice,
+    onVoiceStop: stopVoice, mentions,
   }
 
   return (

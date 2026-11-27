@@ -297,3 +297,56 @@ test('the table size helper shrinks and grows a real table', async () => {
 
   editor.destroy()
 })
+
+/**
+ * The `@` mention: filtering and the two text forms it has to produce.
+ *
+ * The picker itself is a ProseMirror plugin driven by key events, which the
+ * render suites exercise through the real editor. What is testable here is the
+ * contract around it: which items a query keeps, and that a chip degrades to
+ * `@Label` in both plain text and markdown -- markdown has no syntax for it,
+ * and an export that silently dropped the reference would be worse than the
+ * plain text.
+ */
+test('mentions filter by label and kind, and cap at eight', async () => {
+  const { filterMentions } = await import('../src/editor/writerMention.js')
+  const items = [
+    { id: '1', label: 'Methods', kind: 'section' },
+    { id: '2', label: 'Results', kind: 'section' },
+    { id: '3', label: 'Literature review', kind: 'file' },
+    ...Array.from({ length: 10 }, (_, i) => ({ id: `x${i}`, label: `Appendix ${i}`, kind: 'section' })),
+  ]
+
+  assert.equal(filterMentions(items, 'met').map((item) => item.label).join(), 'Methods')
+  assert.equal(filterMentions(items, 'file').length, 1, 'the kind is searchable too')
+  assert.equal(filterMentions(items, 'appendix').length, 8, 'the list is capped')
+  assert.equal(filterMentions(items, '').length, 8, 'an empty query shows the first page')
+})
+
+test('a mention chip flattens to @Label in text and markdown', async () => {
+  const { MentionNode } = await import('../src/editor/writerMention.js')
+  const Markdown = (await import('@tiptap/markdown')).Markdown
+  const editor = new Editor({
+    extensions: [StarterKit, Markdown, MentionNode],
+    content: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'See ' },
+            { type: 'mention', attrs: { id: 's1', label: 'Methods', kind: 'section' } },
+            { type: 'text', text: ' for the method.' },
+          ],
+        },
+      ],
+    },
+  })
+
+  assert.match(editor.getHTML(), /data-mention="section"/, 'the chip is a mention element')
+  assert.match(editor.getHTML(), /@Methods/, 'and it shows its label')
+  assert.equal(editor.getText(), 'See @Methods for the method.')
+  assert.equal(editor.getMarkdown().trim(), 'See @Methods for the method.')
+
+  editor.destroy()
+})

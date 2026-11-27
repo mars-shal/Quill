@@ -1166,7 +1166,8 @@ body.reduce-motion .library-grid:not(.list-view) .document-tile:hover { transfor
 /* The bar grew from six controls to a full formatting set, so it needs to be
    allowed to scroll rather than wrap: wrapping made the sticky toolbar grow
    over the text on narrow windows. */
-.format-toolbar-inner { display: flex; align-items: center; gap: 6px; width: min(760px, 100%); min-height: 42px; margin: 0 auto; padding: 5px 6px; overflow-x: auto; scrollbar-width: none; background: var(--main); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-1); }
+.format-toolbar-inner { display: flex; align-items: center; gap: 6px; width: min(760px, 100%); min-height: 42px; margin: 0 auto; padding: 5px 6px; overflow-x: auto; scrollbar-width: none; background: var(--main); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 0 color-mix(in srgb, var(--main) 55%, transparent) inset, 0 10px 26px color-mix(in srgb, var(--text-1) 6%, transparent), 0 1px 2px color-mix(in srgb, var(--text-1) 5%, transparent); }
+[data-mode="dark"] .format-toolbar-inner { box-shadow: 0 1px 0 color-mix(in srgb, var(--text-1) 6%, transparent) inset, 0 12px 30px color-mix(in srgb, var(--text-1) 14%, transparent), 0 1px 2px color-mix(in srgb, var(--text-1) 10%, transparent); }
 .format-toolbar-inner::-webkit-scrollbar { display: none; }
 .tool-selects, .tool-group { display: flex; align-items: center; gap: 2px; flex: none; }
 /* The font and size controls, drawn like the assistant's model picker (see
@@ -1249,8 +1250,8 @@ body.reduce-motion .library-grid:not(.list-view) .document-tile:hover { transfor
 .format-toolbar select:hover { background: var(--hover); color: var(--text-1); }
 .format-toolbar select:nth-child(2) { min-width: 60px; }
 .tool-divider { width: 1px; height: 22px; margin: 0 3px; background: var(--border); }
-.format-button { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; color: var(--text-2); background: transparent; border-radius: 6px; }
-.format-button:hover:not(:disabled) { color: var(--text-1); background: var(--hover); }
+.format-button { display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; color: var(--text-2); background: transparent; border-radius: 7px; transition: color 0.15s var(--ease), background 0.15s var(--ease), transform 0.15s var(--ease); }
+.format-button:hover:not(:disabled) { color: var(--text-1); background: var(--hover); transform: translateY(-1px); }
 /* Pressed state, so the bar reports what the caret is actually inside. */
 .format-button.active { color: var(--accent); background: var(--accent-soft); }
 .format-button:disabled { opacity: 0.32; }
@@ -2023,8 +2024,48 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .chat-suggestions::-webkit-scrollbar { display: none; }
 .chat-suggestions button { flex: none; min-height: 24px; padding: 0 4px; color: var(--text-3); background: transparent; border: 0; border-radius: 0; font-size: 10.5px; }
 .chat-suggestions button:hover { color: var(--text-1); background: transparent; }
-.chat-box { display: flex; flex-direction: column; min-height: 126px; padding: 12px; border-radius: 20px; box-shadow: 0 8px 24px rgba(20, 30, 50, 0.08); }
+.chat-box { display: flex; flex-direction: column; min-height: 126px; padding: 12px; border-radius: 20px; box-shadow: 0 8px 24px rgba(20, 30, 50, 0.08); position: relative; }
 .chat-box textarea { flex: 1; min-height: 70px; max-height: 160px; padding: 2px; font-size: 13px; }
+
+/* The composer's @ menu, opening up out of the box. */
+.chat-mention {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px;
+  color: var(--text-1);
+  background: var(--main);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--text-1) 16%, transparent), 0 2px 8px color-mix(in srgb, var(--text-1) 8%, transparent);
+}
+
+.chat-mention__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 30px;
+  padding: 0 7px;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-mention__row[data-active] { color: var(--text-1); background: var(--hover); }
+.chat-mention__row > span { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.chat-mention__row > em { flex: none; color: var(--text-3); font-family: var(--mono); font-size: 9px; font-style: normal; }
+.chat-mention__hint { padding: 4px 7px 1px; color: var(--text-3); border-top: 1px solid var(--border); font-family: var(--mono); font-size: 9px; }
 .chat-controls { margin-top: auto; padding-top: 8px; }
 .chat-control-left { flex: 1; }
 .chat-control, .chat-mode { min-height: 32px; }

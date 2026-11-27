@@ -2007,7 +2007,7 @@ function WritingPanel({ draft, update, documents = [] }) {
         id="natural-voice"
         label="Natural voice"
         description="Generate plainer academic prose: shorter sentences, active voice, concrete examples and no formulaic transitions."
-        checked={draft.naturalVoice === true}
+        checked={draft.naturalVoice !== false}
         onChange={(value) => update("naturalVoice", value)}
       />
       <ToggleRow

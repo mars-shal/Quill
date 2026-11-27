@@ -685,8 +685,28 @@ fn write_docx(
     let rendered = render_body(document);
     let mut warnings = rendered.warnings;
 
-    // docx-rs exposes headings as named paragraph styles rather than an enum.
-    let mut doc = Docx::new().add_paragraph(
+    // docx-rs names styles but does not define them. Without these entries the
+    // body references `Heading1..4` and Word/LibreOffice fall back to Normal,
+    // which is what made an exported book read as one undifferentiated block.
+    // Sizes are half-points: 18pt, 15pt, 13pt, 12pt.
+    let mut doc = Docx::new();
+    for level in 1..=4u8 {
+        let size = match level {
+            1 => 36,
+            2 => 30,
+            3 => 26,
+            _ => 24,
+        };
+        doc = doc.add_style(
+            Style::new(format!("Heading{level}"), StyleType::Paragraph)
+                .name(format!("Heading {level}"))
+                .size(size)
+                .bold()
+                .outline_lvl(level as usize - 1),
+        );
+    }
+
+    doc = doc.add_paragraph(
         Paragraph::new()
             .style("Heading1")
             .add_run(Run::new().add_text(title.to_string())),
@@ -1358,6 +1378,34 @@ mod tests {
         // A ZIP archive starts with the local file header signature "PK\x03\x04".
         assert_eq!(&bytes[..4], b"PK\x03\x04", "not a zip container");
         assert_eq!(outcome.bytes, bytes.len() as u64);
+
+        // The body references Heading1..4, so those styles have to exist in the
+        // package or every heading renders as Normal -- the exported book read
+        // as one undifferentiated block.
+        let read = |name: &str| {
+            use std::io::Read as _;
+            let mut archive =
+                zip::ZipArchive::new(std::io::Cursor::new(bytes.clone())).expect("zip");
+            let mut file = archive.by_name(name).expect("entry");
+            let mut text = String::new();
+            file.read_to_string(&mut text).expect("read entry");
+            text
+        };
+        let styles = read("word/styles.xml");
+        for level in 1..=4 {
+            assert!(
+                styles.contains(&format!("w:styleId=\"Heading{level}\"")),
+                "Heading{level} is referenced but not defined"
+            );
+        }
+        let document = read("word/document.xml");
+        // The fixture's heading is level 2; the title owns Heading1, so body
+        // headings start at Heading2/3.
+        assert!(
+            document.contains("w:val=\"Heading3\""),
+            "a level-2 body heading keeps its style in the document"
+        );
+
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

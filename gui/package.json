@@ -4,7 +4,7 @@
   "version": "0.35.0",
   "license": "MIT",
   "type": "module",
-  "description": "Quill \u2014 a desktop editor for long-form writing with built-in AI.",
+  "description": "Quill — a desktop editor for long-form writing with built-in AI.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -63,6 +63,7 @@
     "@tiptap/pm": "^3.31.3",
     "@tiptap/react": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
+    "@tiptap/suggestion": "^3.31.3",
     "@tiptap/y-tiptap": "^3.0.9",
     "ascii-reveal": "https://github.com/mars-shal/ascii-reveal.git",
     "border-beam": "^1.4.1",
