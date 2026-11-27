@@ -77,7 +77,7 @@ def record_generation(**metrics) -> dict:
         "runId": str(metrics.pop("run_id", "") or uuid.uuid4().hex),
         "createdAt": int(time.time() * 1000),
         "source": "quill",
-        "appVersion": os.environ.get("QUILL_APP_VERSION", "0.35.1"),
+        "appVersion": os.environ.get("QUILL_APP_VERSION", "0.35.2"),
         # Defaults keep a partial caller (or a smoke test) ingestible; the
         # pipeline always supplies the real numbers.
         "task": "WRITE",

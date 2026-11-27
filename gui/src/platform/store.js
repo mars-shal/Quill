@@ -976,6 +976,53 @@ export async function checkUpdates() {
   return (await tauriInvoke())('check_updates')
 }
 
+/**
+ * The signed update the Tauri updater can install, or null.
+ *
+ * `checkUpdates` answers "is there a newer release?" from the GitHub feed. This
+ * asks the updater plugin, which also knows whether the release carries a
+ * signed bundle this platform can actually install. Both are shown so a reader
+ * on a build without an asset is not offered a download that cannot work.
+ */
+export async function updateAvailable() {
+  if (!isTauri) return null
+  try {
+    const { check } = await import('@tauri-apps/plugin-updater')
+    return await check()
+  } catch (error) {
+    console.warn('The updater is not available', error)
+    return null
+  }
+}
+
+/**
+ * Download and install an update, reporting bytes as they arrive.
+ *
+ * The callback shape is the plugin's: `Started` carries the total, `Progress`
+ * a chunk length, `Finished` the end. The sum is kept here so the UI does not
+ * have to know the protocol.
+ */
+export async function installUpdate(update, onProgress) {
+  if (!update) throw new Error('There is no update to install.')
+  let downloaded = 0
+  let total = 0
+  await update.downloadAndInstall((event) => {
+    if (event.event === 'Started') {
+      total = Number(event.data?.contentLength) || 0
+    } else if (event.event === 'Progress') {
+      downloaded += Number(event.data?.chunkLength) || 0
+    }
+    const done = event.event === 'Finished'
+    onProgress?.({ downloaded, total: total || downloaded, done })
+  })
+}
+
+/** Relaunch into the installed version. */
+export async function restartApp() {
+  const { relaunch } = await import('@tauri-apps/plugin-process')
+  await relaunch()
+}
+
 /** Open a release page in the system browser. */
 export async function openExternal(url) {
   if (!url) return

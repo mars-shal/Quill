@@ -208,7 +208,7 @@ _EMBED_STAGE = re.compile(r"^EMBEDDING_(DOWNLOAD|READY)\b")
 _TIMING = re.compile(r"^([A-Za-z_][\w.]*) took ([\d.]+)s")
 
 # A search call's CALL line carries the query, and the query is the part a
-# reader recognises: `Sleuthing: what dogs perceive against domestication
+# reader recognises: `Searching: what dogs perceive against domestication
 # theories` reads as the work, while the completion line can only say that a
 # search happened.
 _CALL_QUERY = re.compile(r"^CALL\s+([A-Za-z_][\w.]*)\s+query=(.*)$")
@@ -226,20 +226,22 @@ _SINK_ID: int | None = None
 _STAGE_LABELS = (
     (re.compile(r"^DocumentParser\."), "Reading the document"),
     (re.compile(r"^ConceptEngine\._prompt_concept"), "Working out the subject"),
-    (re.compile(r"^ResearchEngine\.search"), "Sleuthing"),
-    (re.compile(r"^Agent\.Nous"), "Reading the question"),
+    (re.compile(r"^ResearchEngine\.search"), "Searching the web"),
+    (re.compile(r"^ResearchEngine\._searxng"), "Searching the web"),
+    (re.compile(r"^ResearchEngine\._(ddg|bing)"), "Searching the web"),
+    (re.compile(r"^ResearchEngine\._fetch"), "Reading a source"),
+        (re.compile(r"^Agent\.Nous"), "Reading the question"),
     (re.compile(r"^Agent\.Sage"), "Thinking it through"),
     # The writer's class is `WritingEngine`. These entries named `Writer` and
     # `SectionWriter`, which no module defines, so the writing half of every
     # write turn was dropped as noise -- "Thinking" was the last thing the
     # panel ever heard before the document appeared.
     (re.compile(r"^WritingEngine\.planner"), "Planning the document"),
-    (re.compile(r"^WritingEngine\._outline"), "Laying out the sections"),
-    (re.compile(r"^WritingEngine\._write_body"), "Writing a section"),
-    (re.compile(r"^WritingEngine\.writer"), "Writing the answer"),
-    (re.compile(r"^WritingEngine\.dedupe"), "Tidying up the draft"),
-    (re.compile(r"^ResearchEngine\.(validate|_think)"), "Checking the sources"),
-    (re.compile(r"^PlagiarismEngine\.(check|document_check|run)"), "Checking for plagiarism"),
+    (re.compile(r"^WritingEngine\._write_body"), "Drafting a section"),
+    (re.compile(r"^WritingEngine\.writer"), "Drafting the document"),
+    (re.compile(r"^WritingEngine\._outline"), "Planning the sections"),
+            (re.compile(r"^WritingEngine\.dedupe"), "Tidying up the draft"),
+        (re.compile(r"^PlagiarismEngine\.(check|document_check|run)"), "Checking for plagiarism"),
 )
 
 
@@ -339,10 +341,10 @@ def _sink(message) -> None:
         stage = _human_stage(m.group(1))
         if not stage or stage == run.last_stage:
             return
-        # A generic "Sleuthing" straight after a query row is the same search
+        # A generic "Searching the web" straight after a query row is the same search
         # arriving twice -- once from its CALL line (which carries the query)
         # and once from its completion. The query row is the better half.
-        if stage == "Sleuthing" and run.last_stage.startswith("Sleuthing:"):
+        if stage == "Searching the web" and run.last_stage.startswith("Searching:"):
             return
         run.last_stage = stage
         run.emit("stage", step=stage, source=m.group(1), took=float(m.group(2)))
@@ -351,7 +353,7 @@ def _sink(message) -> None:
     # The search half of the pair above: the CALL line, with its query.
     if isinstance(run, ChatTurn) and (m := _CALL_QUERY.match(text)):
         query = " ".join(m.group(2).split())[:80]
-        stage = f"Sleuthing: {query}"
+        stage = f"Searching: {query}"
         if stage != run.last_stage:
             run.last_stage = stage
             run.emit("stage", step=stage, source=m.group(1), took=0.0)
@@ -1424,7 +1426,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {
             "pipeline": {
                 "running": True,
-                "version": os.environ.get("QUILL_APP_VERSION", "0.35.1"),
+                "version": os.environ.get("QUILL_APP_VERSION", "0.35.2"),
                 "workspace": str(Path.cwd()),
                 "python": platform.python_version(),
                 "platform": platform.system(),

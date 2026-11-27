@@ -682,8 +682,7 @@ fn write_docx(
 ) -> Result<(u64, Vec<String>), std::io::Error> {
     use docx_rs::*;
 
-    let rendered = render_body(document);
-    let mut warnings = rendered.warnings;
+    let mut warnings: Vec<String> = Vec::new();
 
     // docx-rs names styles but does not define them. Without these entries the
     // body references `Heading1..4` and Word/LibreOffice fall back to Normal,
@@ -717,86 +716,276 @@ fn write_docx(
             .add_paragraph(Paragraph::new().add_run(Run::new().italic().add_text(a.to_string())));
     }
 
-    // The body is already sanitised HTML; strip tags to obtain plain text per
-    // block. DOCX inline formatting is a follow-up (see module docs).
-    for line in rendered.html.lines() {
-        let plain = strip_tags(line);
-        if plain.trim().is_empty() {
-            continue;
+    // The writer's title and the document's first heading are often the same
+    // sentence. Adding both is the "double header" a reader sees in Word:
+    // skip the body heading that repeats the title we just wrote.
+    let mut skip_title_heading = true;
+    if let Some(blocks) = document.get("content").and_then(Value::as_array) {
+        for node in blocks {
+            if skip_title_heading && node_type(node) == "heading" {
+                if normalize_heading(&plain_node_text(node)) == normalize_heading(title) {
+                    skip_title_heading = false;
+                    continue;
+                }
+            }
+            skip_title_heading = false;
+            add_docx_block(&mut doc, node, &mut warnings);
         }
-        let heading = heading_level(line);
-        let mut paragraph = match heading {
-            Some(1) => Paragraph::new().style("Heading2"),
-            Some(2) => Paragraph::new().style("Heading3"),
-            Some(3) => Paragraph::new().style("Heading4"),
-            _ => Paragraph::new(),
-        };
-        if is_list_item(line) {
-            paragraph = paragraph.add_run(Run::new().add_text("• "));
-        }
-        doc = doc.add_paragraph(paragraph.add_run(Run::new().add_text(plain)));
     }
 
     let mut buffer: Vec<u8> = Vec::new();
     doc.pack(std::io::Cursor::new(&mut buffer))
         .map_err(|e| std::io::Error::other(format!("docx pack failed: {e}")))?;
 
-    if stripped_tag_count(&rendered.html) > 0 {
-        warnings.push(
-            "DOCX export keeps text and headings; inline bold/italic/highlight is not yet carried over"
-                .to_string(),
-        );
-    }
-
     Ok((write_atomic(path, &buffer)?, warnings))
 }
 
-/// Removes tags from an HTML fragment, leaving readable text.
-fn strip_tags(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut inside = false;
-    for ch in input.chars() {
-        match ch {
-            '<' => inside = true,
-            '>' => inside = false,
-            _ if !inside => out.push(ch),
-            _ => {}
+fn node_type(node: &Value) -> &str {
+    node.get("type").and_then(Value::as_str).unwrap_or("")
+}
+
+fn node_children(node: &Value) -> &[Value] {
+    node.get("content")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn normalize_heading(text: &str) -> String {
+    text.chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+fn plain_node_text(node: &Value) -> String {
+    let mut out = String::new();
+    for child in node_children(node) {
+        let kind = node_type(child);
+        if kind == "text" || kind == "codeBlock" {
+            if let Some(text) = child.get("text").and_then(Value::as_str) {
+                out.push_str(text);
+            }
+        } else if kind == "mention" {
+            let label = child
+                .pointer("/attrs/label")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            out.push('@');
+            out.push_str(label);
+        } else {
+            out.push_str(&plain_node_text(child));
         }
     }
-    // Unescape the handful of entities our renderer can emit.
-    out.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#x27;", "'")
-        .replace("&amp;", "&")
-        .trim()
-        .to_string()
+    out
 }
 
-fn heading_level(line: &str) -> Option<u8> {
-    if line.starts_with("<h1") {
-        Some(1)
-    } else if line.starts_with("<h2") {
-        Some(2)
-    } else if line.starts_with("<h3") {
-        Some(3)
-    } else if line.starts_with("<h4") {
-        Some(4)
-    } else {
-        None
+fn warn_once(warnings: &mut Vec<String>, message: &str) {
+    if !warnings.iter().any(|existing| existing == message) {
+        warnings.push(message.to_string());
     }
 }
 
-fn is_list_item(line: &str) -> bool {
-    line.starts_with("<li")
+/// Runs for one inline node, carrying the marks a Word reader expects.
+fn docx_runs(node: &Value, bold_context: bool) -> Vec<docx_rs::Run> {
+    use docx_rs::*;
+
+    let mut runs = Vec::new();
+    for child in node_children(node) {
+        match node_type(child) {
+            "text" => {
+                let text = child.get("text").and_then(Value::as_str).unwrap_or("");
+                if text.is_empty() {
+                    continue;
+                }
+                let mut run = Run::new().add_text(text);
+                if bold_context {
+                    run = run.bold();
+                }
+                if let Some(marks) = child.get("marks").and_then(Value::as_array) {
+                    for mark in marks {
+                        match mark.get("type").and_then(Value::as_str).unwrap_or("") {
+                            "bold" => run = run.bold(),
+                            "italic" => run = run.italic(),
+                            "underline" => run = run.underline("single"),
+                            "strike" => run = run.strike(),
+                            // Word only accepts named highlight colours; the
+                            // editor's hex tags are all close enough to yellow
+                            // to keep the intent visible.
+                            "highlight" => run = run.highlight("yellow"),
+                            "code" => run = run.fonts(RunFonts::new().ascii("Courier New")),
+                            "link" => run = run.underline("single").color("0563C1"),
+                            _ => {}
+                        }
+                    }
+                }
+                runs.push(run);
+            }
+            "hardBreak" => runs.push(Run::new().add_break(BreakType::TextWrapping)),
+            "mention" => {
+                let label = child
+                    .pointer("/attrs/label")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let mut run = Run::new().add_text(format!("@{label}"));
+                if bold_context {
+                    run = run.bold();
+                }
+                runs.push(run);
+            }
+            _ => runs.extend(docx_runs(child, bold_context)),
+        }
+    }
+    runs
 }
 
-fn stripped_tag_count(html: &str) -> usize {
-    html.matches("<strong>").count()
-        + html.matches("<em>").count()
-        + html.matches("<mark").count()
-        + html.matches("<s>").count()
-        + html.matches("<u>").count()
+fn docx_paragraph(node: &Value, style: Option<&str>, bold: bool) -> docx_rs::Paragraph {
+    use docx_rs::*;
+
+    let mut paragraph = Paragraph::new();
+    if let Some(style) = style {
+        paragraph = paragraph.style(style);
+    }
+    match node
+        .pointer("/attrs/textAlign")
+        .and_then(Value::as_str)
+        .unwrap_or("left")
+    {
+        "center" => paragraph = paragraph.align(AlignmentType::Center),
+        "right" => paragraph = paragraph.align(AlignmentType::Right),
+        "justify" => paragraph = paragraph.align(AlignmentType::Both),
+        _ => {}
+    }
+    for run in docx_runs(node, bold) {
+        paragraph = paragraph.add_run(run);
+    }
+    paragraph
+}
+
+fn add_docx_block(doc: &mut docx_rs::Docx, node: &Value, warnings: &mut Vec<String>) {
+    use docx_rs::*;
+
+    match node_type(node) {
+        "paragraph" => {
+            *doc = doc.clone().add_paragraph(docx_paragraph(node, None, false));
+        }
+        "heading" => {
+            // The title owns Heading1, so body levels start one deeper.
+            let level = node
+                .pointer("/attrs/level")
+                .and_then(Value::as_i64)
+                .unwrap_or(2)
+                .clamp(1, 3);
+            let style = format!("Heading{}", level + 1);
+            *doc = doc
+                .clone()
+                .add_paragraph(docx_paragraph(node, Some(&style), false));
+        }
+        "bulletList" | "orderedList" => {
+            let ordered = node_type(node) == "orderedList";
+            for (index, item) in node_children(node).iter().enumerate() {
+                let prefix = if ordered {
+                    format!("{}. ", index + 1)
+                } else {
+                    "• ".to_string()
+                };
+                let mut first = true;
+                for child in node_children(item) {
+                    if !matches!(node_type(child), "paragraph" | "heading") {
+                        continue;
+                    }
+                    let mut runs = vec![Run::new().add_text(if first {
+                        prefix.clone()
+                    } else {
+                        String::new()
+                    })];
+                    runs.extend(docx_runs(child, false));
+                    let mut paragraph = Paragraph::new();
+                    for run in runs {
+                        paragraph = paragraph.add_run(run);
+                    }
+                    paragraph = paragraph.indent(Some(360), None, None, None);
+                    *doc = doc.clone().add_paragraph(paragraph);
+                    first = false;
+                }
+            }
+        }
+        "blockquote" => {
+            for child in node_children(node) {
+                if node_type(child) == "paragraph" {
+                    let mut paragraph = docx_paragraph(child, None, false);
+                    paragraph = paragraph.indent(Some(360), None, None, None);
+                    *doc = doc.clone().add_paragraph(paragraph);
+                } else {
+                    add_docx_block(doc, child, warnings);
+                }
+            }
+        }
+        "codeBlock" => {
+            let text = plain_node_text(node);
+            for line in text.lines() {
+                let run = Run::new()
+                    .add_text(line)
+                    .fonts(RunFonts::new().ascii("Courier New"));
+                *doc = doc.clone().add_paragraph(Paragraph::new().add_run(run));
+            }
+        }
+        "table" => {
+            let rows = node_children(node)
+                .iter()
+                .filter(|row| node_type(row) == "tableRow")
+                .map(|row| {
+                    let cells = node_children(row)
+                        .iter()
+                        .filter(|cell| matches!(node_type(cell), "tableCell" | "tableHeader"))
+                        .map(|cell| {
+                            let header = node_type(cell) == "tableHeader";
+                            let mut built = TableCell::new();
+                            for block in node_children(cell) {
+                                if node_type(block) == "paragraph" {
+                                    built =
+                                        built.add_paragraph(docx_paragraph(block, None, header));
+                                }
+                            }
+                            built
+                        })
+                        .collect::<Vec<_>>();
+                    TableRow::new(cells)
+                })
+                .collect::<Vec<_>>();
+            if !rows.is_empty() {
+                *doc = doc.clone().add_table(Table::new(rows));
+            }
+        }
+        "horizontalRule" => {
+            // A paragraph is enough: a rule with no text still separates the
+            // blocks in Word, and the alternative is a border feature this
+            // version of docx-rs does not expose cleanly.
+            *doc = doc.clone().add_paragraph(Paragraph::new());
+        }
+        "image" => warn_once(
+            warnings,
+            "Images are not embedded in DOCX exports; their captions and surrounding text are kept",
+        ),
+        _ => {
+            let children = node_children(node);
+            if children.is_empty() {
+                let text = plain_node_text(node);
+                if !text.trim().is_empty() {
+                    *doc = doc
+                        .clone()
+                        .add_paragraph(Paragraph::new().add_run(Run::new().add_text(text)));
+                }
+            } else {
+                for child in children {
+                    add_docx_block(doc, child, warnings);
+                }
+            }
+        }
+    }
 }
 
 fn write_epub(
@@ -1358,6 +1547,114 @@ mod tests {
 
         let written = std::fs::read_to_string(&path).expect("read back");
         assert_eq!(written, "# Title\n\nBody\n");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    fn read_zip_entry(bytes: &[u8], name: &str) -> String {
+        use std::io::Read as _;
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec())).expect("zip");
+        let mut file = archive.by_name(name).expect("entry");
+        let mut text = String::new();
+        file.read_to_string(&mut text).expect("read entry");
+        text
+    }
+
+    #[test]
+    fn docx_export_keeps_tables_and_inline_marks() {
+        let document = serde_json::json!({
+            "type": "doc",
+            "content": [
+                { "type": "paragraph", "content": [
+                    { "type": "text", "text": "Bold claim", "marks": [{ "type": "bold" }] },
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "text": "italic note", "marks": [{ "type": "italic" }] }
+                ]},
+                { "type": "table", "content": [
+                    { "type": "tableRow", "content": [
+                        { "type": "tableHeader", "content": [
+                            { "type": "paragraph", "content": [{ "type": "text", "text": "Term" }] }
+                        ]},
+                        { "type": "tableHeader", "content": [
+                            { "type": "paragraph", "content": [{ "type": "text", "text": "Meaning" }] }
+                        ]}
+                    ]},
+                    { "type": "tableRow", "content": [
+                        { "type": "tableCell", "content": [
+                            { "type": "paragraph", "content": [{ "type": "text", "text": "Replication" }] }
+                        ]},
+                        { "type": "tableCell", "content": [
+                            { "type": "paragraph", "content": [{ "type": "text", "text": "Copies across nodes" }] }
+                        ]}
+                    ]}
+                ]}
+            ]
+        });
+        let path = temp_path("table.docx");
+        let outcome = export(&ExportRequest {
+            path: path.display().to_string(),
+            document: Some(document),
+            markdown: None,
+            format: ExportFormat::Docx,
+            title: "Schema".into(),
+            author: None,
+        })
+        .expect("docx export");
+
+        let bytes = std::fs::read(&path).expect("read back");
+        let body = read_zip_entry(&bytes, "word/document.xml");
+        assert!(
+            body.contains("<w:tbl>"),
+            "a table becomes a real Word table"
+        );
+        assert!(body.contains("Replication") && body.contains("Copies across nodes"));
+        assert!(
+            body.contains("<w:b/>") || body.contains("<w:b "),
+            "bold survives"
+        );
+        assert!(
+            body.contains("<w:i/>") || body.contains("<w:i "),
+            "italic survives"
+        );
+        assert!(
+            !outcome
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("table")),
+            "tables should not warn: {:?}",
+            outcome.warnings
+        );
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn docx_export_does_not_repeat_the_title_as_a_heading() {
+        let document = serde_json::json!({
+            "type": "doc",
+            "content": [
+                { "type": "heading", "attrs": { "level": 1 }, "content": [{ "type": "text", "text": "Chapter One" }] },
+                { "type": "paragraph", "content": [{ "type": "text", "text": "Body." }] }
+            ]
+        });
+        let path = temp_path("title.docx");
+        export(&ExportRequest {
+            path: path.display().to_string(),
+            document: Some(document),
+            markdown: None,
+            format: ExportFormat::Docx,
+            title: "Chapter One".into(),
+            author: None,
+        })
+        .expect("docx export");
+
+        let bytes = std::fs::read(&path).expect("read back");
+        let body = read_zip_entry(&bytes, "word/document.xml");
+        assert_eq!(
+            body.matches("Chapter One").count(),
+            1,
+            "the title must appear once, not once as a title and again as a heading"
+        );
+
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

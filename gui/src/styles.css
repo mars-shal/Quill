@@ -2462,8 +2462,10 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 
 /* ThinkingOrb: replaces the old three-dot typing indicator, sitting inline
    before the word "Thinking" at the 20px inline-text scale. */
-.typing-status { display: inline-flex; align-items: center; gap: 9px; min-height: 28px; }
-.typing-status canvas { display: block; flex: none; }
+.typing-status { display: inline-flex; align-items: flex-start; gap: 9px; min-height: 28px; }
+/* The trace can be taller than the orb. Centring the row put the orb halfway
+   down the list; the orb belongs beside the first line, where the live label is. */
+.typing-status canvas { display: block; flex: none; align-self: flex-start; margin-top: 1px; }
 
 /* BorderBeam: a travelling line along the composer while a reply streams. The
    beam is drawn on the wrapper, so the wrapper owns the radius and the inner

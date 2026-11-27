@@ -42,7 +42,7 @@ import {
 } from "./ui/select.jsx";
 import { RadioGroup, RadioGroupItem } from './ui/radio-group.jsx'
 import { Switch } from './ui/switch.jsx'
-import { profileWritingStyle, checkUpdates, openExternal } from '../platform/store.js'
+import { profileWritingStyle, checkUpdates, openExternal, updateAvailable, installUpdate, restartApp } from '../platform/store.js'
 import { notify } from './toast.js'
 
 /**
@@ -1931,6 +1931,9 @@ function WritingPanel({ draft, update, documents = [] }) {
   const [profileError, setProfileError] = useState("");
   const [updateState, setUpdateState] = useState("idle");
   const [updateInfo, setUpdateInfo] = useState(null);
+  const [pendingUpdate, setPendingUpdate] = useState(null);
+  const [installState, setInstallState] = useState("idle");
+  const [installProgress, setInstallProgress] = useState({ downloaded: 0, total: 0 });
   const savedProfile = (() => {
     try {
       return draft.writingProfile ? JSON.parse(draft.writingProfile) : null;
@@ -1969,14 +1972,34 @@ function WritingPanel({ draft, update, documents = [] }) {
 
   const lookForUpdates = async () => {
     setUpdateState("loading");
+    setPendingUpdate(null);
+    setInstallState("idle");
+    setInstallProgress({ downloaded: 0, total: 0 });
     try {
-      setUpdateInfo(await checkUpdates());
+      const info = await checkUpdates();
+      setUpdateInfo(info);
+      // The feed says a release exists; the updater says whether this build
+      // can install it. Only the second turns the card into a download.
+      setPendingUpdate(info?.available ? await updateAvailable() : null);
       setUpdateState("ready");
     } catch (error) {
       const message = error?.message || "Check failed.";
       setUpdateInfo({ current: "", available: false, error: message });
       notify(message);
       setUpdateState("error");
+    }
+  };
+
+  const downloadUpdate = async () => {
+    if (!pendingUpdate) return;
+    setInstallState("downloading");
+    try {
+      await installUpdate(pendingUpdate, setInstallProgress);
+      setInstallState("ready");
+    } catch (error) {
+      const message = error?.message || "The update could not be installed.";
+      notify(message);
+      setInstallState("error");
     }
   };
 
@@ -2087,14 +2110,32 @@ function WritingPanel({ draft, update, documents = [] }) {
                 : updateInfo.available
                   ? `Quill ${updateInfo.latest} is available (you have ${updateInfo.current}).`
                   : `You are on the latest version (${updateInfo.current}).`}
-              {updateInfo?.available && updateInfo.url && (
+              {updateInfo?.available && !pendingUpdate && updateInfo.url && (
                 <> <button className="link-button" type="button" onClick={() => openExternal(updateInfo.url)}>Open release</button></>)}
             </p>
           )}
+          {installState === "downloading" && (
+            <p className="settings-update-result">
+              Downloading… {installProgress.total
+                ? `${Math.min(100, Math.round((installProgress.downloaded / installProgress.total) * 100))}%`
+                : `${Math.round(installProgress.downloaded / 1024)} KB`}
+            </p>
+          )}
+          {installState === "error" && (
+            <p className="settings-update-result">The download did not finish. Try again.</p>
+          )}
         </div>
-        <button className="soft-button" type="button" onClick={lookForUpdates} disabled={updateState === "loading"}>
-          {updateState === "loading" ? "Checking…" : "Check for updates"}
-        </button>
+        {pendingUpdate && installState !== "ready" ? (
+          <button className="soft-button" type="button" onClick={downloadUpdate} disabled={installState === "downloading"}>
+            {installState === "downloading" ? "Installing…" : "Download and install"}
+          </button>
+        ) : installState === "ready" ? (
+          <button className="soft-button" type="button" onClick={restartApp}>Restart Quill</button>
+        ) : (
+          <button className="soft-button" type="button" onClick={lookForUpdates} disabled={updateState === "loading"}>
+            {updateState === "loading" ? "Checking…" : "Check for updates"}
+          </button>
+        )}
       </div>
     </>
   );

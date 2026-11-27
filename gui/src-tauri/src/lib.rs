@@ -60,6 +60,8 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let pool = tauri::async_runtime::block_on(db::init_pool())?;
             // Adopt whatever the pipeline was already using, so an existing

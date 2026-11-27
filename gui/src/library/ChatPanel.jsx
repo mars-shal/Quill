@@ -156,13 +156,11 @@ const READING_SIZES = ['8', '9', '10', '11', '12', '14', '16', '18', '20', '22',
 const DEFAULT_FONT = 'Arial'
 const DEFAULT_SIZE = '12'
 
-const THOUGHT_VERBS = ['Thinking', 'Conspiring', 'Evaluating', 'Grounding', 'Sleuthing', 'Drafting']
-
 /**
  * Which of the ThinkingOrb's nine states matches the newest step.
  *
  * The orb beside the label and the label's own shimmering text tell the same
- * story -- a searching orb over "Sleuthing: …", a composing orb over "Writing
+ * story -- a searching orb over "Searching: …", a composing orb over "Drafting
  * a section" -- so the state derives from the step instead of parking on
  * "breathing" (orb states: working / searching / solving / listening /
  * connecting / weaving / composing / breathing / shaping).
@@ -1221,7 +1219,6 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
   const [modelsRevision, setModelsRevision] = useState(0)
   // The stages this turn has actually reported, in the order they happened.
   const [turnSteps, setTurnSteps] = useState([])
-  const [thoughtVerb, setThoughtVerb] = useState(THOUGHT_VERBS[0])
   const [shownCount, setShownCount] = useState(MESSAGE_WINDOW)
   const scrollRef = useRef(null)
   const fileRef = useRef(null)
@@ -1590,6 +1587,12 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
     }))
 
     setTurnSteps([])
+    // A document that already has headings is being edited, not started. A
+    // WRITE turn then replaces the draft instead of appending a second copy of
+    // the same sections underneath it -- the duplicate-header bug.
+    const draftHasSections = /(^|\n)\s{0,3}#{1,6}\s+\S/.test(
+      typeof getDraft === 'function' ? getDraft() : '',
+    )
     chat({
       messages: history,
       draft: typeof getDraft === 'function' ? getDraft() : '',
@@ -1618,7 +1621,8 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         if (!markdown || typeof onWriteToDocument !== 'function') return
         if (!['WRITE', 'REWRITE', 'FORMAT'].includes(draftTask)) return
         onWriteToDocument(markdown, {
-          replace: draftTask === 'FORMAT' || draftTask === 'REWRITE',
+          replace: draftTask === 'FORMAT' || draftTask === 'REWRITE'
+            || (draftTask === 'WRITE' && draftHasSections),
           live: true,
         })
       },
@@ -1642,7 +1646,7 @@ function ChatPanel({ documentId, assistantReducedMotion, settings, theme, onSett
         // A brand-new document is a placeholder heading. A WRITE turn should
         // replace that, not append a second document underneath it.
         const replaceDraft = task === 'FORMAT' || task === 'REWRITE'
-          || (task === 'WRITE' && isPlaceholderDraft(getDraft?.()))
+          || (task === 'WRITE' && (draftHasSections || isPlaceholderDraft(getDraft?.())))
         const wrote = writesDocument && wroteDocument !== false && typeof onWriteToDocument === 'function'
           ? onWriteToDocument(reply, {
             replace: replaceDraft,
