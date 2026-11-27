@@ -13,6 +13,7 @@ pub mod openrouter;
 pub mod pipeline;
 mod pocketbase;
 pub mod providers;
+mod search;
 mod secrets;
 pub mod settings;
 mod sidecar;
@@ -90,6 +91,9 @@ pub fn run() {
             }
             app.manage(AppState { pool });
             app.manage(pipeline::Supervisor::default());
+            // Optional, off the main thread, and never fatal: research degrades
+            // to its scraper fallback when this cannot start.
+            search::ensure_local_search(app.handle().clone());
             #[cfg(target_os = "linux")]
             if let Some(window) = app.get_webview_window("main") {
                 allow_microphone(&window);
@@ -143,6 +147,7 @@ pub fn run() {
             pipeline::api_stream_run,
             pipeline::pipeline_status,
             pipeline::usage_stats,
+            pipeline::system_status,
             pipeline::pipeline_start,
             pipeline::pipeline_stop,
             commands::delete_custom_theme,

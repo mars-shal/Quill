@@ -174,6 +174,30 @@ pub async fn usage_stats() -> AppResult<serde_json::Value> {
         .map_err(|error| AppError::Other(format!("{url} did not return JSON: {error}")))
 }
 
+/// The environment checks the Settings page shows.
+///
+/// Answered by the sidecar rather than by this process on purpose: the sidecar
+/// is the thing that reads `QUILL_SEARXNG_URL` and owns the ledger, and an
+/// AppImage launched from a file manager inherits a different environment from
+/// the shell that built it. Asking the process that will actually run the work
+/// is the only way this report can be true.
+#[tauri::command]
+pub async fn system_status() -> AppResult<serde_json::Value> {
+    let url = format!("{}/diagnostics", base_url());
+    let response = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|error| AppError::Other(format!("could not build the status request: {error}")))?
+        .get(&url)
+        .send()
+        .await
+        .map_err(|error| AppError::Other(format!("could not reach {url}: {error}")))?;
+    response
+        .json()
+        .await
+        .map_err(|error| AppError::Other(format!("{url} did not return JSON: {error}")))
+}
+
 /// Start the sidecar, or adopt the one already running.
 ///
 /// Idempotent by contract: the webview calls this on mount and again after a

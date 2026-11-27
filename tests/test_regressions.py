@@ -609,6 +609,21 @@ finally:
         os.environ["QUILL_CONVEX_TOKEN"] = _previous_convex_token
 
 
+# --- the portability report is a first-class endpoint ------------------------
+from api import Handler as _Handler
+
+_diagnostics_src = inspect.getsource(_Handler._diagnostics)
+chk("diagnostics endpoint is routed",
+    '"/diagnostics"' in inspect.getsource(_Handler.do_GET))
+chk("diagnostics probes the configured search instance",
+    "QUILL_SEARXNG_URL" in _diagnostics_src
+    and "urllib.request.urlopen" in _diagnostics_src)
+chk("diagnostics names the JSON-format failure",
+    "search.formats" in _diagnostics_src)
+chk("diagnostics reports the telemetry target",
+    "QUILL_CONVEX_URL" in _diagnostics_src)
+
+
 def main() -> int:
     passed = sum(1 for ok, _, _ in RESULTS if ok)
     for ok, label, extra in RESULTS:

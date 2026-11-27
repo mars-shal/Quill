@@ -801,6 +801,23 @@ export async function usageStats() {
   }
 }
 
+/**
+ * Environment checks for the Settings > System panel.
+ *
+ * Resolves to `null` when the sidecar cannot answer, rather than throwing: the
+ * panel exists to report exactly that state, so an exception would replace the
+ * report with an error box.
+ */
+export async function systemStatus() {
+  if (!isTauri) return null
+  try {
+    return await (await tauriInvoke())('system_status')
+  } catch (error) {
+    console.error('Failed to read the system status', error)
+    return null
+  }
+}
+
 /** One inline completion. Optional assist: failures resolve to empty text. */
 export async function complete({ before, after } = {}) {
   if (!isTauri) return ''

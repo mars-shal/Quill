@@ -116,6 +116,51 @@ provider. Embeddings run locally through `fastembed`/ONNX,
 using the same `all-MiniLM-L6-v2` model as before. The model is fetched once
 into the app-data `fastembed` cache, then all inference stays on the machine.
 
+## Running it on another machine
+
+Quill is a desktop app plus two optional services, and only the first of those
+travels inside the AppImage. Knowing which is which is the difference between a
+five-minute first run and a support thread.
+
+| Layer | Ships with the app | Where it lives |
+| --- | --- | --- |
+| App, Python sidecar | yes | inside the AppImage |
+| Documents, settings, keys | no | per-user app-data directory |
+| SearXNG (research) | no | a Docker container, started on demand |
+| Convex (telemetry) | no | optional, configured per install |
+
+**First run, in order:**
+
+1. Open Quill. The Rust supervisor starts the bundled sidecar on a loopback port
+   and waits for `/health`; nothing has to be started by hand.
+2. Connect a provider in onboarding, or enter an API key on
+   **Settings → Assistant**. A local model or a CLI tool needs no key at all.
+3. Research is optional. If a loopback SearXNG is not answering, Quill looks for
+   Docker and either starts `quill-searxng` or creates it from
+   `searxng/searxng:latest`, writing a settings file that enables `format=json`.
+   With no Docker, research falls back to the DuckDuckGo and Bing scrapers and
+   the rest of the app is unaffected.
+4. **Settings → System** reports the three pieces separately: the writing
+   service, the search backend, and the generation ledger. Each row says what is
+   wrong and offers the one action that fixes it — restart the service, re-probe
+   search, or point at where the ledger is written.
+5. Convex is opt-in and per install. Without `QUILL_CONVEX_URL` and
+   `QUILL_CONVEX_TOKEN`, every run still records to `generations.jsonl` locally.
+
+Nothing machine-specific is baked into the build: keys live in the OS credential
+store, the workspace is under the user's app-data directory, and the search
+container is created from the stock image on the machine that runs it. The
+AppImage itself is the same file everywhere.
+
+For a shared or headless install, use the Compose stack instead — it runs the
+sidecar and SearXNG together with restart policies, and the desktop app can drive
+it through `QUILL_API_URL`:
+
+```bash
+cp .env.example .env        # provider key + optional telemetry
+docker compose up --build
+```
+
 ## Generation metrics
 
 Every long-form `WRITE` records one metadata row in

@@ -2,7 +2,7 @@
  * Does clicking a settings tab actually switch which panel is visible?
  *
  * Every other settings suite in this repo passes either way, which is the whole
- * reason this file exists. The three panels stay *mounted* and are hidden with
+ * reason this file exists. The panels stay *mounted* and are hidden with
  * the `hidden` attribute rather than being unmounted, so a control inside
  * Appearance or Writing is in the DOM while a different panel is on screen.
  * `querySelector` finds it regardless, `aria-controls` resolves, `.contains()`
@@ -15,8 +15,8 @@
  * So the assertions here are deliberately about the switch itself, and about
  * the two pieces of state that a broken switch would leave stale:
  *
- *   - `aria-selected` on the three tabs
- *   - the `hidden` property on the three `role="tabpanel"` sections
+ *   - `aria-selected` on every tab
+ *   - the `hidden` property on every `role="tabpanel"` section
  *
  * Why the attribute and not computed style: jsdom loads no stylesheet, so
  * `getComputedStyle` returns defaults for everything and every panel looks
@@ -57,7 +57,7 @@ mockFramerMotion()
 
 // Seeded before the import, because `App` loads the theme list during bootstrap.
 // The Appearance panel has a picker in it, and this file mounts the real page
-// with all three panels rendered; the list is not what is under test, but an
+// with every panel rendered; the list is not what is under test, but an
 // empty one should not be the thing that changes first.
 themeFixtures.reset([
   { theme_id: 'midnight', name: 'Midnight', mode: 'dark', tokens: { '--main': '#0b1020', '--text-1': '#e6ecff' } },
@@ -69,7 +69,7 @@ await awaitBoot()
 const { window } = dom
 
 /**
- * The three sections, in the order the tab bar renders them.
+ * The sections, in the order the tab bar renders them.
  *
  * `id`/`label` pairs rather than selectors, so every assertion below can name
  * the section it is talking about. The ids are also what the tabs' `aria-controls`
@@ -81,6 +81,7 @@ const SECTIONS = [
   { id: 'settings-usage', label: 'Usage' },
   { id: 'settings-appearance', label: 'Appearance' },
   { id: 'settings-writing', label: 'Writing' },
+  { id: 'settings-system', label: 'System' },
 ]
 
 const click = async (node) => {
@@ -114,7 +115,7 @@ const tablist = () => {
   return strip
 }
 
-/** The three tabs, by role and visible text. */
+/** The tabs, by role and visible text. */
 const tabNamed = (label) => {
   const tab = [...tablist().querySelectorAll('[role="tab"]')].find(
     (node) => node.textContent.trim() === label,
@@ -255,7 +256,7 @@ test('switching panels does not take the tab strip with it', async () => {
     )
     // The roving tabindex: one stop for the whole strip, on the tab whose panel
     // is showing. A tab bar where the stops scattered would be a separate bug,
-    // but it lives in the same three nodes this test already has open.
+    // but it lives in the same nodes this test already has open.
     const stops = [...strip.querySelectorAll('[role="tab"]')].filter((node) => node.tabIndex === 0)
     assert.equal(stops.length, 1, `exactly one tab is in the tab order after switching to ${target.label}`)
     assert.equal(
@@ -270,8 +271,8 @@ test('switching panels does not take the tab strip with it', async () => {
 })
 
 test('every panel is reachable from the strip and only one is ever visible', async () => {
-  // The same three clicks again, from a clean open, asserting the shape of the
-  // control rather than one particular transition: three tabs, three panels, and
+  // The same clicks again, from a clean open, asserting the shape of the
+  // control rather than one particular transition: one tab per section, one panel per section, and
   // no point in the cycle where two panels are showing at once.
   await openSettings()
 

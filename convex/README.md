@@ -11,6 +11,11 @@ research quality, word/section counts and token usage. The prompt is represented
 by a SHA-256 hash and its length; a short preview is sent only when
 `QUILL_TELEMETRY_PROMPT=1`.
 
+This mirror is optional and configured per installation. Without
+`QUILL_CONVEX_URL` and `QUILL_CONVEX_TOKEN`, Quill still appends every record to
+its local `generations.jsonl`; a failed post is logged and never fails the run.
+**Settings → System** shows which of the two targets is active.
+
 ## Deploy
 
 This directory is the Convex project root. Its functions live in `convex/`.

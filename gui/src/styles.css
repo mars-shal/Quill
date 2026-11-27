@@ -1736,6 +1736,7 @@ kbd { padding: 2px 4px; color: var(--text-2); background: var(--sidebar); border
 .settings-status { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; color: var(--text-3); background: var(--sidebar); border-radius: 999px; font-family: var(--mono); font-size: 9.5px; white-space: nowrap; }
 .settings-status.connected { color: var(--publish); background: color-mix(in srgb, var(--publish) 10%, transparent); }
 .settings-status.error { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+#settings-system .system-detail { margin: -6px 0 16px; color: var(--text-3); font-family: var(--mono); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
 .settings-note { margin: 0; padding: 0 0 4px; }
 
 /* The save toast: what acknowledges a write now that the status line and the

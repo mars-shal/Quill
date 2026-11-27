@@ -195,6 +195,27 @@ export const handlers = {
   api_transcribe: () => ({ text: 'spoken words' }),
   check_updates: () => ({ current: '0.35.0', latest: '0.35.0', available: false, url: '' }),
   get_settings: () => SETTINGS,
+  pipeline_status: () => ({ state: 'ready', detail: 'the pipeline is serving http://127.0.0.1:8000' }),
+  system_status: () => ({
+    pipeline: {
+      running: true,
+      version: '0.35.0',
+      workspace: '/tmp/quill',
+      python: '3.12.0',
+      platform: 'Linux',
+    },
+    search: {
+      configured: true,
+      url: 'http://127.0.0.1:8080',
+      reachable: true,
+      json: true,
+      results: 2,
+      backend: 'searxng',
+      docker: true,
+      detail: '',
+    },
+    telemetry: { ledger: '/tmp/quill/generations.jsonl', convexConfigured: false },
+  }),
   usage_stats: () => ({
     date: '2026-01-01',
     limit: 200000,

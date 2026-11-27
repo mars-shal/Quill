@@ -23,9 +23,14 @@ from __future__ import annotations
 import argparse
 import os
 import json
+import platform
 import re
+import shutil
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -1057,6 +1062,8 @@ class Handler(BaseHTTPRequestHandler):
                                     "gap_research": bool(os.environ.get("QUILL_GAP_RESEARCH"))})
         if path == "/generations":
             return self._generations()
+        if path == "/diagnostics":
+            return self._diagnostics()
         if path == "/usage":
             # Today's token spend per model, accumulated by the model layer on
             # every call (provider-reported totals, estimates as fallback) --
@@ -1343,6 +1350,88 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": "no such turn"})
         turn.cancel()
         return self._json(200, {"cancelled": True})
+
+    def _diagnostics(self) -> None:
+        """What a fresh install needs to know, answered by the process itself.
+
+        This exists because Quill runs on machines the author never sees. The
+        three things that fail elsewhere are all environment, not code: a
+        missing sidecar, a search backend that is not running, and telemetry
+        that was never configured. Each one reports its own state here, so a
+        reader (or a support thread) can tell "not set up" apart from "broken".
+        """
+        search_url = os.environ.get("QUILL_SEARXNG_URL")
+        search_url = (
+            "http://127.0.0.1:8080" if search_url is None else search_url
+        ).strip().rstrip("/")
+        search = {
+            "configured": bool(search_url),
+            "url": search_url,
+            "reachable": False,
+            "json": False,
+            "results": 0,
+            "backend": "scrapers",
+            "docker": bool(shutil.which("docker")),
+            "detail": "",
+        }
+        if not search_url:
+            search["detail"] = (
+                "Search is explicitly disabled (QUILL_SEARXNG_URL is empty); "
+                "research falls back to the scrapers."
+            )
+        else:
+            probe = (
+                f"{search_url}/search?"
+                + urllib.parse.urlencode(
+                    {"q": "quill health", "format": "json",
+                     "categories": "general", "language": "en"}
+                )
+            )
+            try:
+                with urllib.request.urlopen(probe, timeout=6) as response:
+                    payload = json.loads(response.read().decode("utf-8", "replace"))
+                results = payload.get("results") if isinstance(payload, dict) else None
+                search["reachable"] = True
+                search["json"] = isinstance(results, list)
+                search["results"] = len(results) if isinstance(results, list) else 0
+                search["backend"] = "searxng"
+                if not search["json"]:
+                    search["detail"] = "The instance answered, but not with JSON results."
+            except urllib.error.HTTPError as exc:
+                search["reachable"] = True
+                if exc.code == 403:
+                    search["detail"] = (
+                        "HTTP 403: add 'json' under search.formats in SearXNG's "
+                        "settings.yml, then restart the container."
+                    )
+                else:
+                    search["detail"] = f"The instance answered HTTP {exc.code}."
+            except Exception as exc:  # noqa: BLE001 - this is a status report
+                search["detail"] = (
+                    f"{type(exc).__name__}: {exc}. Research falls back to the scrapers."
+                )
+
+        ledger = os.environ.get("QUILL_GENERATIONS_PATH", "").strip()
+        ledger = Path(ledger).expanduser() if ledger else Path("output") / "generations.jsonl"
+        telemetry = {
+            "ledger": str(ledger),
+            "convexConfigured": bool(
+                os.environ.get("QUILL_CONVEX_URL")
+                and os.environ.get("QUILL_CONVEX_TOKEN")
+            ),
+        }
+
+        return self._json(200, {
+            "pipeline": {
+                "running": True,
+                "version": os.environ.get("QUILL_APP_VERSION", "0.35.0"),
+                "workspace": str(Path.cwd()),
+                "python": platform.python_version(),
+                "platform": platform.system(),
+            },
+            "search": search,
+            "telemetry": telemetry,
+        })
 
     def _generations(self) -> None:
         """The last 100 local generation records, for a dashboard or curl."""

@@ -16,7 +16,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon.jsx";
 import { ModalLayer } from "../ModalLayer.jsx";
-import { getProviderSecretStatus, isLocalEndpoint, listProviderModels, slugify, usageStats } from "../platform/store.js";
+import { getProviderSecretStatus, isLocalEndpoint, listProviderModels, slugify, usageStats, systemStatus, pipelineStatus, pipelineStart } from "../platform/store.js";
 import { resolveTheme } from "./themes.js";
 
 // The three appearance choices from the Paper reference. "System" is the OS
@@ -97,6 +97,13 @@ const SETTINGS_SECTIONS = [
     title: "Writing preferences",
     note: "Small defaults that make a long session feel less noisy.",
     Panel: WritingPanel,
+  },
+  {
+    id: "settings-system",
+    label: "System",
+    title: "This machine",
+    note: "The services Quill needs here, and what to do when one is not answering.",
+    Panel: SystemPanel,
   },
 ];
 
@@ -934,7 +941,7 @@ function SettingsPage({
                     <h3>{section.title}</h3>
                     <p>{section.note}</p>
                   </div>
-                  <Panel {...panelProps} />
+                  <Panel {...panelProps} active={section.id === activeTab} />
                 </section>
               );
             });
@@ -2089,6 +2096,179 @@ function WritingPanel({ draft, update, documents = [] }) {
           {updateState === "loading" ? "Checking…" : "Check for updates"}
         </button>
       </div>
+    </>
+  );
+}
+
+/**
+ * System: what this installation can actually do right now.
+ *
+ * Quill is three things that ship separately -- the app, the Python pipeline and
+ * a search backend -- so "it works on my machine" is not a property of the code.
+ * This panel is the answer to a support thread: it asks the running sidecar what
+ * it sees, probes the configured search instance, and reports the ledger and
+ * telemetry state. Every row names its own fix, and the restart button is the
+ * one action that resolves the most common failure (a sidecar left behind by a
+ * previous session).
+ *
+ * The report is per machine and deliberately not synced: it describes this PC,
+ * not the reader or the document.
+ */
+function SystemPanel({ active = true } = {}) {
+  const [report, setReport] = useState(null);
+  const [pipeline, setPipeline] = useState(null);
+  const [state, setState] = useState("loading");
+  const [busy, setBusy] = useState(false);
+
+  const refresh = async () => {
+    setState("loading");
+    const [next, live] = await Promise.all([systemStatus(), pipelineStatus()]);
+    setReport(next);
+    setPipeline(live);
+    setState(next ? "ready" : "offline");
+  };
+
+  // Only the panel on screen probes. The tabs stay mounted, so an ungated
+  // effect would run a live search request every time Settings opened, even
+  // for a reader who came in to change a font.
+  useEffect(() => {
+    if (!active) return undefined;
+    let cancelled = false;
+    (async () => {
+      const [next, live] = await Promise.all([systemStatus(), pipelineStatus()]);
+      if (cancelled) return;
+      setReport(next);
+      setPipeline(live);
+      setState(next ? "ready" : "offline");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
+
+  const restart = async () => {
+    setBusy(true);
+    await pipelineStart();
+    await refresh();
+    setBusy(false);
+  };
+
+  const search = report?.search;
+  const searchOk = Boolean(search?.reachable && search?.json);
+  const serviceReady = pipeline?.state === "ready";
+  const checking = state === "loading";
+
+  return (
+    <>
+      <div className="settings-banner" role="note">
+        <span className="settings-banner-mark" aria-hidden="true">
+          <Icon name="check" size={16} />
+        </span>
+        <div>
+          <strong>These checks describe this computer</strong>
+          <div className="settings-banner-sub">
+            They do not travel with a document. On a new machine, an API key or a
+            local model is the only thing a reader has to set up before writing.
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <span className="settings-row-label">Writing service</span>
+          <small>
+            {checking
+              ? "Checking the local pipeline…"
+              : serviceReady
+                ? "Running here. Quill starts it with the app and stops it on exit."
+                : "Not answering. Writing, chat and research all need it."}
+          </small>
+        </div>
+        <div className="settings-row-control">
+          <span className={`settings-status${serviceReady ? " connected" : " error"}`}>
+            {checking ? "Checking" : serviceReady ? "Running" : "Not running"}
+          </span>
+          <button
+            className="soft-button"
+            type="button"
+            onClick={restart}
+            disabled={busy}
+          >
+            {busy ? "Starting…" : "Restart"}
+          </button>
+        </div>
+      </div>
+      {pipeline?.detail && <p className="system-detail">{pipeline.detail}</p>}
+
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <span className="settings-row-label">Research search</span>
+          <small>
+            {checking
+              ? "Probing the configured search instance…"
+              : searchOk
+                ? "SearXNG answered a live query. Research uses it before the scrapers."
+                : search?.configured
+                  ? "SearXNG is not answering, so research falls back to DuckDuckGo and Bing."
+                  : "Search is switched off for this install."}
+          </small>
+        </div>
+        <div className="settings-row-control">
+          <span className={`settings-status${searchOk ? " connected" : search?.configured ? " error" : ""}`}>
+            {checking ? "Checking" : searchOk ? "SearXNG" : search?.configured ? "Scrapers" : "Off"}
+          </span>
+          <button
+            className="soft-button"
+            type="button"
+            onClick={refresh}
+            disabled={checking}
+          >
+            Check again
+          </button>
+        </div>
+      </div>
+      {search && (
+        <p className="system-detail">
+          {searchOk
+            ? `${search.results} result${search.results === 1 ? "" : "s"} from ${search.url}`
+            : search.detail || search.url || "No search backend configured."}
+        </p>
+      )}
+
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <span className="settings-row-label">Generation ledger</span>
+          <small>
+            Every long-form write records one metadata row here. The prompt is
+            hashed, never copied.
+          </small>
+        </div>
+        <div className="settings-row-control">
+          <span className={`settings-status${report?.telemetry?.convexConfigured ? " connected" : ""}`}>
+            {report?.telemetry?.convexConfigured ? "Local + Convex" : "Local only"}
+          </span>
+        </div>
+      </div>
+      {report?.telemetry?.ledger && (
+        <p className="system-detail">{report.telemetry.ledger}</p>
+      )}
+
+      <div className="settings-row">
+        <div className="settings-row-copy">
+          <span className="settings-row-label">This machine</span>
+          <small>
+            {report?.pipeline
+              ? `${report.pipeline.platform} · Python ${report.pipeline.python} · app ${report.pipeline.version}`
+              : "Waiting for the writing service to report."}
+          </small>
+        </div>
+        <div className="settings-row-control">
+          <span className="settings-status">{checking ? "Checking" : state === "ready" ? "Reported" : "No report"}</span>
+        </div>
+      </div>
+      {report?.pipeline?.workspace && (
+        <p className="system-detail">{report.pipeline.workspace}</p>
+      )}
     </>
   );
 }

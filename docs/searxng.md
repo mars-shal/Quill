@@ -14,7 +14,21 @@ Configuration is read from the environment at call time. There is deliberately n
 
 ## 1. Quick start (development)
 
-The dev script runs SearXNG for you, which is the normal way to get this working:
+### Installed builds start it themselves
+
+The AppImage carries Quill and its Python sidecar, not Docker and not this
+image. On every launch, if the loopback URL is not answering, the app checks for
+Docker and either starts the existing `quill-searxng` container or creates it
+from `searxng/searxng:latest`. It writes the settings file into the app-data
+directory first — that file is what enables `format=json` — and mounts it
+read-only. This runs in the background after the window opens; a missing Docker
+is a log line, never a launch failure, and research falls back to the scrapers.
+
+The one thing the app cannot do is install Docker. **Settings → System** reports
+whether search is on SearXNG or on the fallback, with the reason.
+
+The dev script runs SearXNG for you, which is the normal way to get this working
+from a checkout:
 
 ```bash
 cd gui
@@ -146,10 +160,14 @@ Add `shareProcessNamespace: true` only if the app must see SearXNG's processes; 
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `QUILL_SEARXNG_URL` | unset (provider disabled, returns `[]`) | Base URL of the SearXNG instance, e.g. `http://localhost:8080` |
+| `QUILL_SEARXNG_URL` | unset (treated as `http://127.0.0.1:8080`) | Base URL of the SearXNG instance, e.g. `http://localhost:8080`. An explicitly empty value (`QUILL_SEARXNG_URL=`) disables the provider. |
 | `QUILL_SEARXNG_CATEGORIES` | `general` | Comma-separated SearXNG categories sent as the `categories` query parameter |
 
-When `QUILL_SEARXNG_URL` is unset the provider does not perform research. The local development convention is `http://localhost:8080`, which is what `.env.example` ships.
+When `QUILL_SEARXNG_URL` is unset the provider uses the conventional local
+instance at `http://127.0.0.1:8080`; it does not guess and it does not disable
+itself. Only an explicit empty value means "no provider". With no instance
+answering, each query returns `[]` and research continues through the scraper
+fallback.
 
 ## 8. Tuning
 
