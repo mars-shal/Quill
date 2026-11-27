@@ -269,20 +269,27 @@ fn spawn_binary(binary: &Path, root: &Path, port: &str) -> std::io::Result<Child
 ///
 /// Development has no such file and falls through to the project venv.
 pub(crate) fn bundled_binary() -> Option<PathBuf> {
+    bundled_tool("quill-sidecar")
+}
+
+/// A Tauri `externalBin` copied beside the main executable.
+///
+/// SearXNG is shipped the same way, so both tools share the lookup: the bare
+/// name Tauri writes when it bundles, and the target-suffixed name a local
+/// `target/<profile>` can still hold next to a hand-copied build.
+pub(crate) fn bundled_tool(tool: &str) -> Option<PathBuf> {
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    for name in ["quill-sidecar", "quill-sidecar.exe"] {
+    for name in [tool.to_string(), format!("{tool}.exe")] {
         let candidate = dir.join(name);
         if candidate.is_file() {
             return Some(candidate);
         }
     }
-    // Tauri renames the target-suffixed source to the bare name when it bundles,
-    // but a local `target/<profile>` next to a hand-copied build can still hold
-    // the suffixed file. Accept either spelling.
+    let prefix = format!("{tool}-");
     let entries = std::fs::read_dir(&dir).ok()?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with("quill-sidecar-") && entry.path().is_file() {
+        if name.starts_with(&prefix) && entry.path().is_file() {
             return Some(entry.path());
         }
     }

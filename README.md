@@ -124,22 +124,20 @@ five-minute first run and a support thread.
 
 | Layer | Ships with the app | Where it lives |
 | --- | --- | --- |
-| App, Python sidecar | yes | inside the AppImage |
+| App, Python sidecar, SearXNG server | yes | inside the AppImage |
 | Documents, settings, keys | no | per-user app-data directory |
-| SearXNG (research) | no | a Docker container, started on demand |
 | Convex (telemetry) | no | optional, configured per install |
 
 **First run, in order:**
 
-1. Open Quill. The Rust supervisor starts the bundled sidecar on a loopback port
-   and waits for `/health`; nothing has to be started by hand.
+1. Open Quill. The Rust supervisor starts the bundled pipeline sidecar on a
+   loopback port and waits for `/health`; nothing has to be started by hand.
 2. Connect a provider in onboarding, or enter an API key on
    **Settings → Assistant**. A local model or a CLI tool needs no key at all.
-3. Research is optional. If a loopback SearXNG is not answering, Quill looks for
-   Docker and either starts `quill-searxng` or creates it from
-   `searxng/searxng:latest`, writing a settings file that enables `format=json`.
-   With no Docker, research falls back to the DuckDuckGo and Bing scrapers and
-   the rest of the app is unaffected.
+3. Search needs no setup. If nothing answers on `127.0.0.1:8080`, Quill starts
+   its bundled SearXNG (`quill-searxng`, an unmodified upstream build) and points
+   the pipeline at it. The settings file that enables `format=json` is written
+   into the app-data directory on demand.
 4. **Settings → System** reports the three pieces separately: the writing
    service, the search backend, and the generation ledger. Each row says what is
    wrong and offers the one action that fixes it — restart the service, re-probe
@@ -147,10 +145,15 @@ five-minute first run and a support thread.
 5. Convex is opt-in and per install. Without `QUILL_CONVEX_URL` and
    `QUILL_CONVEX_TOKEN`, every run still records to `generations.jsonl` locally.
 
+Docker is still supported, as a fallback rather than a requirement: a machine
+without the bundled binary but with Docker gets the old `quill-searxng`
+container, started or created on demand. With neither, research falls back to
+the DuckDuckGo and Bing scrapers and the rest of the app is unaffected.
+
 Nothing machine-specific is baked into the build: keys live in the OS credential
 store, the workspace is under the user's app-data directory, and the search
-container is created from the stock image on the machine that runs it. The
-AppImage itself is the same file everywhere.
+server is built from a pinned upstream commit. The AppImage itself is the same
+file everywhere.
 
 For a shared or headless install, use the Compose stack instead — it runs the
 sidecar and SearXNG together with restart policies, and the desktop app can drive
@@ -219,3 +222,11 @@ Runtime copies live in [`gui/public/brand/`](gui/public/brand/).
 ## License
 
 [MIT](LICENSE) © 2026 Quill contributors.
+
+Packaged builds also carry **[SearXNG](https://github.com/searxng/searxng)**, the
+search backend, under **AGPL-3.0-or-later**. It is bundled unmodified: Quill only
+starts it and writes its settings file. The exact upstream commit and the SHA-256
+of the source archive are pinned in
+[`gui/scripts/build-searxng.py`](gui/scripts/build-searxng.py), which is the
+corresponding-source reference for any binary built from it; the settings Quill
+writes at run time are in `gui/src-tauri/src/search.rs`.

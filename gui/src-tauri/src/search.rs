@@ -1,32 +1,28 @@
-//! Starts the optional local search backend before research needs it.
+//! Starts the local search backend before research needs it.
 //!
-//! The AppImage carries Quill and the Python sidecar. It cannot carry Docker or
-//! the SearXNG image: one is a system service and the other is a separately
-//! licensed server. So the honest contract is "works when Docker is there, says
-//! so when it is not": research already falls back to the DuckDuckGo and Bing
-//! scrapers, and this module must never make launch wait for, or fail on, a
-//! search helper.
+//! Research talks to SearXNG over HTTP. There are three ways that server can
+//! exist, and this module tries them in order:
 //!
-//! Everything here runs off the main thread, after the window is up. A first run
-//! with no image can spend minutes pulling one, and blocking the editor behind
-//! that would be a worse bug than the one it fixes.
+//! 1. **Bundled.** Packaged builds carry an unmodified SearXNG as a PyInstaller
+//!    sidecar (`quill-searxng`), so a fresh install needs neither Docker nor a
+//!    network before its first search. This is the normal path.
+//! 2. **Docker.** A machine with no bundled binary but with Docker gets the
+//!    existing container: started if present, created from the stock image with
+//!    a settings file if not.
+//! 3. **Scrapers.** With neither, research falls back to the DuckDuckGo and
+//!    Bing scrapers. That is a degraded quality, not a broken app, so it is
+//!    logged rather than surfaced as a failure.
 //!
-//! What it does, in order:
+//! An explicitly empty `QUILL_SEARXNG_URL` is an opt-out and a non-loopback URL
+//! is an operator-managed instance; both are left alone.
 //!
-//! 1. Leave a non-loopback or explicitly empty `QUILL_SEARXNG_URL` alone; those
-//!    mean the operator manages the instance.
-//! 2. Return immediately when something already answers `/healthz`.
-//! 3. `docker start quill-searxng` if the container exists, recreating it when
-//!    it was published on a different port (ports cannot be re-mapped by
-//!    `docker start`).
-//! 4. Otherwise write a minimal Settings file into the app-data directory and
-//!    `docker run` the image with it mounted. That file is the one thing that
-//!    makes `format=json` work; without it every search is a silent 403.
-//!
-//! Every step logs, because the failure this replaces was invisible: research
-//! quietly degraded to scrapers and read as "flaky".
+//! Everything runs off the main thread, after the window is up. Unpacking a
+//! 60 MB binary and a first Docker pull are both slow, and blocking the editor
+//! behind either would be worse than the problem this solves.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Stdio};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::Manager;
@@ -36,22 +32,49 @@ const IMAGE: &str = "searxng/searxng:latest";
 const DEFAULT_URL: &str = "http://127.0.0.1:8080";
 const SETTINGS_FILE: &str = "searxng-settings.yml";
 
-/// Settings that must exist in the container. `json` under `search.formats` is
-/// the line the whole provider depends on; `limiter: false` stops the bot
-/// heuristics from 429ing a loopback JSON client after a few research rounds.
-const SETTINGS: &str = r#"# Written by Quill for its local SearXNG container.
-# Mounted read-only at /etc/searxng/settings.yml.
+/// Settings the server needs. `json` under `search.formats` is the line the
+/// whole provider depends on; `limiter: false` stops the bot heuristics from
+/// 429ing a loopback JSON client after a few research rounds.
+///
+/// `contact_url` is required by the Wikipedia engine, and `instance_name` keeps
+/// its API responses honest about what this instance is. The three engines are
+/// the ones that answer reliably without a token: the default list is broad and
+/// half of it needs credentials or upstream keys Quill does not have.
+const SETTINGS_TEMPLATE: &str = r#"# Written by Quill for its local SearXNG server.
+# Mounted read-only at /etc/searxng/settings.yml when Docker runs it, and
+# pointed at directly by SEARXNG_SETTINGS_PATH when the bundled binary does.
 use_default_settings: true
+
+general:
+  instance_name: "Quill"
+  contact_url: "https://github.com/searxng/searxng"
 
 server:
   secret_key: "quill-local-search-only-not-for-deployment"
   limiter: false
+  port: {port}
+  bind_address: "127.0.0.1"
 
 search:
   formats:
     - html
     - json
+
+engines:
+  - name: duckduckgo
+  - name: brave
+  - name: wikipedia
+  # Both fail to register in a frozen build (one needs a token, the other a
+  # dependency Quill does not ship) and would log an error on every start.
+  - name: ahmia
+    disabled: true
+  - name: torch
+    disabled: true
 "#;
+
+/// The bundled server, so exit can reap it. A child left holding 8080 would be
+/// adopted by the next launch (which is safe but means a stale settings file).
+static BUNDLED: Mutex<Option<Child>> = Mutex::new(None);
 
 /// Kick off the check without waiting for it. Errors are logged, never surfaced
 /// as a dialog: a reader who writes without research is still writing.
@@ -63,6 +86,18 @@ pub fn ensure_local_search(app: tauri::AppHandle) {
     });
 }
 
+/// Kill the bundled server. Safe when nothing is running.
+pub fn stop() {
+    let Ok(mut guard) = BUNDLED.lock() else {
+        return;
+    };
+    let Some(mut child) = guard.take() else {
+        return;
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 async fn ensure(app: &tauri::AppHandle) -> Result<(), String> {
     let configured = std::env::var("QUILL_SEARXNG_URL").ok();
     let base = match configured.as_deref() {
@@ -72,22 +107,120 @@ async fn ensure(app: &tauri::AppHandle) -> Result<(), String> {
         None => DEFAULT_URL.to_string(),
     };
     if !is_loopback(&base) {
-        tracing::debug!(base = %base, "search points at another host; the local container is not Quill's business");
+        tracing::debug!(base = %base, "search points at another host; local search is not Quill's business");
         return Ok(());
     }
     if healthy(&base).await {
         tracing::debug!(base = %base, "local search is already answering");
         return Ok(());
     }
+    // Only the conventional port is Quill's to fill. A different loopback port
+    // means someone configured an instance; a server started on 8080 would not
+    // be the one the sidecar asks.
+    if base != DEFAULT_URL {
+        tracing::info!(
+            base = %base,
+            "nothing is answering at the configured loopback URL; research will use the scrapers"
+        );
+        return Ok(());
+    }
 
+    // The bundled server is the normal path: no daemon, no image, no root.
+    if let Some(binary) = bundled_binary() {
+        match start_bundled(app, &binary, &base).await {
+            Ok(()) => return Ok(()),
+            Err(reason) => {
+                tracing::warn!(%reason, "the bundled search server did not start; trying Docker");
+            }
+        }
+    }
+
+    start_docker(app, &base, port_of(&base)).await
+}
+
+// --- bundled ---------------------------------------------------------------
+
+async fn start_bundled(app: &tauri::AppHandle, binary: &Path, base: &str) -> Result<(), String> {
+    let port = port_of(base);
+    let settings = settings_path(app)?;
+    write_settings(&settings, port)?;
+
+    let mut command = std::process::Command::new(binary);
+    command
+        .env("SEARXNG_SETTINGS_PATH", &settings)
+        .stdin(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command
+            .creation_flags(0x0800_0000)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+    }
+    #[cfg(not(windows))]
+    {
+        // Inherited so a failure to bind or load an engine reaches the log the
+        // app was launched from, instead of a pipe nobody drains.
+        command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    }
+
+    let child = command
+        .spawn()
+        .map_err(|error| format!("could not start {}: {error}", binary.display()))?;
+    if let Ok(mut guard) = BUNDLED.lock() {
+        // Reap a previous child first; a second server would only fail to bind.
+        if let Some(mut old) = guard.replace(child) {
+            let _ = old.kill();
+            let _ = old.wait();
+        }
+    }
+    tracing::info!(binary = %binary.display(), port, "started the bundled search server");
+
+    for _ in 0..80 {
+        if healthy(base).await {
+            probe_json(base).await;
+            return Ok(());
+        }
+        if exited() {
+            // The child is gone; give the reason a chance to name the cause.
+            return Err("the bundled search server exited during startup".to_string());
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+    Err("the bundled search server did not answer /healthz within 20s".to_string())
+}
+
+fn exited() -> bool {
+    let Ok(mut guard) = BUNDLED.lock() else {
+        return false;
+    };
+    match guard.as_mut() {
+        Some(child) => matches!(child.try_wait(), Ok(Some(_)) | Err(_)),
+        None => true,
+    }
+}
+
+fn bundled_binary() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("QUILL_SEARXNG_BIN") {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    crate::sidecar::bundled_tool("quill-searxng")
+}
+
+// --- Docker fallback -------------------------------------------------------
+
+async fn start_docker(app: &tauri::AppHandle, base: &str, port: u16) -> Result<(), String> {
     let Some(docker) = docker_binary().await else {
         tracing::info!(
-            "SearXNG is not answering and Docker is not installed; research will use the scrapers"
+            "SearXNG is not answering and neither the bundled server nor Docker is available; \
+             research will use the scrapers"
         );
         return Ok(());
     };
-    let port = port_of(&base);
-    tracing::info!(%docker, port, "starting the local search container");
+    tracing::info!(%docker, port, "starting the Docker search container");
 
     // A container created for another port boots and answers nowhere, and
     // `docker start` cannot re-map it. It holds no state, so replacing it is
@@ -108,11 +241,9 @@ async fn ensure(app: &tauri::AppHandle) -> Result<(), String> {
         return Err("the search container could not be created".to_string());
     }
 
-    // A container boot is seconds, a first pull is not; the pull already
-    // finished inside `starts_container`, so this window only covers boot.
     for _ in 0..120 {
-        if healthy(&base).await {
-            probe_json(&base).await;
+        if healthy(base).await {
+            probe_json(base).await;
             tracing::info!(base = %base, "local search is ready");
             return Ok(());
         }
@@ -123,17 +254,10 @@ async fn ensure(app: &tauri::AppHandle) -> Result<(), String> {
     ))
 }
 
-/// Write the settings file if it is missing and create the container.
+/// Create the container from the stock image, with Quill's settings mounted.
 async fn starts_container(docker: &str, app: &tauri::AppHandle, port: u16) -> Result<bool, String> {
     let settings = settings_path(app)?;
-    if !settings.exists() {
-        if let Some(parent) = settings.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
-        }
-        std::fs::write(&settings, SETTINGS)
-            .map_err(|error| format!("could not write {}: {error}", settings.display()))?;
-    }
+    write_settings(&settings, port)?;
     let mount = format!("{}:/etc/searxng/settings.yml:ro", settings.display());
     let publish = format!("127.0.0.1:{port}:8080");
 
@@ -163,6 +287,16 @@ async fn starts_container(docker: &str, app: &tauri::AppHandle, port: u16) -> Re
         return Ok(false);
     }
     Ok(true)
+}
+
+fn write_settings(path: &Path, port: u16) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("could not create {}: {error}", parent.display()))?;
+    }
+    let settings = SETTINGS_TEMPLATE.replace("{port}", &port.to_string());
+    std::fs::write(path, settings)
+        .map_err(|error| format!("could not write {}: {error}", path.display()))
 }
 
 fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -267,7 +401,7 @@ async fn probe_json(base: &str) {
         Ok(response) if response.status().is_success() => {}
         Ok(response) if response.status().as_u16() == 403 => {
             tracing::warn!(
-                "SearXNG answered 403 for format=json; add 'json' under search.formats in its settings.yml"
+                "SearXNG answered 403 for format=json; its settings.yml is missing 'json' under search.formats"
             );
         }
         Ok(response) => {
@@ -319,8 +453,12 @@ mod tests {
     }
 
     #[test]
-    fn the_written_settings_enable_json() {
-        assert!(SETTINGS.contains("json"));
-        assert!(SETTINGS.contains("use_default_settings: true"));
+    fn the_written_settings_enable_json_and_name_the_instance() {
+        let rendered = SETTINGS_TEMPLATE.replace("{port}", "8080");
+        assert!(rendered.contains("json"));
+        assert!(rendered.contains("use_default_settings: true"));
+        assert!(rendered.contains("contact_url"));
+        assert!(rendered.contains("port: 8080"));
+        assert!(!rendered.contains("{port}"));
     }
 }

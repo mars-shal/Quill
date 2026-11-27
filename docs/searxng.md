@@ -14,18 +14,32 @@ Configuration is read from the environment at call time. There is deliberately n
 
 ## 1. Quick start (development)
 
-### Installed builds start it themselves
+### Installed builds carry the server
 
-The AppImage carries Quill and its Python sidecar, not Docker and not this
-image. On every launch, if the loopback URL is not answering, the app checks for
-Docker and either starts the existing `quill-searxng` container or creates it
-from `searxng/searxng:latest`. It writes the settings file into the app-data
-directory first — that file is what enables `format=json` — and mounts it
-read-only. This runs in the background after the window opens; a missing Docker
-is a log line, never a launch failure, and research falls back to the scrapers.
+The AppImage ships an unmodified SearXNG as a second sidecar (`quill-searxng`),
+so research works on a fresh install with no Docker, no system service and no
+setup step. On launch, if `127.0.0.1:8080` is not already answering, the app:
 
-The one thing the app cannot do is install Docker. **Settings → System** reports
-whether search is on SearXNG or on the fallback, with the reason.
+1. writes `searxng-settings.yml` into its app-data directory (the file that
+   enables `format=json`),
+2. starts the bundled server with `SEARXNG_SETTINGS_PATH` pointing at it, and
+3. waits for `/healthz`, then probes one real JSON query.
+
+The child is reaped when the app exits. Everything runs after the window opens,
+so a slow first start never blocks the editor.
+
+Docker remains a fallback: a machine without the bundled binary but with Docker
+gets the old container path (start `quill-searxng`, or create it from
+`searxng/searxng:latest` with the same settings file mounted read-only). With
+neither, research falls back to the scrapers — a log line, never a failed
+launch. **Settings → System** reports which of the three is in use, with the
+reason.
+
+The bundled binary is built by `gui/scripts/build-searxng.py`, which downloads a
+pinned upstream commit, verifies its SHA-256, and freezes it with PyInstaller.
+SearXNG is AGPL-3.0-or-later and is not modified; the pin and hash in that script
+are the corresponding-source reference for any binary built from it. Rebuild it
+with `npm run search:build` (part of `npm run build:desktop`).
 
 The dev script runs SearXNG for you, which is the normal way to get this working
 from a checkout:

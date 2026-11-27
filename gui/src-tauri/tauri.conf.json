@@ -4,7 +4,7 @@
   "version": "0.35.0",
   "identifier": "app.quill.workspace",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run search:ensure && npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build:desktop",
     "frontendDist": "../dist"
@@ -31,7 +31,8 @@
     "active": true,
     "targets": "all",
     "externalBin": [
-      "binaries/quill-sidecar"
+      "binaries/quill-sidecar",
+      "binaries/quill-searxng"
     ],
     "icon": [
       "icons/32x32.png",

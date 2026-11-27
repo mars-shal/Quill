@@ -2206,16 +2206,18 @@ function SystemPanel({ active = true } = {}) {
           <small>
             {checking
               ? "Probing the configured search instance…"
-              : searchOk
-                ? "SearXNG answered a live query. Research uses it before the scrapers."
-                : search?.configured
-                  ? "SearXNG is not answering, so research falls back to DuckDuckGo and Bing."
-                  : "Search is switched off for this install."}
+              : !report
+                ? "The writing service is not running, so it cannot report the search backend yet."
+                : searchOk
+                  ? "SearXNG answered a live query. Research uses it before the scrapers."
+                  : search?.configured
+                    ? "SearXNG is not answering, so research falls back to DuckDuckGo and Bing."
+                    : "Search is switched off for this install."}
           </small>
         </div>
         <div className="settings-row-control">
-          <span className={`settings-status${searchOk ? " connected" : search?.configured ? " error" : ""}`}>
-            {checking ? "Checking" : searchOk ? "SearXNG" : search?.configured ? "Scrapers" : "Off"}
+          <span className={`settings-status${searchOk ? " connected" : report && search?.configured ? " error" : ""}`}>
+            {checking ? "Checking" : !report ? "Unknown" : searchOk ? "SearXNG" : search?.configured ? "Scrapers" : "Off"}
           </span>
           <button
             className="soft-button"
@@ -2245,7 +2247,11 @@ function SystemPanel({ active = true } = {}) {
         </div>
         <div className="settings-row-control">
           <span className={`settings-status${report?.telemetry?.convexConfigured ? " connected" : ""}`}>
-            {report?.telemetry?.convexConfigured ? "Local + Convex" : "Local only"}
+            {!report
+              ? "Unknown"
+              : report.telemetry?.convexConfigured
+                ? "Local + Convex"
+                : "Local only"}
           </span>
         </div>
       </div>

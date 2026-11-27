@@ -174,6 +174,7 @@ pub fn run() {
     // one keeps the port against the next launch.
     app.run(|app_handle, event| {
         if matches!(event, tauri::RunEvent::Exit) {
+            search::stop();
             pipeline::stop_on_exit(app_handle);
         }
     });

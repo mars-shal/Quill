@@ -4,11 +4,11 @@
   "version": "0.35.0",
   "license": "MIT",
   "type": "module",
-  "description": "Quill — a desktop editor for long-form writing with built-in AI.",
+  "description": "Quill \u2014 a desktop editor for long-form writing with built-in AI.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:desktop": "npm run build && npm run sidecar:build",
+    "build:desktop": "npm run build && npm run sidecar:build && npm run search:build",
     "sidecar:build": "uv run --frozen python scripts/build-sidecar.py",
     "preview": "vite preview",
     "tauri": "bash scripts/tauri.sh",
@@ -20,7 +20,9 @@
     "check:rust": "bash scripts/check-rust.sh",
     "check": "npm run check:contrast && npm run test && npm run check:rust",
     "verify": "node scripts/verify-persistence.mjs && node scripts/verify-legacy-import.mjs && node scripts/verify-export.mjs",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "search:build": "uv run --frozen python scripts/build-searxng.py",
+    "search:ensure": "uv run --frozen python scripts/build-searxng.py --ensure"
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.3.5",
