@@ -1424,7 +1424,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(200, {
             "pipeline": {
                 "running": True,
-                "version": os.environ.get("QUILL_APP_VERSION", "0.35.0"),
+                "version": os.environ.get("QUILL_APP_VERSION", "0.35.1"),
                 "workspace": str(Path.cwd()),
                 "python": platform.python_version(),
                 "platform": platform.system(),
