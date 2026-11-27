@@ -349,6 +349,39 @@ export function sanitizeHtml(source = '') {
  * turns literal LaTeX in text nodes into real math nodes, drops empty
  * paragraphs, and leaves the document's own structure alone.
  */
+/**
+ * Drops a numbered section that appears twice.
+ *
+ * A WRITE turn used to append its whole plan under the draft, so a document
+ * written twice carried two copies of every heading and body. The write path
+ * now replaces instead, but a document written before that fix still needs a
+ * repair. Only numbered headings are treated as section starts: a repeated
+ * "Introduction" can be legitimate, a repeated "2.1 Scope" is a duplicate.
+ */
+function removeDuplicateSections(doc) {
+  const seen = new Set()
+  for (const heading of [...doc.body.querySelectorAll('h1, h2, h3')]) {
+    const text = String(heading.textContent || '').trim()
+    if (!/^\d+(?:\.\d+)*[.)]?\s+\S/.test(text)) continue
+    const key = `${heading.tagName}:${text.toLowerCase()}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      continue
+    }
+    if (!heading.isConnected) continue
+    // Remove the duplicate heading and its own paragraphs. Stop at any heading:
+    // subsections carry their own duplicate keys and are removed on their own
+    // pass, so a unique subsection is never deleted with the block above it.
+    let node = heading
+    while (node) {
+      const next = node.nextElementSibling
+      node.remove()
+      if (!next || /^H[1-6]$/.test(next.tagName)) break
+      node = next
+    }
+  }
+}
+
 export function cleanupImportedHtml(source = '') {
   const text = String(source)
   if (typeof DOMParser === 'undefined') {
@@ -415,6 +448,7 @@ export function cleanupImportedHtml(source = '') {
     if (paragraph.querySelector('img, [data-type$="-math"]')) continue
     paragraph.remove()
   }
+  removeDuplicateSections(doc)
   return doc.body.innerHTML
 }
 

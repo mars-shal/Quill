@@ -214,3 +214,27 @@ test('template previews are drawn as the sheets they open', () => {
     assert.ok(templateSections(template).length, `${template.id} shows at least one section`)
   }
 })
+
+test('cleanup drops a numbered section that was appended twice', () => {
+  const previous = globalThis.DOMParser
+  globalThis.DOMParser = new JSDOM().window.DOMParser
+  try {
+    const html = cleanupImportedHtml([
+      '<h1>1. Introduction</h1><p>First body.</p>',
+      '<h1>1. Introduction</h1><p>Second copy of the same body.</p>',
+      '<h2>1.1 Scope</h2><p>Scope.</p>',
+      '<h1>2. Method</h1><p>Method body.</p>',
+      '<h1>Introduction</h1><p>A repeated word, not a section number.</p>',
+      '<h1>Introduction</h1><p>Kept: unnumbered headings can legitimately repeat.</p>',
+    ].join(''))
+    assert.equal((html.match(/1\. Introduction/g) || []).length, 1, 'the duplicate section is gone')
+    assert.match(html, /First body/)
+    assert.doesNotMatch(html, /Second copy/)
+    assert.match(html, /1\.1 Scope/)
+    assert.match(html, /2\. Method/)
+    assert.equal((html.match(/>Introduction</g) || []).length, 2, 'unnumbered repeats survive')
+  } finally {
+    if (previous === undefined) delete globalThis.DOMParser
+    else globalThis.DOMParser = previous
+  }
+})
